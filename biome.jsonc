@@ -1,0 +1,69 @@
+{
+  // dryvist canonical Biome config — single source of truth for the org.
+  // Repos copy this at scaffold time; Renovate keeps copies in sync.
+  // Schema: https://biomejs.dev/reference/configuration/
+  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignore": [
+      "**/node_modules",
+      "**/.venv",
+      "**/dist",
+      "**/coverage",
+      "**/.direnv",
+      // Cribl pack content is YAML/JSON authored by Cribl tooling — leave it alone.
+      "**/default/**",
+      "**/data/samples/**",
+      "**/tests/fixtures/**"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        // We keep nullish narrowing explicit — disallow non-null assertions.
+        "noNonNullAssertion": "error",
+        // Imports stay grouped + sorted by Biome's organizer (run via `biome check --write`).
+        "useImportType": "warn"
+      },
+      "suspicious": {
+        // Console output is fine in test fixtures + scripts; tighten in libraries via per-repo override.
+        "noConsole": "off"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "always",
+      "trailingCommas": "all",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    },
+    "parser": {
+      // Allow JSONC syntax for files like this one + tsconfig.json.
+      "allowComments": true,
+      "allowTrailingCommas": true
+    }
+  }
+}
