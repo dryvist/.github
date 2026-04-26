@@ -27,9 +27,10 @@ inherit configs and policies via the mechanisms below.
 For a new TS-based dryvist repo, copy the canonical configs from this repo:
 
 ```sh
-# From the new repo's root:
-gh api repos/dryvist/.github/contents/biome.jsonc --jq '.content' | base64 -d > biome.jsonc
-gh api repos/dryvist/.github/contents/renovate.json --jq '.content' | base64 -d > renovate.json
+# From the new repo's root (raw content via Accept header — no base64
+# decoding, portable across macOS and Linux):
+gh api repos/dryvist/.github/contents/biome.jsonc -H "Accept: application/vnd.github.raw" > biome.jsonc
+gh api repos/dryvist/.github/contents/renovate.json -H "Accept: application/vnd.github.raw" > renovate.json
 ```
 
 If the repo is a Cribl pack, scaffold from
@@ -53,7 +54,7 @@ permissions:
 jobs:
   release-please:
     uses: JacobPEvans/.github/.github/workflows/_release-please.yml@main
-    # The inherited workflow's input is named GH_ACTION_JACOBPEVANS_APP_ID for
+    # The inherited workflow's secret is named GH_ACTION_JACOBPEVANS_APP_ID for
     # historical reasons. dryvist exposes a generic GH_APP_ID org secret and
     # forwards it here at the boundary — repo readers only see the generic name.
     secrets:
