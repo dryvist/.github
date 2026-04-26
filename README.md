@@ -53,19 +53,40 @@ permissions:
 jobs:
   release-please:
     uses: JacobPEvans/.github/.github/workflows/_release-please.yml@main
+    # The inherited workflow's input is named GH_ACTION_JACOBPEVANS_APP_ID for
+    # historical reasons. dryvist exposes a generic GH_APP_ID org secret and
+    # forwards it here at the boundary — repo readers only see the generic name.
     secrets:
-      GH_ACTION_JACOBPEVANS_APP_ID: ${{ secrets.GH_ACTION_JACOBPEVANS_APP_ID }}
+      GH_ACTION_JACOBPEVANS_APP_ID: ${{ secrets.GH_APP_ID }}
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 ```
 
 Org-level secret prereqs (one-time, owner-handled):
 
-- `GH_ACTION_JACOBPEVANS_APP_ID`
-- `GH_APP_PRIVATE_KEY`
+- `GH_APP_ID` — App ID (numeric)
+- `GH_APP_PRIVATE_KEY` — App private key PEM
 
-These are the same secrets the upstream JacobPEvans org uses. Set them at
-`https://github.com/organizations/dryvist/settings/secrets/actions` after
-installing the corresponding GitHub App on the dryvist org.
+Generic names so any future App swap or org-internal rebrand is a one-line
+secret update — no caller-workflow churn.
+
+### One-time GitHub App setup (owner-handled)
+
+1. Locate the App owned by JacobPEvans (`https://github.com/settings/apps` or
+   `https://github.com/organizations/JacobPEvans/settings/apps`).
+2. Verify "Where can this GitHub App be installed?" is set to "Any account"
+   (change + save if currently "Only on this account").
+3. Visit the App's public install URL (`https://github.com/apps/<app-slug>/installations/new`)
+   and install on the **dryvist** org with access to "All repositories".
+4. Back in the App settings: copy the App ID; generate + download a private
+   key `.pem` (cannot be re-downloaded).
+5. Set the dryvist org secrets:
+
+   ```sh
+   gh secret set GH_APP_ID --org dryvist --visibility all
+   gh secret set GH_APP_PRIVATE_KEY --org dryvist --visibility all < /path/to/private-key.pem
+   ```
+
+   Or via UI at <https://github.com/organizations/dryvist/settings/secrets/actions>.
 
 ## API
 

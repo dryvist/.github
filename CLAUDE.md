@@ -55,10 +55,20 @@ unless we need behavior they don't provide.
 dryvist repos. Re-inheritance works through the same mechanisms (workflow
 `uses:` + Renovate `extends:`).
 
-**Prereq for release-please:** the JacobPEvans reusable workflow needs the
-GitHub App secrets `GH_ACTION_JACOBPEVANS_APP_ID` + `GH_APP_PRIVATE_KEY`
-configured at the org level on `dryvist`. (Owner sets these manually; agent
-should not attempt to install the App.)
+**Prereq for release-please:** the inherited workflow needs a GitHub App
+token at runtime. dryvist exposes two generic org-level secrets — caller
+workflows in each dryvist repo forward them to the inherited workflow at the
+boundary (the inherited workflow's input is JACOBPEVANS-named for historical
+reasons; dryvist consumers see only the generic names):
+
+| dryvist org secret | Forwards to inherited input |
+|---|---|
+| `GH_APP_ID` | `GH_ACTION_JACOBPEVANS_APP_ID` |
+| `GH_APP_PRIVATE_KEY` | `GH_APP_PRIVATE_KEY` |
+
+(Owner sets these manually after installing the App on the dryvist org;
+agent should not attempt to install the App. See `README.md` for setup
+steps.)
 
 ## Scope of this repo
 
