@@ -1,0 +1,54 @@
+name: Sync labels from labels.yml
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/labels.yml]
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    environment: automation
+    # permissions for GITHUB_TOKEN (used by EndBug/label-sync on this repo only).
+    # Cross-repo operations use GH_PAT_WORKFLOW_DISPATCH PAT instead.
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+
+      # Step 1: Sync labels.yml -> this repo's GitHub labels via EndBug/label-sync.
+      # This ensures .github repo matches the file before step 2 clones from it.
+      - name: Sync labels to this repo from labels.yml
+        uses: EndBug/label-sync@v2
+        with:
+          config-file: .github/labels.yml
+          delete-other-labels: true
+
+      # Step 2: Clone from .github (now guaranteed in sync with labels.yml) to
+      # all other dryvist public repos. Private repos are intentionally excluded.
+      #
+      # SECURITY: No user-controlled inputs (no github.event.*) reach the run
+      # block. `repos` is derived from the GitHub API; repo names are restricted
+      # to alphanumeric + hyphen + underscore + dot per GitHub's own validation.
+      - name: Sync labels to all other dryvist public repos
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_WORKFLOW_DISPATCH }}
+        run: |
+          repos=$(gh repo list dryvist --public --json name --limit 100 \
+            | jq -r '.[].name | select(. != ".github")') || {
+            echo "Error: Failed to fetch repository list"
+            exit 1
+          }
+
+          if [ -z "$repos" ]; then
+            echo "Warning: No repositories found to sync"
+            exit 0
+          fi
+
+          for repo in $repos; do
+            echo "Syncing labels to $repo..."
+            gh label clone dryvist/.github -R "dryvist/$repo" --force || \
+              echo "  Warning: failed to sync $repo"
+          done
