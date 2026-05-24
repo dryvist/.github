@@ -6,7 +6,7 @@ infrastructure for AI-coding-tool observability.
 ## Active repositories
 
 | Repo | Purpose |
-|---|---|
+| --- | --- |
 | [`cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template) | Template for new Cribl Edge / Stream packs |
 | [`cc-edge-claude-code-io`](https://github.com/dryvist/cc-edge-claude-code-io) | Claude Code session-logs + OpenTelemetry pack |
 | [`.github`](https://github.com/dryvist/.github) | Org-wide standards: AI policy, Biome config, security policy, renovate inheritance |

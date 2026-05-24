@@ -3,9 +3,10 @@
 ## Reporting Vulnerabilities
 
 To report a security vulnerability in any **dryvist** repository, use
-[GitHub's private vulnerability reporting](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability)
-on the affected repository. Do not open a public issue for security
-vulnerabilities.
+[GitHub's private vulnerability reporting][private-vuln] on the affected
+repository. Do not open a public issue for security vulnerabilities.
+
+[private-vuln]: https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability
 
 For critical vulnerabilities affecting multiple dryvist repositories, report
 to this [.github repository](https://github.com/dryvist/.github/security/advisories/new).
@@ -17,7 +18,7 @@ Automated dependency updates use Renovate via the inherited preset
 The presets enforce a tiered trust model:
 
 | Tier | Scope | Stabilization | Auto-merge |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Always Trusted** | `dryvist/**`, `JacobPEvans/**` (self-owned) | 0 days | Yes, CI-gated |
 | **Trusted, Wait** | GitHub Actions from established orgs (npm, googleapis, actions, etc.) | 3 days | Minor/patch auto; major manual |
 | **Default** | All other external dependencies | 3 days | Manual review |
@@ -29,7 +30,7 @@ alerts auto-merge without the 3-day wait.
 ## Version Pinning
 
 | Source | Strategy |
-|---|---|
+| --- | --- |
 | dryvist self-references | `@main` or major version tag — never SHA or minor/patch pins |
 | JacobPEvans inherited workflows | `@main` (per the inherited org's policy) |
 | Trusted GitHub Actions | Semantic version tags (`@v6`) |
