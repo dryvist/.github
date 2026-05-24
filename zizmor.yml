@@ -1,0 +1,19 @@
+# Org-wide zizmor policy.
+#
+# Consumed by every dryvist (and JacobPEvans, via the nix-devenv
+# flake-module) repo that runs zizmor. The unpinned-uses audit defaults
+# to requiring SHA pins for every action reference, which is the right
+# default for untrusted publishers but produces high-friction noise
+# (Renovate churn, manual SHA rotation) for action vendors who maintain
+# stable major-version tags.
+#
+# Trusted publishers below are allowed to use `ref-pin` (tag or branch
+# references). Everything else falls through to zizmor's implicit
+# `hash-pin` default.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        actions/*: ref-pin
+        DeterminateSystems/*: ref-pin
+        googleapis/*: ref-pin
