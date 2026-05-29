@@ -1,0 +1,45 @@
+# Standalone markdown lint for org-wide enforcement via Required Workflows.
+#
+# Referenced by dryvist/terraform-github's github_organization_ruleset, which
+# injects this workflow into the default-branch PRs of EVERY repo in the org.
+#
+# Unlike the reusable _markdown-lint.yml (which defers to each repo's own
+# markdownlint config and only falls back to the org default), this FORCES the
+# single canonical config from dryvist/.github. That is the point: identical
+# rules org-wide, zero per-repo .markdownlint* files to drift. Once this is
+# active, the reusable workflow + per-repo configs + per-repo `uses:` wiring
+# can be retired.
+name: Markdown Lint
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: org-markdown-lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  markdownlint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v6
+
+      - name: Checkout org config (single source of truth)
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .org-github
+
+      - name: Run markdownlint with the forced org config
+        uses: DavidAnson/markdownlint-cli2-action@v23
+        with:
+          config: .org-github/.markdownlint-cli2.yaml
+          globs: |
+            **/*.md
+            !.org-github/**

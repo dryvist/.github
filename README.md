@@ -14,10 +14,11 @@ This repo is consumed by reference, not installed. Other dryvist repos
 inherit configs and policies via the mechanisms below.
 
 | Inheritance mechanism | Where it shows up |
-|---|---|
+| --- | --- |
 | GitHub auto-applied org files (`SECURITY.md`, `profile/README.md`) | Visible on every dryvist repo's Security tab + at <https://github.com/dryvist> |
 | Renovate `extends` | `renovate.json` in each repo: `extends: github>JacobPEvans/.github:renovate-presets` (this repo's `renovate.json` is the example) |
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
+| markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
 | AI assistant policy | `CLAUDE.md` — read by Claude Code on every session |
 
 ## Usage
@@ -27,9 +28,11 @@ inherit configs and policies via the mechanisms below.
 For a new TS-based dryvist repo, copy the canonical configs from this repo:
 
 ```sh
-# From the new repo's root:
-gh api repos/dryvist/.github/contents/biome.jsonc --jq '.content' | base64 -d > biome.jsonc
-gh api repos/dryvist/.github/contents/renovate.json --jq '.content' | base64 -d > renovate.json
+# From the new repo's root (raw content via Accept header — no base64
+# decoding, portable across macOS and Linux):
+gh api repos/dryvist/.github/contents/biome.jsonc -H "Accept: application/vnd.github.raw" > biome.jsonc
+gh api repos/dryvist/.github/contents/.markdownlint-cli2.yaml -H "Accept: application/vnd.github.raw" > .markdownlint-cli2.yaml
+gh api repos/dryvist/.github/contents/renovate.json -H "Accept: application/vnd.github.raw" > renovate.json
 ```
 
 If the repo is a Cribl pack, scaffold from
@@ -53,7 +56,7 @@ permissions:
 jobs:
   release-please:
     uses: JacobPEvans/.github/.github/workflows/_release-please.yml@main
-    # The inherited workflow's input is named GH_ACTION_JACOBPEVANS_APP_ID for
+    # The inherited workflow's secret is named GH_ACTION_JACOBPEVANS_APP_ID for
     # historical reasons. dryvist exposes a generic GH_APP_ID org secret and
     # forwards it here at the boundary — repo readers only see the generic name.
     secrets:
@@ -93,9 +96,10 @@ secret update — no caller-workflow churn.
 This repo exposes the following inheritance surfaces:
 
 | Path | Purpose |
-|---|---|
+| --- | --- |
 | `CLAUDE.md` | AI assistant policy (read by Claude Code) |
-| `biome.jsonc` | Canonical Biome lint + format config |
+| `biome.jsonc` | Canonical Biome lint + format config (code) |
+| `.markdownlint-cli2.yaml` | Canonical markdownlint-cli2 config (`.md` files) |
 | `renovate.json` | Org-default Renovate extending JacobPEvans presets |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
@@ -104,15 +108,16 @@ This repo exposes the following inheritance surfaces:
 
 Changes here affect every dryvist repo. Tread carefully:
 
-- Bump rules in `biome.jsonc` cautiously — they cascade to every repo on next sync.
+- Bump rules in `biome.jsonc` or `.markdownlint-cli2.yaml` cautiously — they cascade to every repo on next sync.
 - Don't introduce vendor-specific (Cribl, etc.) content. That belongs in the relevant template repo.
 - Conventional commits required (`feat:`, `fix:`, `chore:`, `docs:`).
 
 To validate locally before pushing:
 
 ```sh
-# Lint this repo's own files (requires Biome installed locally)
+# Lint this repo's own code and markdown
 npx -y @biomejs/biome check .
+npx -y markdownlint-cli2 "**/*.md"
 ```
 
 ## License
@@ -124,5 +129,6 @@ npx -y @biomejs/biome check .
 - [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — upstream org we inherit from
 - [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template) — Cribl pack template
 - [Biome configuration reference](https://biomejs.dev/reference/configuration/)
+- [markdownlint-cli2 configuration](https://github.com/DavidAnson/markdownlint-cli2#configuration)
 - [Renovate `extends` docs](https://docs.renovatebot.com/config-presets/)
 - [release-please-action](https://github.com/googleapis/release-please-action)
