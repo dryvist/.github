@@ -1,0 +1,24 @@
+# Org-wide file-size defaults. Consumed by .github/workflows/file-size.yml,
+# which is referenced as a Required Workflow by terraform-github's
+# github_organization_ruleset.org_file_size_check.
+#
+# Per-repo overrides land in the consuming repo at .github/file-size.yml
+# (preferred) or .file-size.yml at the root (legacy, deprecation warning).
+
+defaults:
+  # Bytes. Files larger than `warn` emit ::warning::; files larger than
+  # `error` emit ::error:: and fail the check.
+  warn: 6144
+  error: 12288
+
+# File extensions scanned by the check. Per-repo overrides REPLACE this list
+# (not additive) — repos that need a different scan set declare their own.
+scan:
+  - .md
+  - .nix
+  - .tf
+
+# Always-exempt files (base name, no extension). Per-repo `exempt` lists are
+# additive to this org default.
+exempt:
+  - CHANGELOG

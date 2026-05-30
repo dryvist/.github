@@ -41,20 +41,46 @@ The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo at
 the root. Repos copy them at scaffold time; periodic sync is handled by
 Renovate's custom manager (or manual update for now — see `renovate.json`).
 
-## Inheritance from `JacobPEvans/.github`
+## Workflow library ownership (migration in progress)
 
-We reuse JacobPEvans's reusable workflows directly. Don't fork or wrap them
-unless we need behavior they don't provide.
+`dryvist/.github` is becoming the **source of truth** for the shared workflow
+library. `JacobPEvans-personal/.github` is being reduced to a consumer —
+inheritance flows dryvist → JacobPEvans-personal, never the reverse. Each
+workflow migrates atomically: it lands here, all consumers flip their
+`uses:` to point at this repo, then the source in
+`JacobPEvans-personal/.github` is deleted.
 
-| Need | Inherited from | Caller pattern |
-| --- | --- | --- |
-| Release-please (org-wide major-bump block) | `JacobPEvans/.github/.github/workflows/_release-please.yml@main` | `release-please.yml` in any dryvist repo |
-| Renovate presets | `github>JacobPEvans/.github:renovate-presets` | `extends` in `renovate.json` |
-| Security policy structure | `JacobPEvans/.github/SECURITY.md` | Adapted/scoped to dryvist (this repo) |
+When adding a new shared workflow (one that more than one repo will call),
+write it here. Don't add it to `JacobPEvans-personal/.github`. Existing
+`uses: JacobPEvans-personal/.github/.github/workflows/_*.yml@main` references
+should be flipped to `uses: dryvist/.github/.github/workflows/<name>.yml@main`
+the next time they're touched, even if their workflow isn't formally
+migrated yet.
 
-**Inheritance chain:** `JacobPEvans/.github` → `dryvist/.github` → individual
-dryvist repos. Re-inheritance works through the same mechanisms (workflow
-`uses:` + Renovate `extends:`).
+Sourced from this repo (`dryvist/.github`) — Required Workflows attached
+via `terraform-github`; no per-repo caller needed:
+
+- `file-size` — workflow at `.github/workflows/file-size.yml`, logic in
+  `.github/scripts/file-size-check.sh`, defaults in
+  `.github/file-size-defaults.yml`.
+- `markdownlint` — workflow at `.github/workflows/markdownlint.yml`,
+  config in `.markdownlint-cli2.yaml` at the repo root.
+
+Still inherited from `JacobPEvans-personal/.github` (pending migration
+into this repo):
+
+- Release-please — `_release-please.yml@main`. Per-repo caller
+  `release-please.yml` forwards `GH_APP_ID` / `GH_APP_PRIVATE_KEY`
+  secrets (see Prereq below).
+- Renovate presets — extends
+  `github>JacobPEvans-personal/.github:renovate-presets` in
+  `renovate.json`.
+- Security policy structure — `SECURITY.md` template, scoped and
+  adapted in this repo.
+
+Older docs and PR templates may still use the redirect-friendly
+`JacobPEvans/<repo>` form. Don't mass-rewrite those — see `~/CLAUDE.local.md`
+for the redirect rules.
 
 **Prereq for release-please:** the inherited workflow needs a GitHub App
 token at runtime. dryvist exposes two generic org-level secrets — caller
@@ -78,7 +104,15 @@ steps.)
 - AI assistant policy (this file)
 - Org-wide tooling configs (`biome.jsonc`, `renovate.json`)
 - Community health files GitHub auto-applies (`SECURITY.md`, `profile/README.md`)
-- Caller workflow templates that wire up inherited reusable workflows
+- The shared workflow library (`.github/workflows/*.yml`) — Required
+  Workflows referenced by org rulesets in `terraform-github`, plus
+  reusables that any dryvist repo can opt into with `uses:`
+- Bash/POSIX implementations of workflow steps (`.github/scripts/*.sh`) —
+  extracted from workflow YAML per the no-scripts rule; ship as
+  committed artifacts with `+x` in the index
+- Workflow defaults (`.github/<name>-defaults.yml`) — no magic numbers in
+  workflow YAML or scripts; thresholds and lists live in these dedicated
+  files, consumed via `yq`
 
 It does **NOT** contain anything vendor- or product-specific. Cribl pack
 infrastructure lives in [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template).
@@ -98,10 +132,12 @@ For every change in dryvist:
 
 ## When in doubt
 
-- Read [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) for the
-  upstream patterns we inherit.
+- Read [`JacobPEvans-personal/.github`](https://github.com/JacobPEvans-personal/.github)
+  for patterns still inherited from there (mostly release-please and Renovate
+  presets, pending migration into this repo).
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
-- For release-please specifics, the inherited workflow's docstring at
-  `JacobPEvans/.github/.github/workflows/_release-please.yml` is authoritative.
+- For release-please specifics, the (still-)inherited workflow's docstring at
+  `JacobPEvans-personal/.github/.github/workflows/_release-please.yml` is
+  authoritative until that workflow migrates here.

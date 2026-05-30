@@ -1,0 +1,49 @@
+# Standalone file-size check for org-wide enforcement via Required Workflows.
+#
+# Referenced by dryvist/terraform-github's github_organization_ruleset
+# (org_file_size_check), which injects this workflow into the default-branch
+# PRs of EVERY repo in the org. All logic lives in
+# .github/scripts/file-size-check.sh (org-controlled). Defaults — thresholds,
+# scan extensions, exempt list — are sourced from
+# .github/file-size-defaults.yml.
+#
+# Per-repo overrides land in the consuming repo at:
+#   .github/file-size.yml   — preferred (consolidated workflow-consumed
+#                             configs live under .github/)
+#   .file-size.yml          — legacy root path; supported with a deprecation
+#                             warning, removed in a future iteration
+#
+# Override fields (all optional, all additive unless noted):
+#   defaults: { warn: <bytes>, error: <bytes> }   # overrides org defaults
+#   scan: [<.ext>, …]                              # REPLACES default scan list
+#   extended: { limit: <bytes>, files: [<base>] }  # additive higher-limit set
+#   exempt: [<base>]                               # additive to org exempt list
+name: File Size
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: org-file-size-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v6
+
+      - name: Checkout org config (single source of truth)
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .org-github
+
+      - name: Check file sizes
+        run: .org-github/.github/scripts/file-size-check.sh .org-github/.github/file-size-defaults.yml
