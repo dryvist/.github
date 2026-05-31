@@ -1,0 +1,56 @@
+# dryvist ansible pre-commit template (non-Nix consumers).
+#
+# Includes the base hook set plus ansible-lint + yamllint. Both consume
+# canonical configs from dryvist/.github at precommit/configs/, which
+# the consumer materializes alongside .pre-commit-config.yaml:
+#
+#   gh api repos/dryvist/.github/contents/precommit/configs/ansible-lint.yml \
+#     -H "Accept: application/vnd.github.raw" > .ansible-lint
+#   gh api repos/dryvist/.github/contents/precommit/configs/yamllint.yml \
+#     -H "Accept: application/vnd.github.raw" > .yamllint.yml
+#
+# Nix-flake consumers should NOT use this file. They get equivalent
+# coverage via `imports = [ inputs.nix-devenv.flakeModules.ansible ];`.
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: end-of-file-fixer
+      - id: trim-trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: detect-private-key
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^CHANGELOG\.md$
+
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.25.2
+    hooks:
+      - id: zizmor
+        files: ^\.github/workflows/.*\.ya?ml$
+        args:
+          - --persona=regular
+          - --min-severity=medium
+          - --min-confidence=medium
+          - --config
+          - zizmor.yml
+
+  - repo: https://github.com/ansible/ansible-lint
+    rev: v26.4.0
+    hooks:
+      - id: ansible-lint
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
