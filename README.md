@@ -19,6 +19,7 @@ inherit configs and policies via the mechanisms below.
 | Renovate `extends` | `renovate.json` in each repo: `extends: github>JacobPEvans/.github:renovate-presets` (this repo's `renovate.json` is the example) |
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
 | markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
+| Pre-commit hooks (shared) | `precommit/` — Nix flake import or static YAML copy; see [`precommit/README.md`](precommit/README.md) |
 | AI assistant policy | `CLAUDE.md` — read by Claude Code on every session |
 
 ## Usage
@@ -101,6 +102,8 @@ This repo exposes the following inheritance surfaces:
 | `biome.jsonc` | Canonical Biome lint + format config (code) |
 | `.markdownlint-cli2.yaml` | Canonical markdownlint-cli2 config (`.md` files) |
 | `renovate.json` | Org-default Renovate extending JacobPEvans presets |
+| `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
+| `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
 

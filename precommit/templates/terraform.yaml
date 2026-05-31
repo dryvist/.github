@@ -1,0 +1,64 @@
+# dryvist terraform pre-commit template (non-Nix consumers).
+#
+# Includes the base hook set plus terraform-specific static checks. Hook
+# choices follow the terraform-checks-placement policy:
+#
+# * `terraform_fmt` and `terraform_validate` (with init -backend=false)
+#   are credential-free and safe in pre-commit.
+# * `tflint` reads the canonical config from dryvist/.github at
+#   precommit/configs/tflint.hcl — materialize that file alongside
+#   .pre-commit-config.yaml or override args.
+# * `terraform_docs` runs in pre-commit AND is mirrored in CI.
+# * `terraform plan`/`apply` are NOT in pre-commit (credentialed; CI-only via OIDC).
+#
+# Nix-flake consumers should NOT use this file. They get equivalent
+# coverage via `imports = [ inputs.nix-devenv.flakeModules.terraform ];`.
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: end-of-file-fixer
+      - id: trim-trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: detect-private-key
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^CHANGELOG\.md$
+
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.25.2
+    hooks:
+      - id: zizmor
+        files: ^\.github/workflows/.*\.ya?ml$
+        args:
+          - --persona=regular
+          - --min-severity=medium
+          - --min-confidence=medium
+          - --config
+          - zizmor.yml
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.92.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+        args:
+          - --hook-config=--retry-once-with-cleanup=true
+          - --tf-init-args=-backend=false
+      - id: terraform_tflint
+        args:
+          # Materialize precommit/configs/tflint.hcl into the repo as
+          # `.tflint.hcl` (root-level) at scaffold time, then this hook
+          # finds it without further flags.
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform_docs

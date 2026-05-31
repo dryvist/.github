@@ -1,0 +1,44 @@
+---
+# dryvist organization-wide ansible-lint canonical.
+#
+# Single source of truth for ansible-lint across every dryvist ansible
+# repo. Consumer repos either fetch this file at scaffold time (non-Nix
+# path) or have the Nix-side `fetch-shared-configs` helper materialize
+# it at devShell entry (Nix path).
+#
+# Schema: https://ansible.readthedocs.io/projects/lint/configuring/
+
+profile: production
+
+exclude_paths:
+  - .git/
+  - .github/
+  - .cache/
+  - .venv/
+  - venv/
+  # SOPS-encrypted files are opaque ciphertext + metadata; linting them
+  # is meaningless. The recursive glob also catches future encrypted
+  # files in any subdirectory.
+  - "**/*.enc.yaml"
+  - "**/*.enc.yml"
+
+# Noise from yaml line-length is handled by .yamllint's line-length rule
+# at warning level; ansible-lint should not duplicate that complaint.
+skip_list:
+  - yaml[line-length]
+
+warn_list:
+  - experimental
+
+enable_list:
+  - fqcn
+  - no-changed-when
+
+# File-type overrides for files in non-standard locations. Repos that
+# don't have these files are unaffected — ansible-lint ignores absent
+# entries.
+kinds:
+  - playbook: "**/load_terraform.yml"
+
+use_default_rules: true
+offline: false
