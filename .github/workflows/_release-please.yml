@@ -1,0 +1,55 @@
+# Reusable: Release Please (org-native).
+#
+# Canonical release-please workflow for the org, hosted once here so every repo
+# runs identical logic. A calling repo adds a thin
+# `.github/workflows/release-please.yml` that `uses:` this file and passes the
+# org-level release App private key.
+#
+# Auth: the org-level release App — app-id from the
+# `GH_ACTION_RELEASE_PLEASE_APP_ID` org variable, private key from the
+# `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` org secret. The App must be installed
+# on the org with Contents + Pull requests write. The App token (vs the default
+# GITHUB_TOKEN) lets the release PR trigger `pull_request` CI gates.
+#
+# Required files in each calling repo:
+#   release-please-config.json     — release configuration
+#   .release-please-manifest.json  — version manifest, e.g. {".": "1.2.3"}
+#
+# Caller shape:
+#   jobs:
+#     release-please:
+#       permissions:
+#         contents: write
+#         pull-requests: write
+#       uses: dryvist/.github/.github/workflows/_release-please.yml@main
+#       secrets:
+#         GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+name: _release-please
+
+on:
+  workflow_call:
+    secrets:
+      GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+
+      - uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          manifest-file: .release-please-manifest.json
+          config-file: release-please-config.json
