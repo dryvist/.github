@@ -32,6 +32,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions: {}
     steps:
+      - name: Check out this repo (for the hub script)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
       - name: Generate org App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
