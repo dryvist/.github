@@ -1,0 +1,12 @@
+# README validator config for the dryvist GitHub org profile.
+#
+# This is an org profile README (renders at https://github.com/dryvist), not a
+# project README. Installation/Usage sections don't apply — the org profile is
+# a landing page, not a manual. Scoped to `profile/` only; the repo's own
+# README.md at the root continues to use validator defaults.
+#
+# Mirrors `JacobPEvans/.readme-validator.yaml` (profile-repo equivalent).
+required_sections:
+  - What lives here
+optional_sections:
+  - Org-wide standards

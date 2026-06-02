@@ -1,0 +1,30 @@
+# Org profile README markdownlint overrides
+#
+# Scoped to `profile/` only. Repo-root `.markdownlint-cli2.yaml` continues to
+# govern every other markdown file in this repo at the strict 160-char limit.
+#
+# This config replaces (not merges with) the parent when markdownlint-cli2
+# discovers it for files in this directory. Profile READMEs require inline
+# HTML and tolerate long badge URLs that standard markdown can't express —
+# the same pattern as `JacobPEvans/.markdownlint-cli2.yaml`.
+config:
+  # Badge URLs and image alt text produce unavoidably long lines.
+  MD013: false
+
+  # Allow duplicate headings in different sections (siblings only).
+  MD024:
+    siblings_only: true
+
+  # Profile READMEs require inline HTML for:
+  # - Centered badge rows (<p align="center">)
+  # - Italic taglines under banners (<em>)
+  # - Linked badge images (<a><img>)
+  MD033:
+    allowed_elements:
+      - a
+      - div
+      - em
+      - img
+      - p
+      - picture
+      - source
