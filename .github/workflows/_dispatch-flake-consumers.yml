@@ -1,0 +1,65 @@
+# Reusable: Dispatch update-flake-input to downstream consumers
+#
+# Fans out a repository_dispatch (event_type=update-flake-input,
+# client_payload.input=<source_input>) to every repo in the caller's
+# DISPATCH_CONSUMERS variable. Each caller keeps its own trigger and its
+# own DISPATCH_CONSUMERS list; this workflow holds the shared token-mint
+# and cross-repo dispatch call so it lives in exactly one place.
+#
+# vars.DISPATCH_CONSUMERS, vars.GH_APP_CLIENT_ID, and the
+# GH_APP_PRIVATE_KEY secret all resolve in the caller's context
+# (workflow_call inherits the caller's vars/secrets), so they are read
+# here directly rather than passed as inputs. Pass GH_APP_PRIVATE_KEY
+# via `secrets: inherit` in the caller.
+name: _dispatch-flake-consumers
+
+on:
+  workflow_call:
+    inputs:
+      source_input:
+        description: >-
+          Flake input name the releasing repo represents downstream.
+          Sent as client_payload.input so the consumer knows which input
+          to bump. Defaults to the calling repository's own name.
+        type: string
+        required: false
+        default: ${{ github.event.repository.name }}
+    secrets:
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Notify ${{ matrix.repo }}
+    strategy:
+      matrix:
+        repo: ${{ fromJSON(vars.DISPATCH_CONSUMERS) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          # Scope the minted token to just the one consumer repo.
+          repositories: ${{ matrix.repo }}
+          # repository_dispatch requires contents:write on the target.
+          permission-contents: write
+
+      - name: Dispatch update-flake-input
+        # Use env vars — never interpolate inputs or matrix directly into
+        # run: steps (expression injection risk).
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TARGET_REPO: ${{ matrix.repo }}
+          SOURCE_INPUT: ${{ inputs.source_input }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY_OWNER}/${TARGET_REPO}/dispatches" \
+            -f event_type=update-flake-input \
+            -f "client_payload[input]=${SOURCE_INPUT}"
