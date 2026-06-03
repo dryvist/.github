@@ -33,42 +33,40 @@ Python is not used for new dryvist work.
 | Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 100` for JS/TS/JSON/CSS |
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
-| Release automation | release-please | Inherited from `JacobPEvans/.github` |
+| Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
 | Dependency updates | Renovate | Extends `JacobPEvans/.github:renovate-presets` |
 
 The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo at
 the root. Repos copy them at scaffold time; periodic sync is handled by
 Renovate's custom manager (or manual update for now — see `renovate.json`).
 
+## Release-please (org-native)
+
+Release-please is **org-native** to this repo: every dryvist repo inherits the
+reusable `.github/workflows/_release-please.yml@main` here (not a cross-account
+JacobPEvans workflow). It blocks automated major bumps and eager-auto-merges the
+release PR. A dryvist repo's `release-please.yml` caller forwards a single
+secret:
+
+| dryvist org secret | Reusable workflow secret |
+| --- | --- |
+| `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` | `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` |
+
+Auth is the dryvist release App: app-id from the `GH_ACTION_RELEASE_PLEASE_APP_ID`
+org variable, private key from the `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` org
+secret. The App must be installed on the org with Contents + Pull requests write.
+(Owner sets these manually after installing the App; the agent should not attempt
+to install it. See `README.md` for setup steps.)
+
 ## Inheritance from `JacobPEvans/.github`
 
-We reuse JacobPEvans's reusable workflows directly. Don't fork or wrap them
-unless we need behavior they don't provide.
+We still reuse a few JacobPEvans community-health and config artifacts directly.
+Don't fork or wrap them unless we need behavior they don't provide.
 
 | Need | Inherited from | Caller pattern |
 | --- | --- | --- |
-| Release-please (org-wide major-bump block) | `JacobPEvans/.github/.github/workflows/_release-please.yml@main` | `release-please.yml` in any dryvist repo |
 | Renovate presets | `github>JacobPEvans/.github:renovate-presets` | `extends` in `renovate.json` |
 | Security policy structure | `JacobPEvans/.github/SECURITY.md` | Adapted/scoped to dryvist (this repo) |
-
-**Inheritance chain:** `JacobPEvans/.github` → `dryvist/.github` → individual
-dryvist repos. Re-inheritance works through the same mechanisms (workflow
-`uses:` + Renovate `extends:`).
-
-**Prereq for release-please:** the inherited workflow needs a GitHub App
-token at runtime. dryvist exposes two generic org-level secrets — caller
-workflows in each dryvist repo forward them to the inherited workflow at the
-boundary (the inherited workflow's `secrets:` block is JACOBPEVANS-named for
-historical reasons; dryvist consumers see only the generic names):
-
-| dryvist org secret | Forwards to inherited secret |
-| --- | --- |
-| `GH_APP_ID` | `GH_ACTION_JACOBPEVANS_APP_ID` |
-| `GH_APP_PRIVATE_KEY` | `GH_APP_PRIVATE_KEY` |
-
-(Owner sets these manually after installing the App on the dryvist org;
-agent should not attempt to install the App. See `README.md` for setup
-steps.)
 
 ## Scope of this repo
 
@@ -102,5 +100,5 @@ For every change in dryvist:
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
-- For release-please specifics, the inherited workflow's docstring at
-  `JacobPEvans/.github/.github/workflows/_release-please.yml` is authoritative.
+- For release-please specifics, the org-native workflow's docstring at
+  `.github/workflows/_release-please.yml` in this repo is authoritative.

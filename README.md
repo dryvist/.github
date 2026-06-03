@@ -43,35 +43,32 @@ instead — the template already includes the canonical configs.
 ### Wire up release-please in a dryvist repo
 
 Each repo needs `.release-please-manifest.json` + `release-please-config.json`
-plus a thin caller workflow that delegates to the inherited reusable workflow:
+plus a thin caller workflow that delegates to the org-native reusable workflow:
 
 ```yaml
 # .github/workflows/release-please.yml
-name: release-please
+name: Release Please
 on:
   push:
     branches: [main]
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
 jobs:
   release-please:
-    uses: JacobPEvans/.github/.github/workflows/_release-please.yml@main
-    # The inherited workflow's secret is named GH_ACTION_JACOBPEVANS_APP_ID for
-    # historical reasons. dryvist exposes a generic GH_APP_ID org secret and
-    # forwards it here at the boundary — repo readers only see the generic name.
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: dryvist/.github/.github/workflows/_release-please.yml@main
     secrets:
-      GH_ACTION_JACOBPEVANS_APP_ID: ${{ secrets.GH_APP_ID }}
-      GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
 
-Org-level secret prereqs (one-time, owner-handled):
+The reusable workflow blocks automated major bumps and eager-auto-merges the
+release PR. Pass `with: { auto-merge: false }` to opt a repo out of auto-merge.
 
-- `GH_APP_ID` — App ID (numeric)
-- `GH_APP_PRIVATE_KEY` — App private key PEM
+Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
-Generic names so any future App swap or org-internal rebrand is a one-line
-secret update — no caller-workflow churn.
+- `GH_ACTION_RELEASE_PLEASE_APP_ID` — App ID (org **variable**, numeric)
+- `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` — App private key PEM (org **secret**)
 
 ### One-time GitHub App setup (owner-handled)
 
