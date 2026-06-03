@@ -11,6 +11,13 @@
 # on the org with Contents + Pull requests write. The App token (vs the default
 # GITHUB_TOKEN) lets the release PR trigger `pull_request` CI gates.
 #
+# Behavior:
+#   - Blocks automated major version bumps (org policy). The versioning override
+#     forces minor-or-patch regardless of BREAKING CHANGE footers; major bumps
+#     are human-initiated only via .release-please-manifest.json.
+#   - Eager auto-merge: enables `--auto --squash` on the release PR so it lands
+#     once checks pass. Disable with `auto-merge: false` from the caller.
+#
 # Required files in each calling repo:
 #   release-please-config.json     — release configuration
 #   .release-please-manifest.json  — version manifest, e.g. {".": "1.2.3"}
@@ -28,6 +35,13 @@ name: _release-please
 
 on:
   workflow_call:
+    inputs:
+      auto-merge:
+        description: >-
+          Enable eager auto-merge of the release PR once checks pass. Set to
+          false to leave the release PR open for manual merge.
+        type: boolean
+        default: true
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY:
         required: true
@@ -41,6 +55,17 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - uses: actions/checkout@v6
+
+      # Org policy: automated major version bumps are forbidden. This overrides
+      # any repo-level versioning config so release-please never computes a major
+      # bump, regardless of BREAKING CHANGE footers. Major bumps are
+      # human-initiated only via .release-please-manifest.json.
+      - name: Enforce org-wide versioning policy (block automated major bumps)
+        run: |
+          jq '.packages[].versioning = "always-bump-minor"' release-please-config.json > /tmp/rp.json
+          mv /tmp/rp.json release-please-config.json
+
       - name: Generate GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -49,7 +74,31 @@ jobs:
           private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
           manifest-file: .release-please-manifest.json
           config-file: release-please-config.json
+
+      - name: Find release PR number
+        id: find-pr
+        if: '!cancelled()'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "release-please--branches--${BASE_BRANCH}" --json number --jq '.[0].number // empty')
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      # Disable+re-enable handles GitHub's stale auto-merge queue (PR is CLEAN
+      # with auto-merge enabled but the merge never executes). The retry loop
+      # handles transient GraphQL errors from `gh pr merge --auto`.
+      - name: Enable auto-merge for release PR (with re-poke + retry)
+        if: "!cancelled() && inputs.auto-merge && steps.find-pr.outputs.number != ''"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.find-pr.outputs.number }}
+        run: |
+          gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
+          for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto --squash && exit 0; sleep 15; done
+          exit 1
