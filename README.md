@@ -101,6 +101,10 @@ This repo exposes the following inheritance surfaces:
 | `renovate.json` | Org-default Renovate extending JacobPEvans presets |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
+| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
+| `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
+| `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
+| `osv-scanner.toml` | Org-wide OSV ignore list inherited via `_osv-scan.yml` (a repo-local copy takes precedence) |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
 
