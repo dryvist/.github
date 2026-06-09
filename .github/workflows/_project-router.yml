@@ -1,0 +1,77 @@
+# Add issues and PRs that carry a type:* label to the org project board.
+#
+# Native, deterministic router: the board exposes only Status and Phase
+# fields, so board membership is the meaningful action — handled by
+# actions/add-to-project with no model, prompt, or token spend. Items are
+# routed only once they are triaged (carry a type:* label).
+#
+# Concurrency is the CALLER's responsibility. A called workflow that declares
+# a workflow-level concurrency group identical to its caller's deadlocks every
+# run ("Canceling since a deadlock was detected for concurrency group ...
+# between a top level workflow and 'route'" — dryvist/docs#58), so this file
+# deliberately declares none.
+name: _project-router
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label to run the job(s) on. Defaults to
+          ubuntu-latest. Pass a RunsOn label (see runs-on.com job labels
+          docs) to opt the calling repo into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+      project-url:
+        description: >-
+          URL of the GitHub Projects v2 board to add matching items to.
+          Defaults to the org's primary board; override to route a repo's
+          items elsewhere.
+        type: string
+        required: false
+        default: https://github.com/orgs/dryvist/projects/1
+    secrets:
+      GH_APP_CLAUDE_BOT_PRIVATE_KEY:
+        description: >-
+          Private key for the routing app (dryvist org secret). Forwarded
+          explicitly by callers — same single-secret pattern as
+          _release-please.yml; no `secrets: inherit`.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  route:
+    # Route only triaged items — those carrying at least one type:* label. An
+    # item opened without one is added later, when the type:* label fires the
+    # caller's `issues: labeled` trigger.
+    if: >-
+      contains(join(github.event.issue.labels.*.name, ','), 'type:') ||
+      contains(join(github.event.pull_request.labels.*.name, ','), 'type:')
+    runs-on: ${{ inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 5
+    steps:
+      - name: Mint app installation token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.GH_APP_CLAUDE_BOT_ID }}
+          private-key: ${{ secrets.GH_APP_CLAUDE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          # Least-privilege: scope the token to the triggering repo plus the
+          # organization-projects permission actions/add-to-project needs.
+          # Requires the app installation to grant org "Projects" read+write.
+          repositories: ${{ github.event.repository.name }}
+          permission-organization-projects: write
+          permission-issues: read
+          permission-pull-requests: read
+
+      - name: Add item to project board
+        # No `v1` major tag exists for this action (only v1.0.x releases), so
+        # `@v1` fails job setup with "unable to resolve action".
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: ${{ inputs.project-url }}
+          github-token: ${{ steps.app-token.outputs.token }}
