@@ -99,14 +99,19 @@ jobs:
       # Take the PR number from the action's own `pr` output (a JSON PullRequest
       # object) rather than re-querying by branch name — release branch names vary
       # (component suffixes), and an exact `gh pr list --head` match silently
-      # misses them. Disable+re-enable handles GitHub's stale auto-merge queue;
-      # the retry loop handles transient GraphQL errors from `gh pr merge --auto`.
+      # misses them. The raw JSON is passed as a string and parsed with jq in the
+      # script: `fromJSON()` in an `env:` value is evaluated even when the step's
+      # `if` is false, so on a release-CUTTING run (no PR opened, `pr` is empty)
+      # `fromJSON('')` would throw a template error and fail the whole workflow.
+      # Disable+re-enable handles GitHub's stale auto-merge queue; the retry loop
+      # handles transient GraphQL errors from `gh pr merge --auto`.
       - name: Enable auto-merge for the release PR (with re-poke + retry)
         if: ${{ !cancelled() && inputs.auto-merge && steps.release.outputs.pr != '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
+          PR_NUMBER=$(jq -r '.number' <<<"$PR_JSON")
           gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
           for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto --squash && exit 0; sleep 15; done
           exit 1
