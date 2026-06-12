@@ -38,8 +38,10 @@ jobs:
         repo: ${{ fromJSON(vars.DISPATCH_CONSUMERS) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      contents: read
+    # No job-level permissions: every caller sets `permissions: {}`, and a
+    # called workflow may only downgrade — requesting more than the caller
+    # grants fails workflow-graph validation (startup_failure). All API
+    # access below uses the minted App token, never GITHUB_TOKEN.
     steps:
       - name: Generate GitHub App Token
         id: app-token

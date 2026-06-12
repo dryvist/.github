@@ -29,8 +29,7 @@ concurrency:
   group: update-flake-input-${{ inputs.input_name }}-${{ github.repository }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   update:
@@ -38,9 +37,11 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     environment: automation
     timeout-minutes: 20
-    permissions:
-      contents: write
-      pull-requests: write
+    # No job-level permissions: every caller sets `permissions: {}`, and a
+    # called workflow may only downgrade — requesting more than the caller
+    # grants fails workflow-graph validation (startup_failure). Checkout,
+    # PR creation, and auto-merge all use the minted App token, never
+    # GITHUB_TOKEN.
     steps:
       - name: Generate GitHub App Token
         id: app-token
