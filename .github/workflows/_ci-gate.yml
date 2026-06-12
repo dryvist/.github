@@ -20,6 +20,27 @@
 # `gate` never runs and the required `Merge Gate` status never reports. The
 # watchdog forces a terminal state by cancelling stuck queued jobs.
 #
+# Caller requirements (thin consumer shape):
+#
+#   jobs:
+#     gate:
+#       permissions:
+#         contents: read
+#         pull-requests: read
+#         actions: write   # REQUIRED: the watchdog cancels queued jobs via the
+#                          # Actions API, and a called workflow can never exceed
+#                          # the caller's token grant — omitting this fails the
+#                          # entire run at workflow-graph validation
+#                          # (startup_failure, 0s, no jobs, UI-only error).
+#       uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+#       with:
+#         markdown_lint: true
+#         file_size: true
+#         filters: |
+#           markdown:
+#             - '**.md'
+#             - '.markdownlint*'
+#
 # Filter name convention (caller defines these in `filters:` input):
 #
 #   nix            -> gates `nix_validate`
