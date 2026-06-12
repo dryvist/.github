@@ -109,6 +109,10 @@ jobs:
         if: ${{ !cancelled() && inputs.auto-merge && steps.release.outputs.pr != '' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # This job has no checkout, so gh cannot infer the repo from a local
+          # git remote — set it explicitly, or `gh pr merge` fails with
+          # "fatal: not a git repository".
+          GH_REPO: ${{ github.repository }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(jq -r '.number' <<<"$PR_JSON")
