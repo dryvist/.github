@@ -44,9 +44,9 @@ Renovate's custom manager (or manual update for now — see `renovate.json`).
 
 Release-please is **org-native** to this repo: every dryvist repo inherits the
 reusable `.github/workflows/_release-please.yml@main` here (not a cross-account
-JacobPEvans workflow). It blocks automated major bumps and eager-auto-merges the
-release PR. A dryvist repo's `release-please.yml` caller forwards a single
-secret:
+JacobPEvans workflow). It eager-auto-merges **every** release PR (patch, minor,
+or major) once checks pass — there is no automated major-bump block. A dryvist
+repo's `release-please.yml` caller forwards a single secret:
 
 | dryvist org secret | Reusable workflow secret |
 | --- | --- |
@@ -57,6 +57,24 @@ org variable, private key from the `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY` org
 secret. The App must be installed on the org with Contents + Pull requests write.
 (Owner sets these manually after installing the App; the agent should not attempt
 to install it. See `README.md` for setup steps.)
+
+### Canonical release config
+
+The canonical `release-please-config.json` lives here at
+`configs/release-please-config.json` (single source of truth, same model as
+`biome.jsonc` / `.markdownlint-cli2.yaml`). Repos copy it; they only diverge when
+they **must**, and such deltas are intentional, e.g.:
+
+- `claude-code-plugins` adds `extra-files` to bump its many `plugin.json`
+  versions.
+- Pre-1.0 / beta repos (e.g. `nix-ai-server`) add `bump-minor-pre-major: true`
+  so breaking changes stay in the `0.x` range instead of auto-jumping to `1.0`.
+
+The reusable workflow also supports **config-free (non-manifest) mode** via its
+inputs (`release-type` + blank `config-file`/`manifest-file`) for repos that need
+no per-repo config at all; manifest mode (with the file above) is the default.
+Do not hand-tweak a repo's `release-please-config.json` away from canonical
+without a recorded reason.
 
 ## Inheritance from `JacobPEvans/.github`
 
