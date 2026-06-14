@@ -76,6 +76,45 @@ no per-repo config at all; manifest mode (with the file above) is the default.
 Do not hand-tweak a repo's `release-please-config.json` away from canonical
 without a recorded reason.
 
+## PR review (org-wide, owned)
+
+Every PR gets a lightweight, owned review that re-runs on every commit until
+merge. It is composed only of standard published tools — **no scripts we author**
+— wired in `.github/workflows/pr-review.yml`. Delivery mirrors `markdownlint.yml`:
+a standalone workflow injected into every dryvist repo's default-branch PRs via
+`dryvist/terraform-github`'s `github_organization_ruleset` (Required Workflows).
+Until that injection lands it still runs on this repo's own PRs.
+
+| Layer | Tool | Posture |
+| --- | --- | --- |
+| Secret / sensitive-value scan | `gitleaks` (+ private overlay) | **Blocking** |
+| PR title = squash subject (Conventional Commits, no emoji) | `amannn/action-semantic-pull-request` | **Blocking** |
+| Semantic checklist | `anthropics/claude-code-action` on a cheap model | **Advisory** |
+
+The canonical checklist is `configs/pr-review-checklist.md` (the single source of
+truth; also the advisory pass's prompt). The advisory pass is pinned to a cheap
+non-SOTA model (`claude-haiku-4-5`, capped turns) to conserve credits and never
+blocks merge.
+
+This repo is **public**, so no real sensitive value is ever committed. The
+gitleaks baseline `.gitleaks.toml` holds only generic patterns + safe
+placeholders; the real org denylist (internal domains, hostnames, IP ranges)
+lives in the **`GITLEAKS_CONFIG_PRIVATE`** org secret, which `[extend]`s the
+baseline at runtime. Owner-provisioned org secrets (visibility: all):
+
+| Org secret | Purpose |
+| --- | --- |
+| `GITLEAKS_LICENSE` | Free key from gitleaks.io — required for org-owned repos |
+| `ANTHROPIC_API_KEY` | Auth for the advisory cheap-model pass |
+| `GITLEAKS_CONFIG_PRIVATE` | Optional private gitleaks overlay (real values, never committed) |
+
+This is the durable replacement for vendor auto-review: org-wide Copilot
+instructions need a Copilot seat the org does not have, a repo
+`.github/copilot-instructions.md` does not propagate org-wide, and the free Gemini
+Code Assist GitHub app is scheduled to shut down 2026-07-17. The thin
+`.github/copilot-instructions.md` and `.gemini/styleguide.md` here only point
+those tools at the same checklist for whoever can still use them.
+
 ## Master source of truth (no upstream inheritance)
 
 `dryvist/.github` is the **master**: it extends no other repository's config.

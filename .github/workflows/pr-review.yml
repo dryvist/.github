@@ -1,0 +1,150 @@
+# Org-wide lightweight PR review.
+#
+# Same delivery model as markdownlint.yml: a standalone workflow meant to be
+# injected into the default-branch PRs of EVERY dryvist repo via
+# dryvist/terraform-github's github_organization_ruleset (Required Workflows).
+# Until that injection lands it still runs on this repo's own PRs.
+#
+# Three standard, published tools — no scripts we author:
+#
+#   secret-scan  -> gitleaks (BLOCKING). Forces the org .gitleaks.toml; an
+#                   optional private overlay (real internal domains/hosts/IPs)
+#                   arrives only as the GITLEAKS_CONFIG_PRIVATE org secret and is
+#                   never committed.
+#   pr-title     -> amannn/action-semantic-pull-request (BLOCKING). The squash
+#                   subject = the PR title, so we validate the title: Conventional
+#                   Commits + plain-ASCII subject (no emoji).
+#   ai-review    -> anthropics/claude-code-action on a cheap model (ADVISORY).
+#                   Reads configs/pr-review-checklist.md and posts one comment.
+#                   continue-on-error: never blocks merge.
+#
+# Owner-provisioned org secrets (one-time; visibility: all):
+#   GITLEAKS_LICENSE         - free key from gitleaks.io (required for org repos)
+#   ANTHROPIC_API_KEY        - for the advisory AI pass (cheap model)
+#   GITLEAKS_CONFIG_PRIVATE  - optional private gitleaks overlay (see below)
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions: {}
+
+concurrency:
+  group: pr-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # BLOCKING: secret / sensitive-value scan (gitleaks + private overlay)
+  # ==========================================================================
+  secret-scan:
+    name: Secret Scan
+    # Title-only edits can't change file content; skip the expensive scan.
+    if: ${{ github.event.action != 'edited' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout org gitleaks config (single source of truth)
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .org-github
+
+      - name: Resolve gitleaks config (private overlay if configured)
+        env:
+          # Secret materialization only — never committed. The overlay TOML must
+          # `[extend] path = ".gitleaks.toml"` to inherit the public baseline.
+          PRIVATE_CFG: ${{ secrets.GITLEAKS_CONFIG_PRIVATE }}
+        run: |
+          if [ -n "$PRIVATE_CFG" ]; then
+            printf '%s\n' "$PRIVATE_CFG" > .org-github/.gitleaks-private.toml
+            echo "GITLEAKS_CONFIG=$PWD/.org-github/.gitleaks-private.toml" >> "$GITHUB_ENV"
+          else
+            echo "GITLEAKS_CONFIG=$PWD/.org-github/.gitleaks.toml" >> "$GITHUB_ENV"
+          fi
+
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          # GITLEAKS_CONFIG is set by the previous step.
+
+  # ==========================================================================
+  # BLOCKING: PR title = squash subject (Conventional Commits, no emoji)
+  # ==========================================================================
+  pr-title:
+    name: PR Title
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Plain-ASCII subject only -> rejects emoji and other non-ASCII.
+          subjectPattern: '^[\x20-\x7E]+$'
+          subjectPatternError: >-
+            The PR title subject must be plain ASCII (no emoji). The title is the
+            squash-merge commit subject; keep it Conventional-Commit + plain text.
+          types: |
+            feat
+            fix
+            chore
+            docs
+            refactor
+            test
+            ci
+            build
+            perf
+            style
+            revert
+
+  # ==========================================================================
+  # ADVISORY: cheap-model checklist review (never blocks)
+  # ==========================================================================
+  ai-review:
+    name: AI Review (advisory)
+    if: ${{ github.event.action != 'edited' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v6
+
+      - name: Checkout org checklist (single source of truth)
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .org-github
+
+      - name: Claude advisory review (cheap model)
+        # Advisory only: an empty ANTHROPIC_API_KEY or any failure must not block.
+        continue-on-error: true
+        uses: anthropics/claude-code-action@d5726de019ec4498aa667642bc3a80fca83aa102 # v1
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          # Bound cost: cheap model + capped turns. Claude reads the checklist
+          # file itself, so this stays a tight, strictly-scoped pass.
+          claude_args: --model claude-haiku-4-5 --max-turns 12
+          prompt: |
+            Read the dryvist PR review checklist at
+            `.org-github/configs/pr-review-checklist.md` and follow its reviewer
+            instructions exactly to review THIS pull request's diff. That file is
+            the single source of truth; do not exceed its scope. Post one concise
+            review comment in its output format, or the single line
+            "No checklist issues found." if nothing applies.

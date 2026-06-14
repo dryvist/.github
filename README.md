@@ -89,6 +89,36 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
    Or via UI at <https://github.com/organizations/dryvist/settings/secrets/actions>.
 
+### Org-wide PR review
+
+`.github/workflows/pr-review.yml` reviews every PR (and every push to an open PR)
+with three standard tools — no authored scripts: `gitleaks` (blocking secret /
+sensitive-value scan), `amannn/action-semantic-pull-request` (blocking PR-title /
+Conventional-Commit / no-emoji check), and `anthropics/claude-code-action` on a
+cheap model (advisory checklist from `configs/pr-review-checklist.md`). It runs on
+this repo's own PRs now and is meant to be injected into every dryvist repo via
+`dryvist/terraform-github`'s Required Workflows ruleset (the same mechanism as
+`markdownlint.yml`).
+
+This repo is public, so no real sensitive values are committed: `.gitleaks.toml`
+holds only generic patterns, and the real denylist lives in a private overlay
+delivered as an org secret. Org-level prereqs (one-time, owner-handled,
+visibility: all):
+
+```sh
+# Free key from https://gitleaks.io (required for org-owned repos):
+gh secret set GITLEAKS_LICENSE --org dryvist --visibility all
+# Auth for the advisory cheap-model pass:
+gh secret set ANTHROPIC_API_KEY --org dryvist --visibility all
+# Optional: private gitleaks overlay (real internal domains/hosts/IPs). The TOML
+# must start with `[extend]` `path = ".gitleaks.toml"` to inherit the baseline:
+gh secret set GITLEAKS_CONFIG_PRIVATE --org dryvist --visibility all < private-gitleaks.toml
+```
+
+Without `GITLEAKS_LICENSE` the blocking scan job fails; without `ANTHROPIC_API_KEY`
+the advisory pass is skipped (it never blocks). The private overlay is optional —
+absent it, only the generic baseline rules apply.
+
 ## API
 
 This repo exposes the following inheritance surfaces:
@@ -104,7 +134,11 @@ This repo exposes the following inheritance surfaces:
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
-| `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
+| `.github/workflows/pr-review.yml` | Standalone org-wide PR reviewer (gitleaks + PR-title + cheap-model advisory); injected via Required Workflows |
+| `configs/` | Shared configs the reusable workflows fetch at runtime (`_markdown-lint` fallback; `pr-review-checklist.md`) |
+| `.gitleaks.toml` | gitleaks baseline (generic patterns only; real denylist via the `GITLEAKS_CONFIG_PRIVATE` org secret) |
+| `.github/copilot-instructions.md` | Thin Copilot pointer to the checklist (repo-level only; needs a Copilot seat) |
+| `.gemini/styleguide.md` | Thin Gemini Code Assist pointer (free GitHub app sunsets 2026-07-17) |
 | `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
 | `osv-scanner.toml` | Org-wide OSV ignore list inherited via `_osv-scan.yml` (a repo-local copy takes precedence) |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |

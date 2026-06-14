@@ -1,0 +1,30 @@
+# dryvist org gitleaks baseline (PUBLIC — generic patterns only).
+#
+# This committed config holds only generic, non-sensitive rules. The real org
+# denylist (internal domains, hostnames, IP ranges) lives in a PRIVATE gitleaks
+# config delivered to CI as the `GITLEAKS_CONFIG_PRIVATE` org secret, which
+# `[extend]`s this file at runtime (see .github/workflows/pr-review.yml). Never
+# commit real sensitive values here — this repository is public.
+title = "dryvist gitleaks baseline"
+
+[extend]
+# Keep gitleaks' built-in secret detectors (API keys, tokens, private keys).
+useDefault = true
+
+[[rules]]
+id = "dryvist-absolute-home-path"
+description = "Absolute local home path committed; use a placeholder or a variable"
+regex = '''/(?:Users|home)/[A-Za-z][A-Za-z0-9._-]+/'''
+tags = ["dryvist", "path"]
+
+[allowlist]
+description = "Safe placeholders + the org-config checkout dir (never scanned)"
+# The reusable workflow checks the org config out into .org-github/ and writes
+# the private overlay there. That directory holds real values at runtime, so it
+# must never be scanned (its findings would surface in public Action logs).
+paths = [
+  '''\.org-github/''',
+]
+regexes = [
+  '''/(?:Users|home)/(?:runner|username|user|youruser|example)/''',
+]
