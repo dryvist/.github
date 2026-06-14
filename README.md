@@ -16,7 +16,7 @@ inherit configs and policies via the mechanisms below.
 | Inheritance mechanism | Where it shows up |
 | --- | --- |
 | GitHub auto-applied org files (`SECURITY.md`, `profile/README.md`) | Visible on every dryvist repo's Security tab + at <https://github.com/dryvist> |
-| Renovate `extends` | `renovate.json` in each repo: `extends: github>JacobPEvans/.github:renovate-presets` (this repo's `renovate.json` is the example) |
+| Renovate `extends` | Each repo: `extends: ["config:recommended", "local>dryvist/.github"]` — this repo is the **master** (extends nothing external) |
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
 | markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
 | Pre-commit hooks (shared) | `precommit/` — Nix flake import or static YAML copy; see [`precommit/README.md`](precommit/README.md) |
@@ -98,7 +98,9 @@ This repo exposes the following inheritance surfaces:
 | `CLAUDE.md` | AI assistant policy (read by Claude Code) |
 | `biome.jsonc` | Canonical Biome lint + format config (code) |
 | `.markdownlint-cli2.yaml` | Canonical markdownlint-cli2 config (`.md` files) |
-| `renovate.json` | Org-default Renovate extending JacobPEvans presets |
+| `renovate.json` | Org-default Renovate entry point (master; extends only `config:recommended` + local presets) |
+| `renovate-presets.json` | Master Renovate policy: auto-merge, trusted orgs, custom managers |
+| `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
@@ -130,7 +132,7 @@ npx -y markdownlint-cli2 "**/*.md"
 
 ## References
 
-- [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — upstream org we inherit from
+- [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — to become a downstream consumer of this repo's presets (inversion pending)
 - [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template) — Cribl pack template
 - [Biome configuration reference](https://biomejs.dev/reference/configuration/)
 - [markdownlint-cli2 configuration](https://github.com/DavidAnson/markdownlint-cli2#configuration)

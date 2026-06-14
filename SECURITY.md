@@ -13,8 +13,8 @@ to this [.github repository](https://github.com/dryvist/.github/security/advisor
 
 ## Dependency Trust
 
-Automated dependency updates use Renovate via the inherited preset
-[`JacobPEvans/.github:renovate-presets`](https://github.com/JacobPEvans/.github/blob/main/renovate-presets.json).
+Automated dependency updates use Renovate via this repo's master presets
+([`renovate-presets.json`](renovate-presets.json) + [`renovate-grouping.json`](renovate-grouping.json)).
 The presets enforce a tiered trust model:
 
 | Tier | Scope | Stabilization | Auto-merge |
@@ -24,7 +24,7 @@ The presets enforce a tiered trust model:
 | **Default** | All other external dependencies | 3 days | Manual review |
 
 GitHub Actions from untrusted orgs are pinned to SHA digests, not tags
-(`pinGitHubActionDigests: true` in the inherited preset). Vulnerability
+(`pinGitHubActionDigests: true` in the preset). Vulnerability
 alerts auto-merge without the 3-day wait.
 
 ## Version Pinning
@@ -32,7 +32,6 @@ alerts auto-merge without the 3-day wait.
 | Source | Strategy |
 | --- | --- |
 | dryvist self-references | `@main` or major version tag — never SHA or minor/patch pins |
-| JacobPEvans inherited workflows | `@main` (per the inherited org's policy) |
 | Trusted GitHub Actions | Semantic version tags (`@v6`) |
 | External/untrusted GitHub Actions | SHA commit hash pins |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
@@ -46,7 +45,7 @@ alerts auto-merge without the 3-day wait.
 
 ## Auditable Workflow Boundaries
 
-Reusable workflows we inherit from `JacobPEvans/.github` are pinned to `@main`
-intentionally — the upstream org follows the same security posture as
-dryvist. If you need to audit a specific workflow run, the resolved SHA is
-logged in the GitHub Actions UI for that run.
+This repo's own reusable workflows are referenced at `@main` by dryvist
+repos intentionally — they are first-party and self-owned (this repo
+extends nothing external). If you need to audit a specific workflow run,
+the resolved SHA is logged in the GitHub Actions UI for that run.
