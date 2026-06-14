@@ -1,4 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "github>JacobPEvans/.github:renovate-presets"]
+  "extends": ["config:recommended", "github>JacobPEvans/.github:renovate-presets"],
+  "customManagers": [
+    {
+      "description": [
+        "Docker images pinned in Ansible role defaults as `<name>_image: \"repo:tag\"`. These live in plain YAML vars that no built-in manager scans, so the image pins across ansible-proxmox-apps roles (prometheus_stack, netmon, qdrant_docker, ntfy_docker, mailpit_docker, etc.) were untracked by Renovate. Matched as the `docker` datasource so Renovate bumps the tag in place; image refs are self-describing (repo:tag) so no per-line `# renovate:` annotation is needed. Untagged refs (no colon) are not matched; local-only tags resolve to nothing and are skipped.",
+        "customManagers is mergeable:true, so this concatenates with — does not replace — the Nix version-pin manager in the JacobPEvans/.github:renovate-presets preset this config extends. Lives in dryvist/.github so every dryvist repo inherits it; JacobPEvans-personal repos do not. Promote this manager into the renovate-presets entry point if/when those repos need the same coverage."
+      ],
+      "customType": "regex",
+      "managerFilePatterns": ["/roles/.+/defaults/main\\.ya?ml$/"],
+      "matchStrings": [
+        "_image:\\s*[\"'](?<depName>[^:\"'\\s]+):(?<currentValue>[^\"'\\s]+)[\"']"
+      ],
+      "datasourceTemplate": "docker"
+    }
+  ]
 }
