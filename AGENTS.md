@@ -34,7 +34,7 @@ Python is not used for new dryvist work.
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
-| Dependency updates | Renovate | Extends `JacobPEvans/.github:renovate-presets` |
+| Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
 
 The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo at
 the root. Repos copy them at scaffold time; periodic sync is handled by
@@ -76,15 +76,14 @@ no per-repo config at all; manifest mode (with the file above) is the default.
 Do not hand-tweak a repo's `release-please-config.json` away from canonical
 without a recorded reason.
 
-## Inheritance from `JacobPEvans/.github`
+## Master source of truth (no upstream inheritance)
 
-We still reuse a few JacobPEvans community-health and config artifacts directly.
-Don't fork or wrap them unless we need behavior they don't provide.
-
-| Need | Inherited from | Caller pattern |
-| --- | --- | --- |
-| Renovate presets | `github>JacobPEvans/.github:renovate-presets` | `extends` in `renovate.json` |
-| Security policy structure | `JacobPEvans/.github/SECURITY.md` | Adapted/scoped to dryvist (this repo) |
+`dryvist/.github` is the **master**: it extends no other repository's config.
+Renovate policy lives here in `renovate-presets.json` + `renovate-grouping.json`;
+reusable workflows are first-party. The dependency direction is inverted —
+`JacobPEvans/.github` extends THIS repo's presets, not the reverse. (Flipping the
+JacobPEvans side to `extends: github>dryvist/.github:renovate-presets` and deleting
+its duplicate preset copies is a pending follow-up.)
 
 ## Scope of this repo
 
@@ -113,8 +112,8 @@ For every change in dryvist:
 
 ## When in doubt
 
-- Read [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) for the
-  upstream patterns we inherit.
+- `dryvist/.github` is the master for org policy (Renovate presets, reusable
+  workflows); it inherits nothing from `JacobPEvans/.github`.
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
