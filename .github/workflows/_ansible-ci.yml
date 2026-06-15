@@ -1,30 +1,24 @@
 # Reusable: Ansible CI (Merge Gatekeeper for ansible repos)
 #
-# Centralizes the ansible CI that previously lived as divergent inline/local
-# workflows in every ansible repo (ansible-proxmox, ansible-proxmox-apps,
-# ansible-splunk). It owns the parts that ARE common and must be consistent:
+# Centralizes the ansible CI that drifted into divergent inline/local workflows
+# across ansible-proxmox, ansible-proxmox-apps and ansible-splunk. Owns the parts
+# that must be consistent, using only off-the-shelf actions (no scripts):
 #
-#   changes  -> dorny/paths-filter on a SINGLE standardized ansible filter
-#               (includes roles/**/*.j2 — a template-only change must lint)
-#   ansible-lint -> gated on the `ansible` filter (scripts/ansible-ci-lint.sh)
-#   molecule -> gated on the `molecule` filter; scenarios DISCOVERED from the
-#               repo, optional masked least-privilege Doppler key export
-#   watchdog -> unsticks the gate when a sibling job hangs `queued`
-#   gate     -> name MUST stay "Merge Gate" (branch-protection ruleset)
-#
-# All non-trivial bash lives in scripts/ (sparse-checked-out per job, pinned to
-# this workflow's own commit so a branch under test uses its matching scripts) —
-# the workflow YAML stays logic-free, matching the _ci-gate.yml watchdog pattern.
+#   changes      -> dorny/paths-filter on ONE standardized filter (incl. *.j2)
+#   ansible-lint -> ansible/ansible-lint
+#   molecule     -> matrix from the caller's `molecule_scenarios`, optional
+#                   Doppler secrets via dopplerhq/secrets-fetch-action
+#   gate         -> name MUST stay "Merge Gate" (branch-protection ruleset)
 #
 # Repo-specific data-contract tests (inventory schema/load, template render,
-# bespoke syntax checks) and self-hosted e2e are NOT centralized — they live in
-# the caller. Such callers set `emit_gate: false` and run their OWN "Merge Gate"
-# aggregating this workflow's result plus their local jobs.
+# bespoke syntax) and self-hosted e2e are NOT centralized — they live in the
+# caller, which sets emit_gate:false and runs its own "Merge Gate" aggregating
+# this workflow's result plus the local jobs.
 #
-# Thin caller (no extra local jobs — proxmox):
+# Thin caller (no extra local jobs):
 #   jobs:
 #     ci:
-#       permissions: { contents: read, pull-requests: read, actions: write }
+#       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
 
 name: _ansible-ci
@@ -33,35 +27,31 @@ on:
   workflow_call:
     inputs:
       python_version:
-        description: Python version for lint + molecule jobs.
+        description: Python version for the molecule job.
         type: string
         default: "3.13"
-      lint_scope:
-        description: >-
-          Args passed to ansible-lint (e.g. 'playbooks/ roles/'). Empty = whole
-          project (ansible-lint default discovery).
+      lint_args:
+        description: Extra args for ansible/ansible-lint (e.g. 'playbooks/ roles/').
         type: string
         default: ""
-      yamllint:
-        description: Also run `yamllint .` in the lint job.
-        type: boolean
-        default: false
       molecule:
         description: Enable the molecule job (gated on the `molecule` filter).
         type: boolean
         default: true
-      molecule_doppler_keys:
-        description: >-
-          Space-separated Doppler secret names to export (masked) into the
-          molecule job. Empty = no secrets. Requires the `doppler_token` secret.
+      molecule_scenarios:
+        description: JSON array of molecule scenario names to run as a matrix.
         type: string
-        default: ""
+        default: '["default"]'
+      molecule_doppler:
+        description: Inject iac-conf-mgmt secrets into the molecule job (needs doppler_token).
+        type: boolean
+        default: false
       doppler_project:
-        description: Doppler project for molecule_doppler_keys.
+        description: Doppler project for molecule secrets.
         type: string
         default: "iac-conf-mgmt"
       doppler_config:
-        description: Doppler config for molecule_doppler_keys.
+        description: Doppler config for molecule secrets.
         type: string
         default: "prd"
       emit_gate:
@@ -74,13 +64,9 @@ on:
         description: Runner label for all jobs.
         type: string
         default: ubuntu-latest
-      queue_timeout_minutes:
-        description: Minutes before the watchdog cancels jobs stuck `queued`.
-        type: number
-        default: 10
     secrets:
       doppler_token:
-        description: Doppler service token, only needed for molecule_doppler_keys.
+        description: Doppler service token, only needed when molecule_doppler is true.
         required: false
 
 permissions:
@@ -123,82 +109,39 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     steps:
       - uses: actions/checkout@v6
-      - name: Sparse-checkout shared scripts
-        uses: actions/checkout@v6
+      - uses: ansible/ansible-lint@v26
         with:
-          repository: dryvist/.github
-          ref: main
-          path: .gh-shared
-          sparse-checkout: scripts/
-          sparse-checkout-cone-mode: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ inputs.python_version }}
-      - uses: astral-sh/setup-uv@v8.1.0
-        with:
-          version: latest
-      - name: Lint
-        env:
-          YAMLLINT: ${{ inputs.yamllint }}
-          LINT_SCOPE: ${{ inputs.lint_scope }}
-        run: bash .gh-shared/scripts/ansible-ci-lint.sh
-
-  molecule-discover:
-    name: Discover Molecule Scenarios
-    needs: changes
-    if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
-    runs-on: ${{ inputs.runner_label }}
-    outputs:
-      scenarios: ${{ steps.d.outputs.scenarios }}
-    steps:
-      - uses: actions/checkout@v6
-      - name: Sparse-checkout shared scripts
-        uses: actions/checkout@v6
-        with:
-          repository: dryvist/.github
-          ref: main
-          path: .gh-shared
-          sparse-checkout: scripts/
-          sparse-checkout-cone-mode: false
-      - name: Discover
-        id: d
-        run: bash .gh-shared/scripts/ansible-ci-discover-scenarios.sh
+          args: ${{ inputs.lint_args }}
 
   molecule:
     name: Molecule (${{ matrix.scenario }})
-    needs: molecule-discover
-    if: ${{ needs.molecule-discover.result == 'success' && needs.molecule-discover.outputs.scenarios != '[]' }}
+    needs: changes
+    if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
     runs-on: ${{ inputs.runner_label }}
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(needs.molecule-discover.outputs.scenarios) }}
+        scenario: ${{ fromJSON(inputs.molecule_scenarios) }}
     steps:
       - uses: actions/checkout@v6
-      - name: Sparse-checkout shared scripts
-        uses: actions/checkout@v6
-        with:
-          repository: dryvist/.github
-          ref: main
-          path: .gh-shared
-          sparse-checkout: scripts/
-          sparse-checkout-cone-mode: false
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python_version }}
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           version: latest
-      - name: Install molecule + dependencies
-        run: bash .gh-shared/scripts/ansible-ci-molecule-deps.sh
-      - name: Export selected Doppler secrets
-        if: ${{ inputs.molecule_doppler_keys != '' }}
-        env:
-          DOPPLER_TOKEN: ${{ secrets.doppler_token }}
-          KEYS: ${{ inputs.molecule_doppler_keys }}
-          PROJECT: ${{ inputs.doppler_project }}
-          CONFIG: ${{ inputs.doppler_config }}
-        run: bash .gh-shared/scripts/ansible-ci-doppler-export.sh
+      - name: Install molecule
+        run: uv pip install --system molecule 'molecule-plugins[docker]>=23.0.0' 'ansible-core>=2.16' 'docker>=7.0.0' 'urllib3<2.0' 'requests<2.32' netaddr ansible-lint
+      - name: Install Ansible collections
+        run: ansible-galaxy collection install -r requirements.yml --force
+      - name: Fetch Doppler secrets
+        if: ${{ inputs.molecule_doppler }}
+        uses: dopplerhq/secrets-fetch-action@451892f16195f9ac360e1a5bcbf0b5fd0e957534 # v2.0.0
+        with:
+          doppler-token: ${{ secrets.doppler_token }}
+          doppler-project: ${{ inputs.doppler_project }}
+          doppler-config: ${{ inputs.doppler_config }}
+          inject-env-vars: true
       - name: Run molecule
         env:
           PY_COLORS: "1"
@@ -207,39 +150,14 @@ jobs:
           MOLECULE_SCENARIO: ${{ matrix.scenario }}
         run: molecule test -s "$MOLECULE_SCENARIO"
 
-  watchdog:
-    name: Queue Watchdog
-    needs: changes
-    runs-on: ${{ inputs.runner_label }}
-    permissions:
-      actions: write
-      contents: read
-    timeout-minutes: 30
-    steps:
-      - name: Sparse-checkout watchdog script
-        uses: actions/checkout@v6
-        with:
-          repository: dryvist/.github
-          ref: main
-          path: .gh-shared
-          sparse-checkout: scripts/ci-gate-watchdog.sh
-          sparse-checkout-cone-mode: false
-      - name: Sleep, then cancel any sibling job still queued
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          QUEUE_TIMEOUT_MINUTES: ${{ inputs.queue_timeout_minutes }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-        run: bash .gh-shared/scripts/ci-gate-watchdog.sh
-
   gate:
     name: Merge Gate
-    needs: [changes, ansible-lint, molecule-discover, molecule, watchdog]
+    needs: [changes, ansible-lint, molecule]
     if: ${{ inputs.emit_gate && always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
-          allowed-skips: ansible-lint, molecule-discover, molecule, watchdog
+          allowed-skips: ansible-lint, molecule
           jobs: ${{ toJSON(needs) }}
