@@ -42,6 +42,12 @@ on:
         description: JSON array of molecule scenario names to run as a matrix.
         type: string
         default: '["default"]'
+      molecule_requirements:
+        description: >-
+          Pip requirements file with the molecule job's dependencies (each repo
+          owns one so its driver + version pins are respected).
+        type: string
+        default: "requirements-ci.txt"
       molecule_doppler:
         description: Inject iac-conf-mgmt secrets into the molecule job (needs doppler_token).
         type: boolean
@@ -130,8 +136,10 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           version: latest
-      - name: Install molecule
-        run: uv pip install --system molecule 'molecule-plugins[docker]>=23.0.0' 'ansible-core>=2.16' 'docker>=7.0.0' 'urllib3<2.0' 'requests<2.32' netaddr ansible-lint
+      - name: Install molecule + dependencies
+        env:
+          REQ: ${{ inputs.molecule_requirements }}
+        run: uv pip install --system -r "$REQ"
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml --force
       - name: Fetch Doppler secrets
