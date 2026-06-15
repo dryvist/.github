@@ -1,0 +1,276 @@
+# Reusable: Ansible CI (Merge Gatekeeper for ansible repos)
+#
+# Centralizes the ansible CI that previously lived as divergent inline/local
+# workflows in every ansible repo (ansible-proxmox, ansible-proxmox-apps,
+# ansible-splunk). It owns the parts that ARE common and must be consistent:
+#
+#   changes  -> dorny/paths-filter on a SINGLE standardized ansible filter
+#               (includes roles/**/*.j2 — a template-only change must lint)
+#   ansible-lint -> gated on the `ansible` filter
+#   molecule -> gated on the `molecule` filter; scenarios are DISCOVERED from
+#               the repo (no per-repo scenario list to drift), optional Doppler
+#               keys exported least-privilege via the CLI (named keys only)
+#   watchdog -> unsticks the gate when a sibling job hangs `queued`
+#   gate     -> name MUST stay "Merge Gate" (branch-protection ruleset)
+#
+# Repo-specific data-contract tests (inventory schema/load, template render,
+# bespoke syntax checks) and self-hosted e2e are NOT centralized — they live in
+# the caller. Such callers set `emit_gate: false` and run their OWN "Merge Gate"
+# that aggregates this workflow's result plus their local jobs.
+#
+# Thin-caller shape (no extra local jobs — proxmox):
+#
+#   jobs:
+#     ci:
+#       permissions: { contents: read, pull-requests: read, actions: write }
+#       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
+#
+# Caller WITH extra local jobs (apps/splunk) sets emit_gate:false and owns the
+# gate; see the per-repo ci-gate.yml.
+
+name: _ansible-ci
+
+on:
+  workflow_call:
+    inputs:
+      python_version:
+        description: Python version for lint + molecule jobs.
+        type: string
+        default: "3.13"
+      lint_scope:
+        description: >-
+          Args passed to `ansible-lint` (e.g. 'playbooks/ roles/'). Empty =
+          lint the whole project (ansible-lint's default discovery).
+        type: string
+        default: ""
+      yamllint:
+        description: Also run `yamllint .` in the lint job.
+        type: boolean
+        default: false
+      molecule:
+        description: Enable the molecule job (gated on the `molecule` filter).
+        type: boolean
+        default: true
+      molecule_doppler_keys:
+        description: >-
+          Space-separated Doppler secret names to export (masked) into the
+          molecule job env. Empty = no secrets fetched. Requires the
+          `doppler_token` secret. Least-privilege: only the named keys are
+          exported, never the whole config.
+        type: string
+        default: ""
+      doppler_project:
+        description: Doppler project for molecule_doppler_keys.
+        type: string
+        default: "iac-conf-mgmt"
+      doppler_config:
+        description: Doppler config for molecule_doppler_keys.
+        type: string
+        default: "prd"
+      emit_gate:
+        description: >-
+          Emit the required "Merge Gate" job. Set false when the CALLER runs its
+          own "Merge Gate" that also aggregates repo-local jobs (avoids two
+          checks with the same name).
+        type: boolean
+        default: true
+      runner_label:
+        description: Runner label for all jobs.
+        type: string
+        default: ubuntu-latest
+      queue_timeout_minutes:
+        description: Minutes before the watchdog cancels jobs stuck `queued`.
+        type: number
+        default: 10
+    secrets:
+      doppler_token:
+        description: Doppler service token, only needed for molecule_doppler_keys.
+        required: false
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ============================================================================
+  # CHANGE DETECTION — single standardized ansible filter (incl. *.j2).
+  # ============================================================================
+  changes:
+    name: Detect Changes
+    runs-on: ${{ inputs.runner_label }}
+    outputs:
+      ansible: ${{ steps.filter.outputs.ansible }}
+      molecule: ${{ steps.filter.outputs.molecule }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4
+        id: filter
+        with:
+          filters: |
+            ansible:
+              - '**.yml'
+              - '**.yaml'
+              - '**.j2'
+              - 'roles/**'
+              - 'playbooks/**'
+              - 'inventory/**'
+              - 'molecule/**'
+              - '.ansible-lint'
+              - '.yamllint'
+              - 'requirements.yml'
+            molecule:
+              - 'roles/**'
+              - 'molecule/**'
+              - 'requirements.yml'
+
+  # ============================================================================
+  # ANSIBLE-LINT (+ optional yamllint)
+  # ============================================================================
+  ansible-lint:
+    name: Ansible Lint
+    needs: changes
+    if: ${{ needs.changes.outputs.ansible == 'true' }}
+    runs-on: ${{ inputs.runner_label }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python_version }}
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+      - name: Install lint tooling
+        run: |
+          uv pip install --system ansible-lint ansible-core ${{ inputs.yamllint && 'yamllint' || '' }}
+      - name: Install Ansible collections
+        run: |
+          if [ -f requirements.yml ]; then
+            ansible-galaxy collection install -r requirements.yml
+          fi
+      - name: yamllint
+        if: ${{ inputs.yamllint }}
+        run: yamllint .
+      - name: ansible-lint
+        env:
+          LINT_SCOPE: ${{ inputs.lint_scope }}
+        run: |
+          read -ra scope <<< "$LINT_SCOPE"
+          ansible-lint "${scope[@]}"
+
+  # ============================================================================
+  # MOLECULE — scenarios discovered from the repo, optional masked Doppler keys.
+  # ============================================================================
+  molecule-discover:
+    name: Discover Molecule Scenarios
+    needs: changes
+    if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
+    runs-on: ${{ inputs.runner_label }}
+    outputs:
+      scenarios: ${{ steps.d.outputs.scenarios }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Discover molecule scenarios
+        id: d
+        run: |
+          list=$(find . -path '*/molecule/*/molecule.yml' \
+            -exec sh -c 'basename "$(dirname "$1")"' _ {} \; | sort -u | jq -R . | jq -s -c .)
+          [ -z "$list" ] && list='[]'
+          echo "scenarios=$list" >> "$GITHUB_OUTPUT"
+          echo "Discovered scenarios: $list"
+
+  molecule:
+    name: Molecule (${{ matrix.scenario }})
+    needs: molecule-discover
+    if: ${{ needs.molecule-discover.result == 'success' && needs.molecule-discover.outputs.scenarios != '[]' }}
+    runs-on: ${{ inputs.runner_label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: ${{ fromJSON(needs.molecule-discover.outputs.scenarios) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ inputs.python_version }}
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          version: latest
+      - name: Install molecule + dependencies
+        run: |
+          uv pip install --system \
+            molecule 'molecule-plugins[docker]>=23.0.0' 'ansible-core>=2.16' \
+            'docker>=7.0.0' netaddr ansible-lint
+      - name: Install Ansible collections
+        run: |
+          if [ -f requirements.yml ]; then
+            ansible-galaxy collection install -r requirements.yml --force
+          fi
+      # Least-privilege secret export: fetch the config once, export ONLY the
+      # named keys (masked). No inject-env-vars, so no unrelated key lands in the
+      # job env. Skipped entirely when no keys are requested.
+      - name: Export selected Doppler secrets
+        if: ${{ inputs.molecule_doppler_keys != '' }}
+        env:
+          DOPPLER_TOKEN: ${{ secrets.doppler_token }}
+          KEYS: ${{ inputs.molecule_doppler_keys }}
+          PROJECT: ${{ inputs.doppler_project }}
+          CONFIG: ${{ inputs.doppler_config }}
+        run: |
+          curl -Ls --proto '=https' --tlsv1.2 https://cli.doppler.com/install.sh | sh -s -- --no-package-manager >/dev/null
+          json=$(doppler secrets download --no-file --format json --project "$PROJECT" --config "$CONFIG")
+          for k in $KEYS; do
+            v=$(printf '%s' "$json" | jq -r --arg k "$k" '.[$k] // empty')
+            if [ -n "$v" ]; then
+              echo "::add-mask::$v"
+              echo "$k=$v" >> "$GITHUB_ENV"
+            fi
+          done
+      - name: Run molecule
+        env:
+          PY_COLORS: "1"
+          ANSIBLE_FORCE_COLOR: "1"
+          MOLECULE_SCENARIO: ${{ matrix.scenario }}
+        run: molecule test -s "$MOLECULE_SCENARIO"
+
+  # ============================================================================
+  # WATCHDOG — unstick the gate if a sibling job hangs `queued`.
+  # ============================================================================
+  watchdog:
+    name: Queue Watchdog
+    needs: changes
+    runs-on: ${{ inputs.runner_label }}
+    permissions:
+      actions: write
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - name: Sparse-checkout watchdog script
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-watchdog.sh
+          sparse-checkout-cone-mode: false
+      - name: Sleep, then cancel any sibling job still queued
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QUEUE_TIMEOUT_MINUTES: ${{ inputs.queue_timeout_minutes }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash .gh-shared/scripts/ci-gate-watchdog.sh
+
+  # ============================================================================
+  # MERGE GATE — the required check (only when this workflow owns the gate).
+  # ============================================================================
+  gate:
+    name: Merge Gate
+    needs: [changes, ansible-lint, molecule-discover, molecule, watchdog]
+    if: ${{ inputs.emit_gate && always() && !cancelled() }}
+    runs-on: ${{ inputs.runner_label }}
+    steps:
+      - name: Aggregate results
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        with:
+          allowed-skips: ansible-lint, molecule-discover, molecule, watchdog
+          jobs: ${{ toJSON(needs) }}
