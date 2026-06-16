@@ -78,44 +78,16 @@ without a recorded reason.
 
 ## PR review (org-wide, owned)
 
-Every PR gets a lightweight, owned review that re-runs on every commit until
-merge. It is composed only of standard published tools — **no scripts we author**
-— wired in `.github/workflows/pr-review.yml`. Delivery mirrors `markdownlint.yml`:
-a standalone workflow injected into every dryvist repo's default-branch PRs via
-`dryvist/terraform-github`'s `github_organization_ruleset` (Required Workflows).
-Until that injection lands it still runs on this repo's own PRs.
+Every PR gets a lightweight, owned review (re-runs on each commit), built only
+from standard published tools — **no scripts we author**: `gitleaks` (blocking
+secrets/sensitive values), `amannn/action-semantic-pull-request` (blocking PR
+title), and `anthropics/claude-code-action` on a cheap model (advisory). It lives
+in `.github/workflows/pr-review.yml`, injected org-wide via `dryvist/terraform-github`
+Required Workflows like `markdownlint.yml`.
 
-| Layer | Tool | Posture |
-| --- | --- | --- |
-| Secret / sensitive-value scan | `gitleaks` (+ private overlay) | **Blocking** |
-| PR title = squash subject (Conventional Commits, no emoji) | `amannn/action-semantic-pull-request` | **Blocking** |
-| Semantic checklist | `anthropics/claude-code-action` on a cheap model | **Advisory** |
-
-The canonical checklist is `configs/pr-review-checklist.md` (the single source of
-truth; also the advisory pass's prompt). The advisory pass is pinned to a cheap
-non-SOTA model (`claude-haiku-4-5`, capped turns) to conserve credits and never
-blocks merge.
-
-This repo is **public**, so no real sensitive value is ever committed. The
-gitleaks baseline `.gitleaks.toml` holds only generic patterns + safe
-placeholders; the real org denylist (internal domains, hostnames, IP ranges)
-lives in the **`GITLEAKS_PRIVATE_CONFIG`** org secret — a self-contained gitleaks
-config used as the authoritative scan config at runtime, materialized outside the
-scanned workspace and never committed. The required org secrets already exist
-(visibility: all):
-
-| Org secret | Purpose |
-| --- | --- |
-| `GITLEAKS_LICENSE_KEY` | Free key from gitleaks.io — required for org-owned repos |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Auth for the advisory cheap-model pass (subscription OAuth, `claude setup-token`) |
-| `GITLEAKS_PRIVATE_CONFIG` | The real gitleaks denylist (self-contained; never committed) |
-
-This is the durable replacement for vendor auto-review: org-wide Copilot
-instructions need a Copilot seat the org does not have, a repo
-`.github/copilot-instructions.md` does not propagate org-wide, and the free Gemini
-Code Assist GitHub app is scheduled to shut down 2026-07-17. The thin
-`.github/copilot-instructions.md` and `.gemini/styleguide.md` here only point
-those tools at the same checklist for whoever can still use them.
+Canonical checklist: `configs/pr-review-checklist.md` (also the advisory prompt).
+This repo is public, so no real values are committed — the real denylist is the
+`GITLEAKS_PRIVATE_CONFIG` org secret. See `README.md` for secrets and setup.
 
 ## Master source of truth (no upstream inheritance)
 
