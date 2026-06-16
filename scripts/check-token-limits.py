@@ -18,8 +18,8 @@ every file is governed by exactly one gate.
     limits:                           # fnmatch patterns -> max tokens.
       AGENTS.md: 2000                 # Matching is tried against the full repo
       '*README.md': 1500             # path AND the basename; '*' spans '/'.
-      'docs/*.md': 3000              # Most-restrictive (smallest) match wins.
-      '*.md': 2000
+      'docs/*.md': 3000              # FIRST matching pattern wins — list
+      '*.md': 2000                   # specific patterns before general ones.
 
 No ``.token-limits.yaml`` -> no-op (exit 0).
 """
@@ -49,13 +49,27 @@ def main() -> int:
         return 1
 
     with open(CONFIG, encoding="utf-8") as fh:
-        cfg = yaml.safe_load(fh) or {}
+        cfg = yaml.safe_load(fh)
+    if not isinstance(cfg, dict):
+        cfg = {}
 
-    limits = cfg.get("limits") or {}
-    exclude = cfg.get("exclude") or []
-    default_limit = (cfg.get("defaults") or {}).get("max_tokens", 2000)
+    # Validate types so a malformed config degrades gracefully instead of
+    # crashing CI with an AttributeError/TypeError.
+    raw_limits = cfg.get("limits")
+    limits = {
+        pat: lim
+        for pat, lim in (raw_limits.items() if isinstance(raw_limits, dict) else [])
+        if isinstance(pat, str) and (lim is None or isinstance(lim, int))
+    }
+    raw_exclude = cfg.get("exclude")
+    exclude = [ex for ex in raw_exclude if isinstance(ex, str)] if isinstance(raw_exclude, list) else []
+    raw_defaults = cfg.get("defaults")
+    default_limit = 2000
+    if isinstance(raw_defaults, dict) and isinstance(raw_defaults.get("max_tokens"), int):
+        default_limit = raw_defaults["max_tokens"]
+
     if not limits:
-        print(f"No `limits` patterns in {CONFIG} — nothing token-gated.")
+        print(f"No valid `limits` patterns in {CONFIG} — nothing token-gated.")
         return 0
 
     try:
@@ -67,12 +81,13 @@ def main() -> int:
         return 0
 
     def limit_for(path: str, name: str) -> int | None:
-        hits = [
-            (lim if lim is not None else default_limit)
-            for pat, lim in limits.items()
-            if _matches(path, name, pat)
-        ]
-        return min(hits) if hits else None
+        # First matching pattern wins (dict preserves insertion order), so callers
+        # list specific patterns before general ones. Returns None when no pattern
+        # matches — that file is not token-gated (the byte gate covers it).
+        for pat, lim in limits.items():
+            if _matches(path, name, pat):
+                return lim if lim is not None else default_limit
+        return None
 
     errors = checked = 0
     for root, dirs, files in os.walk("."):
