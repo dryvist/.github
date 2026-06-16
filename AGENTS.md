@@ -99,14 +99,16 @@ blocks merge.
 This repo is **public**, so no real sensitive value is ever committed. The
 gitleaks baseline `.gitleaks.toml` holds only generic patterns + safe
 placeholders; the real org denylist (internal domains, hostnames, IP ranges)
-lives in the **`GITLEAKS_CONFIG_PRIVATE`** org secret, which `[extend]`s the
-baseline at runtime. Owner-provisioned org secrets (visibility: all):
+lives in the **`GITLEAKS_PRIVATE_CONFIG`** org secret — a self-contained gitleaks
+config used as the authoritative scan config at runtime, materialized outside the
+scanned workspace and never committed. The required org secrets already exist
+(visibility: all):
 
 | Org secret | Purpose |
 | --- | --- |
-| `GITLEAKS_LICENSE` | Free key from gitleaks.io — required for org-owned repos |
-| `ANTHROPIC_API_KEY` | Auth for the advisory cheap-model pass |
-| `GITLEAKS_CONFIG_PRIVATE` | Optional private gitleaks overlay (real values, never committed) |
+| `GITLEAKS_LICENSE_KEY` | Free key from gitleaks.io — required for org-owned repos |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Auth for the advisory cheap-model pass (subscription OAuth, `claude setup-token`) |
+| `GITLEAKS_PRIVATE_CONFIG` | The real gitleaks denylist (self-contained; never committed) |
 
 This is the durable replacement for vendor auto-review: org-wide Copilot
 instructions need a Copilot seat the org does not have, a repo

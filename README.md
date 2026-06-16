@@ -101,23 +101,19 @@ this repo's own PRs now and is meant to be injected into every dryvist repo via
 `markdownlint.yml`).
 
 This repo is public, so no real sensitive values are committed: `.gitleaks.toml`
-holds only generic patterns, and the real denylist lives in a private overlay
-delivered as an org secret. Org-level prereqs (one-time, owner-handled,
-visibility: all):
+holds only generic patterns, while the authoritative scan config (the real
+denylist) lives in the `GITLEAKS_PRIVATE_CONFIG` org secret, materialized at
+runtime outside the scanned workspace. The required org secrets already exist
+(visibility: all):
 
-```sh
-# Free key from https://gitleaks.io (required for org-owned repos):
-gh secret set GITLEAKS_LICENSE --org dryvist --visibility all
-# Auth for the advisory cheap-model pass:
-gh secret set ANTHROPIC_API_KEY --org dryvist --visibility all
-# Optional: private gitleaks overlay (real internal domains/hosts/IPs). The TOML
-# must start with `[extend]` `path = ".gitleaks.toml"` to inherit the baseline:
-gh secret set GITLEAKS_CONFIG_PRIVATE --org dryvist --visibility all < private-gitleaks.toml
-```
+| Org secret | Purpose |
+| --- | --- |
+| `GITLEAKS_LICENSE_KEY` | Free gitleaks.io key — required for org-owned repos |
+| `GITLEAKS_PRIVATE_CONFIG` | Self-contained gitleaks denylist (never committed) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Subscription OAuth for the advisory pass (`claude setup-token`) |
 
-Without `GITLEAKS_LICENSE` the blocking scan job fails; without `ANTHROPIC_API_KEY`
-the advisory pass is skipped (it never blocks). The private overlay is optional —
-absent it, only the generic baseline rules apply.
+The advisory pass authenticates with the Claude subscription OAuth token (no
+Anthropic API key needed); it is pinned to a cheap model and never blocks merge.
 
 ## API
 
@@ -136,7 +132,7 @@ This repo exposes the following inheritance surfaces:
 | `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
 | `.github/workflows/pr-review.yml` | Standalone org-wide PR reviewer (gitleaks + PR-title + cheap-model advisory); injected via Required Workflows |
 | `configs/` | Shared configs the reusable workflows fetch at runtime (`_markdown-lint` fallback; `pr-review-checklist.md`) |
-| `.gitleaks.toml` | gitleaks baseline (generic patterns only; real denylist via the `GITLEAKS_CONFIG_PRIVATE` org secret) |
+| `.gitleaks.toml` | gitleaks baseline (generic patterns only; real denylist via the `GITLEAKS_PRIVATE_CONFIG` org secret) |
 | `.github/copilot-instructions.md` | Thin Copilot pointer to the checklist (repo-level only; needs a Copilot seat) |
 | `.gemini/styleguide.md` | Thin Gemini Code Assist pointer (free GitHub app sunsets 2026-07-17) |
 | `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
