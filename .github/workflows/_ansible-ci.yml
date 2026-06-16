@@ -74,6 +74,16 @@ on:
       doppler_token:
         description: Doppler service token, only needed when molecule_doppler is true.
         required: false
+    outputs:
+      ansible:
+        description: >-
+          Whether ansible-relevant files changed (the standardized filter).
+          Callers gate their own repo-local jobs on this so every job in the
+          repo shares ONE change-detection definition.
+        value: ${{ jobs.changes.outputs.ansible }}
+      molecule:
+        description: Whether molecule-relevant files changed (the standardized filter).
+        value: ${{ jobs.changes.outputs.molecule }}
 
 permissions:
   contents: read
