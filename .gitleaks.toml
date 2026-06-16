@@ -14,7 +14,7 @@ useDefault = true
 [[rules]]
 id = "dryvist-absolute-home-path"
 description = "Absolute local home path committed; use a placeholder or a variable"
-regex = '''/(?:Users|home)/[A-Za-z][A-Za-z0-9._-]+/'''
+regex = '''/(?:Users|home)/[A-Za-z][A-Za-z0-9._-]+/?'''
 tags = ["dryvist", "path"]
 
 [allowlist]
@@ -26,5 +26,5 @@ paths = [
   '''\.org-github/''',
 ]
 regexes = [
-  '''/(?:Users|home)/(?:runner|username|user|youruser|example)/''',
+  '''/(?:Users|home)/(?:runner|username|user|youruser|example)/?''',
 ]
