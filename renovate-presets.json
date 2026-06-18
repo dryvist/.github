@@ -170,9 +170,10 @@
       "automerge": false
     },
     {
-      "description": "Auto-merge own-org dependencies (JacobPEvans + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days.",
+      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
       "matchPackageNames": [
         "JacobPEvans/**",
+        "JacobPEvans-personal/**",
         "dryvist/**"
       ],
       "automerge": true,
