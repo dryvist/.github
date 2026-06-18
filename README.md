@@ -20,6 +20,7 @@ inherit configs and policies via the mechanisms below.
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
 | markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
 | Pre-commit hooks (shared) | `precommit/` — Nix flake import or static YAML copy; see [`precommit/README.md`](precommit/README.md) |
+| Default `.gitignore` | Each repo appends `configs/gitignore` into its `.gitignore` at scaffold; secrets + AI-local-state baseline; sync TBD (manual for now) |
 | AI assistant policy | `CLAUDE.md` — read by Claude Code on every session |
 
 ## Usage
@@ -34,6 +35,8 @@ For a new TS-based dryvist repo, copy the canonical configs from this repo:
 gh api repos/dryvist/.github/contents/biome.jsonc -H "Accept: application/vnd.github.raw" > biome.jsonc
 gh api repos/dryvist/.github/contents/.markdownlint-cli2.yaml -H "Accept: application/vnd.github.raw" > .markdownlint-cli2.yaml
 gh api repos/dryvist/.github/contents/renovate.json -H "Accept: application/vnd.github.raw" > renovate.json
+# Default .gitignore baseline (secrets + AI local state) — append, then de-dupe:
+gh api repos/dryvist/.github/contents/configs/gitignore -H "Accept: application/vnd.github.raw" >> .gitignore
 ```
 
 If the repo is a Cribl pack, scaffold from
@@ -105,6 +108,7 @@ This repo exposes the following inheritance surfaces:
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
 | `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
+| `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |
 | `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
 | `osv-scanner.toml` | Org-wide OSV ignore list inherited via `_osv-scan.yml` (a repo-local copy takes precedence) |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
