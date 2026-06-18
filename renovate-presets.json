@@ -44,8 +44,8 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "before 7am on Monday",
-      "before 7am on Thursday"
+      "after 7am on Monday",
+      "after 7am on Thursday"
     ],
     "automerge": true,
     "minimumReleaseAge": "0 days"
