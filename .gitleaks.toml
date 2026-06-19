@@ -2,7 +2,7 @@
 #
 # This committed config holds only generic, non-sensitive rules. The real org
 # denylist (internal domains, hostnames, IP ranges) lives in a PRIVATE gitleaks
-# config delivered to CI as the `GITLEAKS_CONFIG_PRIVATE` org secret, which
+# config delivered to CI as the `GITLEAKS_PRIVATE_CONFIG` org secret, which
 # `[extend]`s this file at runtime (see .github/workflows/pr-review.yml). Never
 # commit real sensitive values here — this repository is public.
 title = "dryvist gitleaks baseline"
