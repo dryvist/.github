@@ -1,0 +1,153 @@
+# dryvist org-default .gitignore
+#
+# Canonical baseline focused on NEVER committing secrets, credentials, or
+# AI-assistant local/machine state. Copy into a repo's `.gitignore` at scaffold:
+#
+#   gh api repos/dryvist/.github/contents/configs/gitignore \
+#     -H "Accept: application/vnd.github.raw" >> .gitignore
+#
+# Append (>>) rather than overwrite so repo-specific entries are preserved,
+# then de-dupe. This file is the org default; repos may add to it, but the
+# secret/AI sections below should never be removed.
+#
+# CARVE-OUTS (intentionally NOT ignored — do not "fix"):
+#   - `.envrc`            committed by convention (direnv `use flake`; the
+#                         SOPS_AGE_KEY_FILE path is not a secret).
+#   - `*.sops.yaml/.yml`  SOPS-encrypted values are ciphertext — safe to commit.
+#   - `.terraform.lock.hcl`  the provider lock IS committed.
+#   - `.claude/settings.json`, `.claude/rules/`, committed skills/agents,
+#     `CLAUDE.md`, `AGENTS.md`  project AI config — committed on purpose.
+
+# ── OS / editor cruft ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# ── direnv / Nix local state ────────────────────────────────────────
+.direnv/
+.envrc.local
+.envrc.cache
+result
+result-*
+
+# ── Language caches ─────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+node_modules/
+
+# ── Logs / temp ─────────────────────────────────────────────────────
+*.log
+*.tmp
+*.bak
+
+# ════════════════════════════════════════════════════════════════════
+# SECRETS & CREDENTIALS — never commit
+# ════════════════════════════════════════════════════════════════════
+
+# Environment files (keep committed examples)
+.env
+.env.*
+.env.local
+.env.*.local
+!.env.example
+!.env.*.example
+
+# Private keys & certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_rsa*
+id_ed25519
+id_ed25519*
+# Public keys are safe to commit — re-include them
+!*.pub
+
+# SOPS / age private keys (NOTE: *.sops.* ciphertext is safe and stays committed)
+*.age
+keys.txt
+
+# Ansible Vault
+*.vault
+vault.yml
+vault.yaml
+.vault_pass
+.vault_password
+.vault-pass*
+.vault-password*
+
+# Generic secret material
+secrets.yml
+secrets.yaml
+*.secrets.yml
+*.secrets.yaml
+secrets.dec.yaml
+secrets.plain.yaml
+*credentials*
+aws-credentials
+SECRETS_SETUP.md
+
+# Cloud provider credentials
+.aws/
+.azure/
+gcloud-credentials.json
+kubeconfig
+*.kubeconfig
+
+# Doppler secrets fallback cache (encrypted snapshot of the WHOLE config) + setup
+doppler.json
+.doppler/
+.doppler.yaml
+
+# ── Terraform / OpenTofu (state & tfvars are secret-bearing) ─────────
+# NOTE: .terraform.lock.hcl is committed — it is intentionally absent here.
+.terraform/
+.terraformrc
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfplan
+crash.log
+crash.*.log
+terragrunt-debug.tfvars.json
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# ════════════════════════════════════════════════════════════════════
+# AI ASSISTANT — local/machine state & per-user instruction files
+# (committed project config above is intentionally NOT ignored)
+# ════════════════════════════════════════════════════════════════════
+
+# Claude Code machine-local state
+.claude/settings.local.json
+.claude/.credentials.json
+.claude/projects/
+.claude/shell-snapshots/
+.claude/statsig/
+.claude/todos/
+.claude/local/
+.claude/worktrees/
+.claude-wt/
+.claude/skills/retrospecting/reports/
+
+# Per-user (never-committed) instruction overlays — symlinked per machine
+CLAUDE.local.md
+.CLAUDE.local.md
+GEMINI.local.md
+AGENTS.local.md
+
+# Other AI tools' local history / caches
+.aider*
+.specstory/

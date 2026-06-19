@@ -44,8 +44,8 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "before 7am on Monday",
-      "before 7am on Thursday"
+      "after 7am on Monday",
+      "after 7am on Thursday"
     ],
     "automerge": true,
     "minimumReleaseAge": "0 days"
@@ -74,6 +74,17 @@
         "_image:\\s*[\"'](?<depName>[^:\"'\\s]+):(?<currentValue>[^\"'\\s]+)[\"']"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "description": "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for roles/**/defaults/main.yml — binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/roles/.+/defaults/main\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\s+[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+      ],
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}"
     }
   ],
   "pep723": {
@@ -159,9 +170,10 @@
       "automerge": false
     },
     {
-      "description": "Auto-merge own-org dependencies (JacobPEvans + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days.",
+      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
       "matchPackageNames": [
         "JacobPEvans/**",
+        "JacobPEvans-personal/**",
         "dryvist/**"
       ],
       "automerge": true,
