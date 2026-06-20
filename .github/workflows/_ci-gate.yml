@@ -44,7 +44,7 @@
 # Filter name convention (caller defines these in `filters:` input):
 #
 #   nix            -> gates `nix_validate`
-#   markdown       -> gates `markdown_lint` and `file_size`
+#   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #   python         -> gates `python_security`
 #
 # Callers may include additional filters; this workflow ignores them. To add
@@ -83,6 +83,13 @@ on:
         default: false
       file_size:
         description: Enable `File Size` (gated on `nix` OR `markdown` filter)
+        type: boolean
+        default: false
+      token_limits:
+        description: >-
+          Enable `Token Limits` (gated on `markdown` filter). Budgets AI-read
+          docs via tiktoken per .token-limits.yaml; pairs with `file_size`,
+          which skips token-gated files. No secret required.
         type: boolean
         default: false
       python_security:
@@ -167,6 +174,14 @@ jobs:
     with:
       runner_label: ${{ inputs.runner_label }}
 
+  token-limits:
+    name: Token Limits
+    needs: changes
+    if: ${{ inputs.token_limits && needs.changes.outputs.markdown == 'true' }}
+    uses: dryvist/.github/.github/workflows/_token-limits.yml@main
+    with:
+      runner_label: ${{ inputs.runner_label }}
+
   python-security:
     name: Python Security
     needs: changes
@@ -218,7 +233,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, python-security]
+    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
@@ -227,5 +242,5 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, markdown-lint, file-size, python-security, watchdog
+          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, watchdog
           jobs: ${{ toJSON(needs) }}
