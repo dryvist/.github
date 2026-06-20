@@ -82,7 +82,19 @@
       "enabled": false
     },
     {
-      "description": "Auto-merge trusted orgs — all managers, all update types (1-day stabilization). Major updates from these orgs are later overridden by the major-default rule below (30-day grace, manual review). The `https://github.com/...` URL form of each entry was removed in this consolidation: `matchPackageNames` matches against the resolved `packageName`, which is `owner/repo` for both GitHub Actions and Nix flake `github:` inputs — the URL form never matched anything (verified via `gh search code 'depName=https://github.com/' org:JacobPEvans`, zero results).",
+      "description": "Major-version defaults, org-wide: 30-day grace period before a PR opens and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. The own-orgs and trusted-orgs rules below are placed AFTER this rule so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-orgs restores immediate auto-merge for JacobPEvans/** and dryvist/** majors, and trusted-orgs restores auto-merge (1-day grace) for the curated trusted-vendor list. Non-trusted-vendor majors match only this rule and stay held. CVE-driven bumps still bypass the grace via the top-level vulnerabilityAlerts block (0 days).",
+      "matchUpdateTypes": ["major"],
+      "minimumReleaseAge": "30 days",
+      "automerge": false
+    },
+    {
+      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
+      "matchPackageNames": ["JacobPEvans/**", "JacobPEvans-personal/**", "dryvist/**"],
+      "automerge": true,
+      "minimumReleaseAge": "0 days"
+    },
+    {
+      "description": "Auto-merge trusted orgs — all managers, all update types including MAJOR (1-day stabilization). Placed AFTER the major-default rule so this rule restores auto-merge for trusted-vendor majors that major-default would otherwise hold (Renovate merges packageRule attributes by last-match wins); non-trusted majors hit only major-default (30-day hold, no auto-merge). The `https://github.com/...` URL form of each entry was removed in this consolidation: `matchPackageNames` matches against the resolved `packageName`, which is `owner/repo` for both GitHub Actions and Nix flake `github:` inputs — the URL form never matched anything (verified via `gh search code 'depName=https://github.com/' org:JacobPEvans`, zero results).",
       "matchPackageNames": [
         "actions/**",
         "ansible/**",
@@ -139,18 +151,6 @@
       ],
       "automerge": true,
       "minimumReleaseAge": "1 day"
-    },
-    {
-      "description": "Major-version defaults, org-wide: 30-day grace period before a PR opens and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. Placed AFTER the trusted-orgs rule so this rule's stricter values win per-attribute for trusted-org majors (Renovate merges packageRule attributes by last-match wins). CVE-driven bumps still bypass the grace via the top-level vulnerabilityAlerts block (0 days). The own-orgs rule below restores immediate auto-merge for JacobPEvans/** and dryvist/** majors specifically.",
-      "matchUpdateTypes": ["major"],
-      "minimumReleaseAge": "30 days",
-      "automerge": false
-    },
-    {
-      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
-      "matchPackageNames": ["JacobPEvans/**", "JacobPEvans-personal/**", "dryvist/**"],
-      "automerge": true,
-      "minimumReleaseAge": "0 days"
     },
     {
       "description": "Auto-merge pre-commit hooks (minor and patch)",
