@@ -28,8 +28,9 @@ test harnesses and reusable workflows live in
 This repo is consumed by reference, not installed. Other dryvist repos
 inherit configs and policies via the mechanisms below.
 
+Example Renovate configuration to inherit these presets:
+
 ```json
-// Example consumption via Renovate configuration:
 {
   "extends": ["local>dryvist/.github"]
 }
