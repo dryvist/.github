@@ -70,12 +70,21 @@ on:
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY:
         required: true
+    outputs:
+      release_created:
+        description: >-
+          'true' when this run cut a release (tag + GitHub release), '' or
+          'false' otherwise. Lets a caller gate a follow-on job — e.g. fanning
+          out a downstream revalidation dispatch only on an actual release.
+        value: ${{ jobs.release-please.outputs.release_created }}
 
 permissions: {}
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.releases_created }}
     permissions:
       contents: write
       pull-requests: write
