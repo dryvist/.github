@@ -18,8 +18,19 @@
 
 One sentence: what this repo is and who it's for.
 
-[![CI](https://github.com/OWNER/repo-name/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/repo-name/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/dryvist/repo-name/actions/workflows/ci.yml/badge.svg)](https://github.com/dryvist/repo-name/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
+## Requirements
+
+### Prerequisites & OS Requirements
+
+- **Tool / Dependency**: Describe any prerequisite tool, OS, or dependent repository needed for this project.
+- **OS Support**: Describe OS compatibility.
+
+### Optional Enhancements
+
+- **Tool / Feature**: Describe any optional enhancements or setup.
 
 ## Installation
 
@@ -44,7 +55,7 @@ live at [docs.jacobpevans.com/conventions](https://docs.jacobpevans.com/conventi
 
 ## License
 
-[MIT](LICENSE).
+[Apache-2.0](LICENSE).
 
 ---
 
