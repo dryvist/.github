@@ -12,6 +12,12 @@
 #   scan: [.md, .nix]                        # replaces default scan list
 #   extended: { limit: 32768, files: [AGENTS] }  # additive higher limit
 #   exempt: [RUNBOOK]                        # additive to default [CHANGELOG]
+#
+# Token partition: when a .token-limits.yaml is present, Markdown (.md) docs are
+# token-gated (governed by _token-limits.yml) and dropped from this byte gate's
+# scan, so every file is checked by exactly one gate. Repos without a
+# .token-limits.yaml are unaffected. (.token-limits.yaml should budget all .md —
+# e.g. a '*.md' catch-all — or exclude any it intentionally leaves ungated.)
 name: _file-size
 
 on:
@@ -68,6 +74,18 @@ jobs:
             # exempt: additive to defaults (CHANGELOG always exempt)
             cfg_exempt=$(yq '.exempt // [] | .[]' .file-size.yml | tr '\n' ' ')
             [ -n "$cfg_exempt" ] && EXEMPT="$EXEMPT$cfg_exempt "
+          fi
+
+          # When a token gate is active (.token-limits.yaml present), Markdown
+          # docs are governed by _token-limits.yml. Drop .md from this byte
+          # gate's scan so each file is checked by exactly one gate.
+          if [ -f ".token-limits.yaml" ]; then
+            new_scan=""
+            for ext in $DEFAULT_SCAN; do
+              [ "$ext" = ".md" ] && continue
+              new_scan="$new_scan $ext"
+            done
+            DEFAULT_SCAN="$new_scan"
           fi
 
           # Build find name arguments from scan extensions

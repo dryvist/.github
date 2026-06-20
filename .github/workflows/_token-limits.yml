@@ -1,0 +1,58 @@
+# Reusable: Token Limit Check
+#
+# Token-budgets AI-read docs (the prose files an agent loads for background)
+# using the public, open-source `tiktoken` tokenizer — NO API key, NO secret.
+# Per-repo config in `.token-limits.yaml` (see scripts/check-token-limits.py).
+#
+# Pairs with `_file-size.yml`: a file is "token-gated" iff it matches a
+# `limits` pattern, and the byte gate skips token-gated files — so every file
+# is governed by exactly one gate. Repos with no `.token-limits.yaml` get a
+# no-op here and keep the byte gate's original behavior.
+name: _token-limits
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          RunsOn label to opt the calling repo into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions: {}
+
+concurrency:
+  group: token-limits-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ${{ inputs.runner_label }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v6
+
+      - name: Sparse-checkout the shared token-counter from this repo
+        uses: actions/checkout@v6
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/check-token-limits.py
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install tiktoken
+        run: pip install --quiet tiktoken pyyaml
+
+      - name: Check token limits
+        run: python3 .gh-shared/scripts/check-token-limits.py
