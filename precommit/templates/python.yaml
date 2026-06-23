@@ -12,10 +12,16 @@
 # │ Nix-flake consumers must NOT use this file; they get equivalent     │
 # │ coverage from `imports = [ inputs.nix-devenv.flakeModules.python ]`.│
 # │ This template and nix-devenv/flake-modules/profiles/python.nix are  │
-# │ the SAME hook set in two languages — change BOTH together until a   │
-# │ generator exists. pyright/pytest entries differ by design: here     │
-# │ they run from `.venv/bin` (uv repos); the Nix profile runs them off │
-# │ the devshell PATH.                                                  │
+# │ the SAME hook set in two encodings — change BOTH together (no        │
+# │ generator yet). The pyright/pytest *entries* differ by design: here  │
+# │ they call .venv/bin/{pyright,pytest}; the Nix profile uses the       │
+# │ git-hooks native pyright hook + a custom .venv/bin/pytest hook.      │
+# │                                                                      │
+# │ Hook parity (keep identical across both files):                     │
+# │   ruff-check (here) / ruff (Nix attr) -> commit stage               │
+# │   ruff-format                         -> commit stage               │
+# │   pyright                             -> commit stage               │
+# │   pytest                              -> pre-push stage              │
 # └─────────────────────────────────────────────────────────────────────┘
 ---
 repos:
