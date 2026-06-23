@@ -105,9 +105,12 @@ on:
         type: boolean
         default: false
       python_ci_versions:
-        description: JSON array of Python versions for the Python CI pytest matrix
+        description: >-
+          JSON array of Python versions for the Python CI pytest matrix. Default
+          covers ALL currently non-EOL Python releases; a consumer narrows it
+          (e.g. to min + latest) by passing its own array.
         type: string
-        default: '["3.10", "3.14"]'
+        default: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
 
       runner_label:
         description: >-

@@ -27,10 +27,13 @@ on:
   workflow_call:
     inputs:
       python_versions:
-        description: JSON array of Python versions for the pytest matrix.
+        description: >-
+          JSON array of Python versions for the pytest matrix. Default covers
+          ALL currently non-EOL Python releases; a consumer narrows it (e.g. to
+          min + latest) by passing its own array.
         type: string
         required: false
-        default: '["3.10", "3.14"]'
+        default: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
       gate_python_version:
         description: Python version for the single-run lint/format/type gate.
         type: string
