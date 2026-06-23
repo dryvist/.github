@@ -1,13 +1,22 @@
 # dryvist python pre-commit template (non-Nix consumers).
 #
-# Includes the base hook set plus ruff (lint + format) and mypy.
-# bandit / detect-secrets are intentionally NOT in this template —
-# they were used in 1 inventory repo each and slow the hook cycle
-# without proportional value. Repos that want them add the relevant
-# `repo:` block locally.
+# Base hook set + ruff (lint + format) + pyright (type check) + pytest (tests).
+# pyright is the org-mandated type checker (replaced mypy 2026-06): one fast,
+# plugin-free tool, used via the project venv. Astral `ty` is a commented opt-in
+# below — still beta (<1.0) as of 2026-06, NOT the mandated checker.
 #
-# Nix-flake consumers should NOT use this file. They get equivalent
-# coverage via `imports = [ inputs.nix-devenv.flakeModules.python ];`.
+# bandit / detect-secrets are intentionally NOT here — used in 1 inventory repo
+# each and slow the cycle without proportional value. Add locally if needed.
+#
+# ┌─────────────────────────── KEEP IN SYNC ───────────────────────────┐
+# │ Nix-flake consumers must NOT use this file; they get equivalent     │
+# │ coverage from `imports = [ inputs.nix-devenv.flakeModules.python ]`.│
+# │ This template and nix-devenv/flake-modules/profiles/python.nix are  │
+# │ the SAME hook set in two languages — change BOTH together until a   │
+# │ generator exists. pyright/pytest entries differ by design: here     │
+# │ they run from `.venv/bin` (uv repos); the Nix profile runs them off │
+# │ the devshell PATH.                                                  │
+# └─────────────────────────────────────────────────────────────────────┘
 ---
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -20,7 +29,9 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: end-of-file-fixer
-      - id: trim-trailing-whitespace
+      # Hook id is `trailing-whitespace`. (`trim-trailing-whitespace` is the Nix
+      # git-hooks.nix ATTR name and is NOT a valid pre-commit-hooks id — it errors.)
+      - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
       - id: detect-private-key
 
@@ -31,7 +42,7 @@ repos:
         exclude: ^CHANGELOG\.md$
 
   - repo: https://github.com/woodruffw/zizmor-pre-commit
-    rev: v1.25.2
+    rev: v1.26.1
     hooks:
       - id: zizmor
         files: ^\.github/workflows/.*\.ya?ml$
@@ -43,13 +54,37 @@ repos:
           - zizmor.yml
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.6
+    rev: v0.15.18
     hooks:
-      - id: ruff
+      # `ruff-check` is the current lint hook id; bare `ruff` is a legacy alias.
+      - id: ruff-check
         args: [--fix]
       - id: ruff-format
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.16.1
+  # pyright + pytest run from the project venv so pyproject.toml dev-deps are the
+  # SINGLE version authority (no rev pin to drift). pytest is gated at PUSH, not
+  # commit, to keep the commit cycle fast org-wide; CI runs the full suite.
+  - repo: local
     hooks:
-      - id: mypy
+      - id: pyright
+        name: pyright (type check, from .venv)
+        entry: .venv/bin/pyright
+        language: system
+        pass_filenames: false
+        types: [python]
+      - id: pytest
+        name: pytest (from .venv, pre-push only)
+        entry: .venv/bin/pytest
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+  # OPT-IN, NON-MANDATED: Astral `ty` as a non-blocking shadow type check.
+  # pyright is the mandated checker. Uncomment to gather diffs; promote to
+  # mandated only at ty 1.0 GA after a clean shadow trial.
+  # - repo: https://github.com/astral-sh/ty-pre-commit
+  #   rev: v0.0.52
+  #   hooks:
+  #     - id: ty
+  #       verbose: true   # informational only

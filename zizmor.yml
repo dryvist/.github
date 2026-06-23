@@ -20,6 +20,9 @@ rules:
     config:
       policies:
         actions/*: ref-pin
+        # astral-sh/* (uv, ruff, setup-uv, ty) is the org-mandated Python
+        # toolchain (2026-06); trusted to pin by version tag like actions/*.
+        astral-sh/*: ref-pin
         DeterminateSystems/*: ref-pin
         dryvist/*: ref-pin
         googleapis/*: ref-pin

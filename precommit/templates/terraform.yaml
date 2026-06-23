@@ -25,7 +25,8 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: end-of-file-fixer
-      - id: trim-trailing-whitespace
+      # Hook id is `trailing-whitespace` (not the Nix attr `trim-trailing-whitespace`).
+      - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
       - id: detect-private-key
 

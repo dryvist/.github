@@ -29,7 +29,7 @@ precommit/
 │   ├── base.yaml                # common 80% (no language-specific hooks)
 │   ├── terraform.yaml           # base + terraform_fmt/validate/tflint/docs
 │   ├── ansible.yaml             # base + ansible-lint + yamllint
-│   └── python.yaml              # base + ruff + ruff-format + mypy
+│   └── python.yaml              # base + ruff + ruff-format + pyright + pytest
 └── README.md
 ```
 
@@ -74,8 +74,10 @@ pre-commit install
 
 For `ansible.yaml`, also fetch `precommit/configs/ansible-lint.yml`
 to `.ansible-lint` and `precommit/configs/yamllint.yml` to
-`.yamllint.yml`. For `python.yaml`, no extra configs needed beyond
-optional repo-local `pyproject.toml` for mypy / ruff.
+`.yamllint.yml`. `python.yaml` needs no extra configs, but its pyright +
+pytest hooks run from the project venv (`.venv/bin`), so consumers must
+`uv pip install -e ".[dev]"` (pyright, pytest, ruff in dev-deps) before
+the hooks resolve. Tool versions come from `pyproject.toml`, not `rev:` pins.
 
 ## Usage
 
@@ -132,7 +134,7 @@ This directory exposes the following surfaces:
 | `templates/base.yaml` | Common-80% static `.pre-commit-config.yaml` for non-Nix consumers |
 | `templates/terraform.yaml` | `base` plus terraform_fmt / validate / tflint / docs |
 | `templates/ansible.yaml` | `base` plus ansible-lint + yamllint |
-| `templates/python.yaml` | `base` plus ruff / ruff-format / mypy |
+| `templates/python.yaml` | `base` plus ruff / ruff-format / pyright (commit) + pytest (pre-push) |
 
 ## Contributing
 
