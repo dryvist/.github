@@ -4,13 +4,20 @@
     "dryvist/.github default Renovate config — the org-wide entry point consumers get via `extends: [\"local>dryvist/.github\"]` (or `github>dryvist/.github`).",
     "dryvist/.github is the MASTER source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. It extends no other repository's config — only Renovate's built-in `config:recommended` baseline and dryvist's own local presets. JacobPEvans/.github extends THIS, never the reverse. All policy (auto-merge, trusted orgs, grouping, custom managers including the Ansible Docker-image manager) lives in renovate-presets.json + renovate-grouping.json in this repo."
   ],
-  "extends": ["config:recommended", "local>dryvist/.github:renovate-presets"],
+  "extends": [
+    "config:recommended",
+    "local>dryvist/.github:renovate-presets"
+  ],
   "customManagers": [
     {
       "customType": "regex",
       "description": "Manage Biome version in biome.jsonc schema",
-      "fileMatch": ["(^|/)biome\\.jsonc$"],
-      "matchStrings": ["\"\\$schema\": \"https://biomejs\\.dev/schemas/(?<currentValue>[^/]+)/schema\\.json\""],
+      "fileMatch": [
+        "(^|/)biome\\.jsonc$"
+      ],
+      "matchStrings": [
+        "\"\\$schema\": \"https://biomejs\\.dev/schemas/(?<currentValue>[^/]+)/schema\\.json\""
+      ],
       "depNameTemplate": "@biomejs/biome",
       "datasourceTemplate": "npm"
     }

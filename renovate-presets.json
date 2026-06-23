@@ -5,25 +5,37 @@
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation — keep them current.",
     "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true."
   ],
-  "extends": ["local>dryvist/.github:renovate-grouping"],
+  "extends": [
+    "local>dryvist/.github:renovate-grouping"
+  ],
   "platformAutomerge": false,
-  "baseBranchPatterns": ["$default"],
+  "baseBranchPatterns": [
+    "$default"
+  ],
   "automergeType": "pr",
   "automergeStrategy": "squash",
   "pinGitHubActionDigests": true,
   "dependencyDashboard": true,
-  "dependencyDashboardLabels": ["dependencies"],
+  "dependencyDashboardLabels": [
+    "dependencies"
+  ],
   "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
   "prConcurrentLimit": 5,
   "branchConcurrentLimit": 3,
   "rebaseWhen": "conflicted",
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
-  "ignorePaths": [".github/workflows/*.lock.yml", ".github/workflows/agentics-maintenance.yml", ".github/aw/**"],
+  "ignorePaths": [
+    ".github/workflows/*.lock.yml",
+    ".github/workflows/agentics-maintenance.yml",
+    ".github/aw/**"
+  ],
   "minimumReleaseAge": "3 days",
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["type:security"],
+    "labels": [
+      "type:security"
+    ],
     "automerge": true,
     "minimumReleaseAge": "0 days",
     "rangeStrategy": "bump",
@@ -31,7 +43,10 @@
   },
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": ["after 7am on Monday", "after 7am on Thursday"],
+    "schedule": [
+      "after 7am on Monday",
+      "after 7am on Thursday"
+    ],
     "automerge": true,
     "minimumReleaseAge": "0 days"
   },
@@ -39,7 +54,9 @@
     {
       "description": "Renovate-annotated version pins in Nix files. HASH FIELDS ARE NOT UPDATED — only version strings. Each repo's fix-renovate-hashes.yml runs nix-update to fix adjacent hash = \"sha256-...\" fields after Renovate bumps a version. When adding a new fetchPypi/fetchurl package with a Renovate annotation, also add it to that repo's nix-update workflow and flake packages output.",
       "customType": "regex",
-      "managerFilePatterns": ["/\\.nix$/"],
+      "managerFilePatterns": [
+        "/\\.nix$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?\\s+\\S+\\s*=\\s*\"(?<currentValue>[^\"]+)\""
       ],
@@ -50,14 +67,20 @@
         "Docker images pinned in Ansible role defaults as `<name>_image: \"repo:tag\"`. These live in plain YAML vars that no built-in Renovate manager scans, so image pins across ansible-proxmox-apps roles (prometheus_stack, netmon, qdrant_docker, ntfy_docker, mailpit_docker, unifi_metrics, seerr, ...) were untracked. Matched as the `docker` datasource so Renovate bumps the tag in place; image refs are self-describing (repo:tag) so no per-line `# renovate:` annotation is needed. Untagged refs (no colon) are not matched; local-only tags resolve to nothing and are skipped."
       ],
       "customType": "regex",
-      "managerFilePatterns": ["/roles/.+/defaults/main\\.ya?ml$/"],
-      "matchStrings": ["_image:\\s*[\"'](?<depName>[^:\"'\\s]+):(?<currentValue>[^\"'\\s]+)[\"']"],
+      "managerFilePatterns": [
+        "/roles/.+/defaults/main\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "_image:\\s*[\"'](?<depName>[^:\"'\\s]+):(?<currentValue>[^\"'\\s]+)[\"']"
+      ],
       "datasourceTemplate": "docker"
     },
     {
       "description": "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for roles/**/defaults/main.yml — binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed.",
       "customType": "regex",
-      "managerFilePatterns": ["/roles/.+/defaults/main\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/roles/.+/defaults/main\\.ya?ml$/"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\s+[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
       ],
@@ -65,23 +88,35 @@
     }
   ],
   "pep723": {
-    "managerFilePatterns": ["/\\.py$/"]
+    "managerFilePatterns": [
+      "/\\.py$/"
+    ]
   },
   "packageRules": [
     {
       "description": "Disable all updates in gh-aw generated files — managed by gh-aw-pin-refresh workflow, not Renovate",
-      "matchFileNames": [".github/workflows/*.lock.yml", ".github/workflows/agentics-maintenance.yml", ".github/aw/**"],
+      "matchFileNames": [
+        ".github/workflows/*.lock.yml",
+        ".github/workflows/agentics-maintenance.yml",
+        ".github/aw/**"
+      ],
       "enabled": false
     },
     {
       "description": "Major-version defaults, org-wide: 30-day grace period before a PR opens and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. The own-orgs and trusted-orgs rules below are placed AFTER this rule so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-orgs restores immediate auto-merge for JacobPEvans/** and dryvist/** majors, and trusted-orgs restores auto-merge (1-day grace) for the curated trusted-vendor list. Non-trusted-vendor majors match only this rule and stay held. CVE-driven bumps still bypass the grace via the top-level vulnerabilityAlerts block (0 days).",
-      "matchUpdateTypes": ["major"],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "minimumReleaseAge": "30 days",
       "automerge": false
     },
     {
       "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
-      "matchPackageNames": ["JacobPEvans/**", "JacobPEvans-personal/**", "dryvist/**"],
+      "matchPackageNames": [
+        "JacobPEvans/**",
+        "JacobPEvans-personal/**",
+        "dryvist/**"
+      ],
       "automerge": true,
       "minimumReleaseAge": "0 days"
     },
@@ -146,47 +181,97 @@
     },
     {
       "description": "Auto-merge pre-commit hooks (minor and patch)",
-      "matchManagers": ["pre-commit"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "pre-commit"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "Auto-merge trusted Terraform providers (minor/patch only)",
-      "matchManagers": ["terraform"],
-      "matchDatasources": ["terraform-provider"],
-      "matchPackageNames": ["bpg/*"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchDatasources": [
+        "terraform-provider"
+      ],
+      "matchPackageNames": [
+        "bpg/*"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "Auto-merge trusted PyPI packages from HuggingFace (minor/patch only)",
-      "matchDatasources": ["pypi"],
-      "matchSourceUrls": ["https://github.com/huggingface/**"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchDatasources": [
+        "pypi"
+      ],
+      "matchSourceUrls": [
+        "https://github.com/huggingface/**"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true
     },
     {
       "description": "GitHub releases use v-prefixed tags for custom Nix packages",
-      "matchDatasources": ["github-releases"],
-      "matchManagers": ["custom.regex"],
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
       "extractVersion": "^v(?<version>.+)$"
     },
     {
       "description": "Twice-weekly schedule for all custom regex managers",
-      "matchManagers": ["custom.regex"],
-      "schedule": ["after 7am on Monday", "after 7am on Thursday"]
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
     },
     {
       "description": "Auto-merge Python minor/patch updates across every Python manager. Paired with the major-only `>=` bump rule below; the two share an identical manager list so behavior is symmetric: minor/patch auto-merge twice-weekly, major opens a PR (held by the 30-day major-default rule and reviewed manually). pip_setup/poetry/pipenv were added to match the bump rule's coverage — previously only pep621/pip_requirements auto-merged, an unintentional gap.",
-      "matchManagers": ["pep621", "pip_requirements", "pip_setup", "poetry", "pipenv"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchManagers": [
+        "pep621",
+        "pip_requirements",
+        "pip_setup",
+        "poetry",
+        "pipenv"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
-      "schedule": ["after 7am on Monday", "after 7am on Thursday"]
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
     },
     {
       "description": "Bump Python `>=` lower bounds ONLY on major releases, and only to `>=N.0.0` form. The floor expresses the oldest acceptable major; minor/patch positions are reserved exclusively for CVE-mitigation pins. Minor/patch releases never trigger a floor bump — Renovate's default `replace` strategy already no-ops when the existing range satisfies the new version. Renovate's pep440 `bump` produces `>=N.M.P` natively; the companion normalizer workflow (follow-up issue in this repo) rewrites it to `>=N.0.0` after the PR opens. CVE EXCEPTION: when a known CVE is fixed only in a specific minor/patch release, pin the floor to the OLDEST secure version (e.g. `pyarrow 17.0.0 → PYSEC-2026-113 fixed in 23.0.1` → `pyarrow>=23.0.1`), NEVER the latest release. An inline comment block citing every CVE identifier the floor mitigates is REQUIRED above any floor that exceeds `>=N.0.0` form — see `mlx-benchmarks/space/requirements.txt` for the canonical pattern. The normalizer must preserve floors preceded by such a comment block. CVE-driven Renovate bumps themselves still use `bump` at all update types via the top-level `vulnerabilityAlerts` block, so security floor bumps remain immediate.",
-      "matchManagers": ["pep621", "pip_requirements", "pip_setup", "poetry", "pipenv"],
-      "matchUpdateTypes": ["major"],
+      "matchManagers": [
+        "pep621",
+        "pip_requirements",
+        "pip_setup",
+        "poetry",
+        "pipenv"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "rangeStrategy": "bump"
     }
   ]
