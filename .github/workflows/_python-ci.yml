@@ -1,0 +1,118 @@
+# Reusable: Python CI (lint / format / type / test gate)
+#
+# The org-wide Python gate, in ONE place. Consumers call this (directly or via
+# `_ci-gate.yml`'s `python_ci` toggle) and carry NO `run:` and NO copied lint
+# config of their own — this is the single home for both.
+#
+# What it runs:
+#   gate  -> `uv run --extra dev pre-commit run --all-files` (ruff + ruff-format
+#            + pyright + hygiene + markdownlint, all defined in the consumer's
+#            .pre-commit-config.yaml whose tool config lives in pyproject.toml /
+#            an @org shareable config — never copied), THEN zizmor against the
+#            org's canonical policy fetched from this repo (zero-copy: the policy
+#            is never duplicated into the consumer).
+#   test  -> pytest across the consumer's supported Python versions.
+#
+# ┌─────────────────────────── KEEP IN SYNC ───────────────────────────┐
+# │ The hook set this runs is the dryvist Python standard, also defined │
+# │ for Nix consumers in nix-devenv/flake-modules/profiles/python.nix   │
+# │ and as the static template in precommit/templates/python.yaml.      │
+# └─────────────────────────────────────────────────────────────────────┘
+#
+# Every config value below is an input with a default — nothing is hard-coded;
+# a consumer (or org/repo `vars`) overrides any of them without editing this file.
+name: _python-ci
+
+on:
+  workflow_call:
+    inputs:
+      python_versions:
+        description: JSON array of Python versions for the pytest matrix.
+        type: string
+        required: false
+        default: '["3.10", "3.14"]'
+      gate_python_version:
+        description: Python version for the single-run lint/format/type gate.
+        type: string
+        required: false
+        default: "3.14"
+      zizmor_version:
+        description: zizmor version run for the central workflow-security audit.
+        type: string
+        required: false
+        default: "1.26.1"
+      central_config_repo:
+        description: >-
+          Repo that holds the canonical zizmor policy (zizmor.yml at root).
+          Defaults to the org's .github repo; never copy the policy per-consumer.
+        type: string
+        required: false
+        default: dryvist/.github
+      runner_label:
+        description: >-
+          Runner label. Defaults to ubuntu-latest; pass a RunsOn label to opt
+          into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+concurrency:
+  group: python-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ${{ inputs.runner_label }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ inputs.gate_python_version }}
+
+      # `uv run` installs the project + dev extra implicitly — no venv/install
+      # script. Runs the consumer's .pre-commit-config.yaml hook set.
+      - name: Lint / format / type gate (pre-commit)
+        run: uv run --extra dev pre-commit run --all-files --show-diff-on-failure
+
+      # zizmor runs centrally against the org's canonical policy, fetched here —
+      # the consumer never copies zizmor.yml.
+      - name: Fetch central zizmor policy
+        uses: actions/checkout@v7.0.0
+        with:
+          repository: ${{ inputs.central_config_repo }}
+          path: .central-config
+          sparse-checkout: zizmor.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Workflow security (zizmor, central policy)
+        env:
+          ZIZMOR_VERSION: ${{ inputs.zizmor_version }}
+        run: >-
+          uvx "zizmor@${ZIZMOR_VERSION}"
+          --persona=regular --min-severity=medium --min-confidence=medium
+          --config .central-config/zizmor.yml
+          .github/workflows
+
+  test:
+    name: Test
+    runs-on: ${{ inputs.runner_label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ fromJSON(inputs.python_versions) }}
+    steps:
+      - uses: actions/checkout@v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Test
+        run: uv run --extra dev pytest
