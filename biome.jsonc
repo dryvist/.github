@@ -53,7 +53,11 @@
   },
   "json": {
     "formatter": {
-      "trailingCommas": "none"
+      "trailingCommas": "none",
+      // Keep arrays/objects one-item-per-line. Biome 2.4+ changed the `expand`
+      // default to collapse primitive arrays that fit lineWidth; "always" restores
+      // the readable, greppable, clean-diff style the org config files relied on.
+      "expand": "always"
     },
     "parser": {
       "allowComments": true,
