@@ -25,7 +25,8 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=500]
       - id: end-of-file-fixer
-      - id: trim-trailing-whitespace
+      # Hook id is `trailing-whitespace` (not the Nix attr `trim-trailing-whitespace`).
+      - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
       - id: detect-private-key
 
@@ -36,7 +37,7 @@ repos:
         exclude: ^CHANGELOG\.md$
 
   - repo: https://github.com/woodruffw/zizmor-pre-commit
-    rev: v1.25.2
+    rev: v1.26.1
     hooks:
       - id: zizmor
         files: ^\.github/workflows/.*\.ya?ml$

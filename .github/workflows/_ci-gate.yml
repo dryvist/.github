@@ -100,6 +100,17 @@ on:
         description: Space-separated dirs passed to _python-security.yml
         type: string
         default: ''
+      python_ci:
+        description: Enable `Python CI` lint/format/type/test gate (gated on `python` filter)
+        type: boolean
+        default: false
+      python_ci_versions:
+        description: >-
+          JSON array of Python versions for the Python CI pytest matrix. Default
+          covers ALL currently non-EOL Python releases; a consumer narrows it
+          (e.g. to min + latest) by passing its own array.
+        type: string
+        default: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
 
       runner_label:
         description: >-
@@ -194,6 +205,15 @@ jobs:
     # secrets, and unconditional inheritance trips zizmor's secrets-inherit
     # audit. (Divergence from the JacobPEvans-personal original, on purpose.)
 
+  python-ci:
+    name: Python CI
+    needs: changes
+    if: ${{ inputs.python_ci && needs.changes.outputs.python == 'true' }}
+    uses: dryvist/.github/.github/workflows/_python-ci.yml@main
+    with:
+      python_versions: ${{ inputs.python_ci_versions }}
+      runner_label: ${{ inputs.runner_label }}
+
   # ============================================================================
   # WATCHDOG
   # Forces a terminal state for queued sibling jobs after queue_timeout_minutes.
@@ -233,7 +253,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security]
+    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
@@ -242,5 +262,5 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, watchdog
+          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, watchdog
           jobs: ${{ toJSON(needs) }}
