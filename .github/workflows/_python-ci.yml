@@ -71,9 +71,11 @@ jobs:
     name: Gate
     runs-on: ${{ inputs.runner_label }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7
 
       - name: Install uv
+        # TODO: switch to @v8 (major-moving) once Astral publishes that tag;
+        # only v8.x.x full tags exist today, so this pins the latest full v8.
         uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: ${{ inputs.gate_python_version }}
@@ -110,9 +112,11 @@ jobs:
       matrix:
         python-version: ${{ fromJSON(inputs.python_versions) }}
     steps:
-      - uses: actions/checkout@v7.0.0
+      - uses: actions/checkout@v7
 
       - name: Install uv
+        # TODO: switch to @v8 (major-moving) once Astral publishes that tag;
+        # only v8.x.x full tags exist today, so this pins the latest full v8.
         uses: astral-sh/setup-uv@v8.2.0
         with:
           python-version: ${{ matrix.python-version }}
