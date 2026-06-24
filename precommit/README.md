@@ -37,6 +37,21 @@ The markdownlint canonical (`.markdownlint-cli2.yaml`) stays at the
 repo root — it predates this directory and is referenced by existing
 consumer workflows. New canonical configs land here in `configs/`.
 
+## Requirements
+
+### Prerequisites & OS Requirements
+
+- **Git**: Required for git-hook execution.
+- **Node.js, Python, or Terraform**: Required depending on the specific profile
+  configuration in use (e.g. Node for Biome/markdownlint, Python for Ruff/Mypy,
+  Terraform for tflint).
+- **OS Support**: Fully compatible with macOS and Linux.
+
+### Optional Enhancements
+
+- **Nix & direnv**: Highly recommended if consuming these pre-commit
+  configurations via the Nix flake path.
+
 ## Installation
 
 This directory is consumed by reference, not installed. Pick the path

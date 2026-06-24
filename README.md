@@ -8,10 +8,33 @@ This repo holds **only** vendor-agnostic org infrastructure. Cribl-specific
 test harnesses and reusable workflows live in
 [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template).
 
+## Requirements
+
+### Prerequisites & OS Requirements
+
+- **dryvist Organization**: This repository provides org-level configurations and templates designed for the `dryvist` GitHub organization.
+- **tofu-github Configuration**: The organization configuration, permissions,
+  and secrets (such as the release-please App credentials) are managed and
+  provisioned by the [dryvist/tofu-github](https://github.com/dryvist/tofu-github)
+  repository.
+- **OS Compatibility**: Fully compatible with macOS and Linux environments.
+
+### Optional Enhancements
+
+- **Nix & direnv**: Recommended for automatic developer environment activation using the provided Nix flakes.
+
 ## Installation
 
 This repo is consumed by reference, not installed. Other dryvist repos
 inherit configs and policies via the mechanisms below.
+
+Example Renovate configuration to inherit these presets:
+
+```json
+{
+  "extends": ["local>dryvist/.github"]
+}
+```
 
 | Inheritance mechanism | Where it shows up |
 | --- | --- |

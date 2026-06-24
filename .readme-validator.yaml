@@ -1,0 +1,13 @@
+# README validator config for the dryvist GitHub org.
+# This config defines the required and optional sections for all repository READMEs.
+required_sections:
+  - Installation
+  - Usage
+  - Requirements
+optional_sections:
+  - Contributing
+  - License
+  - API
+  - References
+  - Layout
+
