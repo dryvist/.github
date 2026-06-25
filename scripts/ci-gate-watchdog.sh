@@ -35,9 +35,12 @@ queued_siblings() {
     --jq ".jobs[] | select(.status == \"queued\" and ${exempt_filter}) | \"\(.id)\t\(.name)\""
 }
 
-deadline=$(( $(date +%s) + QUEUE_TIMEOUT_MINUTES * 60 ))
+# awk parses QUEUE_TIMEOUT_MINUTES so a float (e.g. 0.5) truncates to an integer
+# instead of crashing bash arithmetic, which only handles integers.
+limit_seconds=$(awk "BEGIN{printf \"%d\", $QUEUE_TIMEOUT_MINUTES * 60}")
 poll_interval=15
 
+# $SECONDS is a bash builtin tracking elapsed script time — no subshell per poll.
 # Exit the instant nothing is queued; otherwise keep watching until the deadline.
 while :; do
   stuck=$(queued_siblings)
@@ -45,7 +48,7 @@ while :; do
     echo "No queued sibling jobs — all scheduled. Nothing to cancel."
     exit 0
   fi
-  if [ "$(date +%s)" -ge "$deadline" ]; then
+  if [ "$SECONDS" -ge "$limit_seconds" ]; then
     echo "Timeout (${QUEUE_TIMEOUT_MINUTES}m) reached; cancelling jobs still stuck in queued:"
     break
   fi
