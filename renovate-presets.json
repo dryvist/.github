@@ -121,6 +121,16 @@
       "minimumReleaseAge": "0 days"
     },
     {
+      "description": "dryvist/* first-party reusable workflows ride @main and must NEVER be digest-pinned (overrides the global pinGitHubActionDigests). They are self-owned; @main is the deliberate self-reference convention (SECURITY.md → Version Pinning). Without this, Renovate rewrites `uses: dryvist/...@main` to a SHA and auto-merges it (own-org rule above), silently breaking the convention across every consumer. Mirrors the zizmor `dryvist/*: ref-pin` allowance; CodeQL code scanning is managed as IaC in tofu-github, not here. Untrusted/external actions are unaffected — they keep SHA digests.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "dryvist/**"
+      ],
+      "pinDigests": false
+    },
+    {
       "description": "Auto-merge trusted orgs — all managers, all update types including MAJOR (1-day stabilization). Placed AFTER the major-default rule so this rule restores auto-merge for trusted-vendor majors that major-default would otherwise hold (Renovate merges packageRule attributes by last-match wins); non-trusted majors hit only major-default (30-day hold, no auto-merge). The `https://github.com/...` URL form of each entry was removed in this consolidation: `matchPackageNames` matches against the resolved `packageName`, which is `owner/repo` for both GitHub Actions and Nix flake `github:` inputs — the URL form never matched anything (verified via `gh search code 'depName=https://github.com/' org:JacobPEvans`, zero results).",
       "matchPackageNames": [
         "actions/**",

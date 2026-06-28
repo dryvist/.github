@@ -6,3 +6,10 @@
 # Remove entries promptly when upgrades land.
 #
 # Repos can override with a local osv-scanner.toml (takes precedence).
+#
+# Action-ref pinning posture (dryvist/*@main): OSV-Scanner reports KNOWN
+# VULNERABILITIES in resolved dependencies — it does NOT flag mutable vs.
+# SHA-pinned action refs, so `uses: dryvist/...@main` is never reported here and
+# needs no ignore entry. Ref-pin trust is enforced elsewhere: Renovate
+# (pinDigests:false for dryvist/**), zizmor (dryvist/*: ref-pin), and code
+# scanning default setup (IaC via tofu-github, public repos). See SECURITY.md.

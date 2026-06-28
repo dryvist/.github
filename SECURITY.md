@@ -31,10 +31,31 @@ alerts auto-merge without the 3-day wait.
 
 | Source | Strategy |
 | --- | --- |
-| dryvist self-references | `@main` or major version tag — never SHA or minor/patch pins |
+| dryvist self-references | `@main` — never SHA or minor/patch pins |
 | Trusted GitHub Actions | Semantic version tags (`@v6`) |
 | External/untrusted GitHub Actions | SHA commit hash pins |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
+
+### Scanner posture for `@main` self-references
+
+`dryvist/*` reusable workflows are referenced at `@main` across every consumer.
+Each scanner allows it by the most native means available — no reinvented
+config files:
+
+| Scanner | How `dryvist/*@main` is allowed |
+| --- | --- |
+| **Renovate** | `pinDigests: false` for `dryvist/**`, overriding the global `pinGitHubActionDigests`; `@main` is never SHA-pinned. |
+| **zizmor** | `unpinned-uses` policy `dryvist/*: ref-pin` in `zizmor.yml`. |
+| **CodeQL** | Code scanning default setup on public repos (free), managed as IaC in dryvist/tofu-github (per-repo, pending the provider resource). |
+| **OSV-Scanner** | N/A — OSV reports dependency vulnerabilities, not ref-pinning, so `@main` is never flagged. |
+
+Untrusted/external actions are unaffected and remain SHA-pinned. Code scanning is
+enabled on **public repos only** — the 11 private repos are excluded to avoid
+the paid GitHub Code Security per-committer charge. Flagging same-org `@main` is
+a known CodeQL false positive ([codeql#18316]); those alerts are dismissed
+natively in the code scanning UI rather than suppressed by a committed file.
+
+[codeql#18316]: https://github.com/github/codeql/issues/18316
 
 ## Secret Management
 
