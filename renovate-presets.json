@@ -22,6 +22,7 @@
   "dependencyDashboardOSVVulnerabilitySummary": "unresolved",
   "prConcurrentLimit": 5,
   "branchConcurrentLimit": 3,
+  "prHourlyLimit": 0,
   "rebaseWhen": "conflicted",
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
@@ -250,6 +251,21 @@
         "after 7am on Monday",
         "after 7am on Thursday"
       ]
+    },
+    {
+      "description": "Batch each repo's .nix custom-regex version pins into ONE scheduled, auto-merged 'nix version pins' PR (minor/patch), instead of one PR per dependency. Without grouping, slow-moving custom-regex pins each need their own branch/PR slot and lose the twice-weekly schedule-window race to lock-file maintenance under the default prHourlyLimit, so they park in the dashboard's Rate-Limited bucket and stall for weeks (e.g. nix-ai huggingface-hub stuck at 1.15.0 from 2026-05 to 2026-07, which broke the hf CLI). Grouping collapses N competing single-package updates into one branch/PR/slot, eliminating the race. Repo interlock groups (e.g. nix-ai mlx-core) override this via later-defined packageRules in the consuming repo (later packageRule wins on groupName). Scoped to **/*.nix so the Ansible-YAML and Docker-image custom.regex managers are unaffected. Majors are excluded so they still open individually under the 30-day major-default hold. Schedule is inherited from the custom.regex rule above.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        "**/*.nix"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "nix version pins",
+      "automerge": true
     },
     {
       "description": "Auto-merge Python minor/patch updates across every Python manager. Paired with the major-only `>=` bump rule below; the two share an identical manager list so behavior is symmetric: minor/patch auto-merge twice-weekly, major opens a PR (held by the 30-day major-default rule and reviewed manually). pip_setup/poetry/pipenv were added to match the bump rule's coverage — previously only pep621/pip_requirements auto-merged, an unintentional gap.",
