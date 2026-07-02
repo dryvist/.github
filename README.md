@@ -133,7 +133,7 @@ This repo exposes the following inheritance surfaces:
 | `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
 | `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |
 | `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
-| `osv-scanner.toml` | Org-wide OSV ignore list inherited via `_osv-scan.yml` (a repo-local copy takes precedence) |
+| repo-local `osv-scanner.toml` | Optional OSV config passed with `_osv-scan.yml`'s `config_file` input for repo-specific exceptions |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
 

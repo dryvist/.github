@@ -1,8 +1,8 @@
-# Multi-ecosystem lockfile vulnerability scanning via Google OSV
+# Multi-ecosystem lockfile vulnerability scanning via Google OSV.
 #
-# Reusable workflow — called from repo-level ci-gate.yml files.
-# Scans lockfiles (uv.lock, package-lock.json, .terraform.lock.hcl, etc.)
-# for known vulnerabilities across all supported ecosystems.
+# Thin wrapper around Google's reusable workflows. Pull requests run Google's
+# differential PR scanner and fail only on vulnerabilities introduced by the PR;
+# push, schedule, and manual callers run a full scan and fail on any finding.
 name: _osv-scan
 
 on:
@@ -16,46 +16,54 @@ on:
         type: string
         required: false
         default: ubuntu-latest
+      scan_args:
+        description: >-
+          Extra OSV Scanner arguments. Do not set --format or --output; Google's
+          reusable workflows manage those internally.
+        type: string
+        required: false
+        default: |-
+          --recursive
+          .
+      config_file:
+        description: >-
+          Optional repo-local OSV config path, for example osv-scanner.toml.
+          When set, the wrapper passes --config=<path> so the config applies to
+          every scanned lockfile.
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: osv-scan-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
+  actions: read
   contents: read
+  security-events: write
 
 jobs:
-  osv-scan:
+  pr-scan:
     name: OSV Scanner
-    runs-on: ${{ inputs.runner_label }}
-    steps:
-      - uses: actions/checkout@v6
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@v2.3.8
+    with:
+      runs-on: ${{ inputs.runner_label }}
+      fail-on-vuln: true
+      upload-sarif: false
+      scan-args: |-
+        ${{ inputs.config_file != '' && format('--config={0}', inputs.config_file) || '' }}
+        ${{ inputs.scan_args }}
 
-      - name: Fetch central OSV config
-        if: hashFiles('osv-scanner.toml') == ''
-        uses: actions/checkout@v6
-        with:
-          repository: ${{ github.repository_owner }}/.github
-          path: .central-config
-          sparse-checkout: osv-scanner.toml
-          sparse-checkout-cone-mode: false
-
-      - name: Apply config (local overrides central)
-        id: config
-        run: |
-          if [ -f osv-scanner.toml ]; then
-            echo "args=--config=osv-scanner.toml" >> "$GITHUB_OUTPUT"
-          elif [ -f .central-config/osv-scanner.toml ]; then
-            cp .central-config/osv-scanner.toml osv-scanner.toml
-            echo "args=--config=osv-scanner.toml" >> "$GITHUB_OUTPUT"
-          else
-            echo "args=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run OSV Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-        with:
-          scan-args: |-
-            ${{ steps.config.outputs.args }}
-            --recursive
-            .
+  full-scan:
+    name: OSV Scanner
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.3.8
+    with:
+      runs-on: ${{ inputs.runner_label }}
+      fail-on-vuln: true
+      upload-sarif: false
+      scan-args: |-
+        ${{ inputs.config_file != '' && format('--config={0}', inputs.config_file) || '' }}
+        ${{ inputs.scan_args }}
