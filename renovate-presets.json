@@ -111,6 +111,15 @@
       "enabled": false
     },
     {
+      "description": "Tag major updates with an additive `update:major` label (minor/patch are inferred by its absence). Gives the dryvist/ai-workflows dependency reviewer a deterministic, AI-independent 'is this a major?' gate so majors never auto-merge, and lets humans filter. addLabels is additive: it does not disturb scheduling, auto-merge, or the dep:review label.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "addLabels": [
+        "update:major"
+      ]
+    },
+    {
       "description": "Major-version default, org-wide: hold non-trusted-vendor majors 30 days before a PR opens, and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. Rules below are placed AFTER this one so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-org restores immediate auto-merge for JacobPEvans/** and dryvist/** majors; the trusted-orgs MAJOR rule shortens the hold to 3 days and opens a review PR (still no auto-merge — a trusted publisher is not proof of a compatible API); the trusted-orgs minor/patch rule auto-merges those (3-day stabilization, twice-weekly). Non-trusted-vendor majors match only this rule and stay held 30 days. CVE-driven bumps bypass the grace entirely via the top-level vulnerabilityAlerts block (0 days, any time).",
       "matchUpdateTypes": [
         "major"

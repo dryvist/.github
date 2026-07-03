@@ -187,3 +187,7 @@
 - name: "risk:high"
   color: "EF4444"
   description: "AI dependency reviewer: high risk - do not merge, human review required"
+
+- name: "update:major"
+  color: "B91C1C"
+  description: "Major version update - never auto-merged; opens for human review"
