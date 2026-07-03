@@ -3,7 +3,8 @@
   "description": [
     "dryvist/.github master Renovate preset — the single source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. This is the MASTER: it extends no other repository’s config. JacobPEvans/.github extends THIS (github>dryvist/.github:renovate-presets), never the reverse. Consumers extend it via local>dryvist/.github (the default preset, which extends this) or directly via github>dryvist/.github:renovate-presets.",
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation — keep them current.",
-    "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true."
+    "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true.",
+    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). The top-level `schedule` sets the DEFAULT cadence to WEEKLY — this is the untrusted long-tail tier. First-party (own-org) overrides to `at any time` for immediate propagation. Trusted orgs override to TWICE-WEEKLY (Mon/Thu): minor/patch auto-merge after a 3-day stabilization; MAJORS open a review PR and never auto-merge (a trusted publisher is not proof of a compatible API). Security/CVE fixes bypass the schedule entirely via vulnerabilityAlerts (`at any time`, 0-day, auto-merge). Non-trusted majors stay held 30 days. The untrusted long-tail is additionally reviewed by the dryvist/ai-workflows dependency reviewer, which auto-merges only the risk:low subset."
   ],
   "extends": [
     "local>dryvist/.github:renovate-grouping"
@@ -32,8 +33,14 @@
     ".github/aw/**"
   ],
   "minimumReleaseAge": "3 days",
+  "schedule": [
+    "after 7am on Monday"
+  ],
   "vulnerabilityAlerts": {
     "enabled": true,
+    "schedule": [
+      "at any time"
+    ],
     "labels": [
       "type:security"
     ],
@@ -104,7 +111,7 @@
       "enabled": false
     },
     {
-      "description": "Major-version defaults, org-wide: 30-day grace period before a PR opens and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. The own-orgs and trusted-orgs rules below are placed AFTER this rule so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-orgs restores immediate auto-merge for JacobPEvans/** and dryvist/** majors, and trusted-orgs restores auto-merge (1-day grace) for the curated trusted-vendor list. Non-trusted-vendor majors match only this rule and stay held. CVE-driven bumps still bypass the grace via the top-level vulnerabilityAlerts block (0 days).",
+      "description": "Major-version default, org-wide: hold non-trusted-vendor majors 30 days before a PR opens, and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. Rules below are placed AFTER this one so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-org restores immediate auto-merge for JacobPEvans/** and dryvist/** majors; the trusted-orgs MAJOR rule shortens the hold to 3 days and opens a review PR (still no auto-merge — a trusted publisher is not proof of a compatible API); the trusted-orgs minor/patch rule auto-merges those (3-day stabilization, twice-weekly). Non-trusted-vendor majors match only this rule and stay held 30 days. CVE-driven bumps bypass the grace entirely via the top-level vulnerabilityAlerts block (0 days, any time).",
       "matchUpdateTypes": [
         "major"
       ],
@@ -112,14 +119,17 @@
       "automerge": false
     },
     {
-      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
+      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. Also overrides the top-level weekly `schedule` with `at any time` so first-party changes propagate on merge, not on the weekly window — release-please cuts + auto-merges the release, and consumers pick it up here at 0-day. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
       "matchPackageNames": [
         "JacobPEvans/**",
         "JacobPEvans-personal/**",
         "dryvist/**"
       ],
       "automerge": true,
-      "minimumReleaseAge": "0 days"
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
+      ]
     },
     {
       "description": "dryvist/* first-party reusable workflows ride @main and must NEVER be digest-pinned (overrides the global pinGitHubActionDigests). They are self-owned; @main is the deliberate self-reference convention (SECURITY.md → Version Pinning). Without this, Renovate rewrites `uses: dryvist/...@main` to a SHA and auto-merges it (own-org rule above), silently breaking the convention across every consumer. Mirrors the zizmor `dryvist/*: ref-pin` allowance; CodeQL code scanning is managed as IaC in tofu-github, not here. Untrusted/external actions are unaffected — they keep SHA digests.",
@@ -132,7 +142,7 @@
       "pinDigests": false
     },
     {
-      "description": "Auto-merge trusted orgs — all managers, all update types including MAJOR (1-day stabilization). Placed AFTER the major-default rule so this rule restores auto-merge for trusted-vendor majors that major-default would otherwise hold (Renovate merges packageRule attributes by last-match wins); non-trusted majors hit only major-default (30-day hold, no auto-merge). The `https://github.com/...` URL form of each entry was removed in this consolidation: `matchPackageNames` matches against the resolved `packageName`, which is `owner/repo` for both GitHub Actions and Nix flake `github:` inputs — the URL form never matched anything (verified via `gh search code 'depName=https://github.com/' org:JacobPEvans`, zero results).",
+      "description": "Auto-merge trusted orgs — MINOR/PATCH only, twice-weekly (Mon/Thu), after a 3-day stabilization. Placed AFTER the major-default rule (Renovate last-match-wins per attribute). Trusted MAJORS are handled by the separate trusted-major rule immediately below (review PR, no auto-merge); non-trusted majors hit only major-default (30-day hold, no auto-merge). `matchPackageNames` matches the resolved `packageName` (`owner/repo` for GitHub Actions and Nix flake `github:` inputs); the old `https://github.com/...` URL form was removed as it never matched (verified via `gh search code 'depName=https://github.com/' org:JacobPEvans`, zero results). ECOSYSTEM NOTE: `owner/**` does NOT match npm/PyPI/Terraform packages published by that org (their packageName is the bare package, e.g. `boto3`), so those currently fall through to the untrusted tier — safe, they get AI review. Promote specific ecosystems to trusted with `matchSourceUrls` carve-outs (see the HuggingFace rule below); a full per-ecosystem audit is a tracked follow-up.",
       "matchPackageNames": [
         "actions/**",
         "ansible/**",
@@ -187,8 +197,85 @@
         "terraform-linters/**",
         "wakatime/**"
       ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
-      "minimumReleaseAge": "1 day"
+      "minimumReleaseAge": "3 days",
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
+    },
+    {
+      "description": "Trusted-org MAJOR updates: shorten the major-default 30-day hold to 3 days and open a review PR, but do NOT auto-merge — a trusted publisher is not proof of a compatible API (breaking majors can pass shallow CI yet break runtime behavior, infra convergence, provider schemas, or CLI flags). Same curated allowlist as the minor/patch rule above. Labelled dep:review so humans can find them; twice-weekly (Mon/Thu) visibility. Non-trusted majors are unaffected and stay in the 30-day hold.",
+      "matchPackageNames": [
+        "actions/**",
+        "ansible/**",
+        "anthropics/**",
+        "aquasecurity/**",
+        "astral-sh/**",
+        "aws-actions/**",
+        "aws-ia/**",
+        "Azure/**",
+        "bitwarden/**",
+        "cachix/**",
+        "codecov/**",
+        "criblio/**",
+        "DavidAnson/**",
+        "DeterminateSystems/**",
+        "docker/**",
+        "DopplerHQ/**",
+        "dorny/**",
+        "edolstra/**",
+        "github/**",
+        "google/**",
+        "google-github-actions/**",
+        "googleapis/**",
+        "hashicorp/**",
+        "hercules-ci/**",
+        "huggingface/**",
+        "kubernetes/**",
+        "kubernetes-sigs/**",
+        "lycheeverse/**",
+        "microsoft/**",
+        "nix-community/**",
+        "nix-darwin/**",
+        "nix-systems/**",
+        "NixOS/**",
+        "numtide/**",
+        "obra/**",
+        "open-telemetry/**",
+        "opentofu/**",
+        "ossf/**",
+        "oven-sh/**",
+        "oxalica/**",
+        "peter-evans/**",
+        "pre-commit/**",
+        "pypa/**",
+        "python/**",
+        "raycast/**",
+        "renovatebot/**",
+        "semgrep/**",
+        "sigstore/**",
+        "softprops/**",
+        "streetsidesoftware/**",
+        "terraform-linters/**",
+        "wakatime/**"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "minimumReleaseAge": "3 days",
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ],
+      "addLabels": [
+        "dep:review"
+      ]
     },
     {
       "description": "Auto-merge pre-commit hooks (minor and patch)",
@@ -199,7 +286,11 @@
         "minor",
         "patch"
       ],
-      "automerge": true
+      "automerge": true,
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
     },
     {
       "description": "Auto-merge trusted Terraform providers (minor/patch only)",
@@ -216,7 +307,11 @@
         "minor",
         "patch"
       ],
-      "automerge": true
+      "automerge": true,
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
     },
     {
       "description": "Auto-merge trusted PyPI packages from HuggingFace (minor/patch only)",
@@ -230,7 +325,11 @@
         "minor",
         "patch"
       ],
-      "automerge": true
+      "automerge": true,
+      "schedule": [
+        "after 7am on Monday",
+        "after 7am on Thursday"
+      ]
     },
     {
       "description": "GitHub releases use v-prefixed tags for custom Nix packages",

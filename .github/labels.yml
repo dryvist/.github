@@ -168,3 +168,22 @@
 - name: "renovate"
   color: "A5B4FC"
   description: "Renovate bot - Automated dependency management"
+
+# =============================================================================
+# DEPENDENCY TRUST / REVIEW LABELS - Renovate tier model + AI dependency reviewer
+# =============================================================================
+- name: "dep:review"
+  color: "F59E0B"
+  description: "Trusted-org major update awaiting human review - never auto-merged"
+
+- name: "risk:low"
+  color: "22C55E"
+  description: "AI dependency reviewer: low risk - eligible for auto-merge if native gates pass"
+
+- name: "risk:medium"
+  color: "F59E0B"
+  description: "AI dependency reviewer: medium risk - human review required"
+
+- name: "risk:high"
+  color: "EF4444"
+  description: "AI dependency reviewer: high risk - do not merge, human review required"
