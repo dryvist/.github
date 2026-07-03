@@ -12,8 +12,8 @@
     {
       "customType": "regex",
       "description": "Manage Biome version in biome.jsonc schema",
-      "fileMatch": [
-        "(^|/)biome\\.jsonc$"
+      "managerFilePatterns": [
+        "/(^|/)biome\\.jsonc$/"
       ],
       "matchStrings": [
         "\"\\$schema\": \"https://biomejs\\.dev/schemas/(?<currentValue>[^/]+)/schema\\.json\""

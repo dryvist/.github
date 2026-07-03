@@ -15,7 +15,6 @@
   ],
   "automergeType": "pr",
   "automergeStrategy": "squash",
-  "pinGitHubActionDigests": true,
   "dependencyDashboard": true,
   "dependencyDashboardLabels": [
     "dependencies"
@@ -139,6 +138,13 @@
       "schedule": [
         "at any time"
       ]
+    },
+    {
+      "description": "Pin external GitHub Action `uses:` refs to a full commit SHA (supply-chain hardening). Replaces the invalid top-level `pinGitHubActionDigests` key with Renovate's canonical per-manager `pinDigests`; dryvist/* first-party actions are exempted by the rule immediately below (Renovate is last-match-wins per attribute).",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "pinDigests": true
     },
     {
       "description": "dryvist/* first-party reusable workflows ride @main and must NEVER be digest-pinned (overrides the global pinGitHubActionDigests). They are self-owned; @main is the deliberate self-reference convention (SECURITY.md → Version Pinning). Without this, Renovate rewrites `uses: dryvist/...@main` to a SHA and auto-merges it (own-org rule above), silently breaking the convention across every consumer. Mirrors the zizmor `dryvist/*: ref-pin` allowance; CodeQL code scanning is managed as IaC in tofu-github, not here. Untrusted/external actions are unaffected — they keep SHA digests.",
@@ -380,7 +386,7 @@
       ]
     },
     {
-      "description": "Bump Python `>=` lower bounds ONLY on major releases, and only to `>=N.0.0` form. The floor expresses the oldest acceptable major; minor/patch positions are reserved exclusively for CVE-mitigation pins. Minor/patch releases never trigger a floor bump — Renovate's default `replace` strategy already no-ops when the existing range satisfies the new version. Renovate's pep440 `bump` produces `>=N.M.P` natively; the companion normalizer workflow (follow-up issue in this repo) rewrites it to `>=N.0.0` after the PR opens. CVE EXCEPTION: when a known CVE is fixed only in a specific minor/patch release, pin the floor to the OLDEST secure version (e.g. `pyarrow 17.0.0 → PYSEC-2026-113 fixed in 23.0.1` → `pyarrow>=23.0.1`), NEVER the latest release. An inline comment block citing every CVE identifier the floor mitigates is REQUIRED above any floor that exceeds `>=N.0.0` form — see `mlx-benchmarks/space/requirements.txt` for the canonical pattern. The normalizer must preserve floors preceded by such a comment block. CVE-driven Renovate bumps themselves still use `bump` at all update types via the top-level `vulnerabilityAlerts` block, so security floor bumps remain immediate.",
+      "description": "DOCUMENTATION-ONLY: Renovate cannot scope `rangeStrategy` by update type, so the invalid `rangeStrategy: bump` combined with `matchUpdateTypes` was removed here (it made the whole preset fail validation). Default `replace` no-ops on `>=` ranges for every update type, preserving manual CVE floors exactly; floor-bumping is owned by the companion normalizer workflow (follow-up issue). Intended policy — bump Python `>=` lower bounds ONLY on major releases, and only to `>=N.0.0` form. The floor expresses the oldest acceptable major; minor/patch positions are reserved exclusively for CVE-mitigation pins. Minor/patch releases never trigger a floor bump — Renovate's default `replace` strategy already no-ops when the existing range satisfies the new version. Renovate's pep440 `bump` produces `>=N.M.P` natively; the companion normalizer workflow (follow-up issue in this repo) rewrites it to `>=N.0.0` after the PR opens. CVE EXCEPTION: when a known CVE is fixed only in a specific minor/patch release, pin the floor to the OLDEST secure version (e.g. `pyarrow 17.0.0 → PYSEC-2026-113 fixed in 23.0.1` → `pyarrow>=23.0.1`), NEVER the latest release. An inline comment block citing every CVE identifier the floor mitigates is REQUIRED above any floor that exceeds `>=N.0.0` form — see `mlx-benchmarks/space/requirements.txt` for the canonical pattern. The normalizer must preserve floors preceded by such a comment block. CVE-driven Renovate bumps themselves still use `bump` at all update types via the top-level `vulnerabilityAlerts` block, so security floor bumps remain immediate.",
       "matchManagers": [
         "pep621",
         "pip_requirements",
@@ -390,8 +396,7 @@
       ],
       "matchUpdateTypes": [
         "major"
-      ],
-      "rangeStrategy": "bump"
+      ]
     }
   ]
 }

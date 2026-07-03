@@ -1,0 +1,36 @@
+# Validates this repo's Renovate config (the org master preset) on every PR
+# that touches it. dryvist/.github is the single source of truth for Renovate
+# policy across every dryvist/JacobPEvans repo, so a broken preset here silently
+# breaks dependency automation for all consumers. `--strict` also fails on
+# deprecation/migration warnings, so config drift (renamed options, removed
+# keys) is caught and fixed at PR time — not discovered months later. Scoped by
+# `paths`, so it only runs when a renovate*.json file actually changes.
+name: Renovate Config Validate
+
+on:
+  pull_request:
+    paths:
+      - "renovate.json"
+      - "renovate-presets.json"
+      - "renovate-grouping.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: renovate-config-validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate Renovate config (strict)
+        run: >-
+          npx --yes --package renovate@latest --
+          renovate-config-validator --strict
+          renovate.json renovate-presets.json renovate-grouping.json
