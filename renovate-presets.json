@@ -54,8 +54,13 @@
       "after 7am on Monday",
       "after 7am on Thursday"
     ],
-    "automerge": true,
-    "minimumReleaseAge": "0 days"
+    "automerge": true
+  },
+  "nix": {
+    "lockFileMaintenance": {
+      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the Mon/Thu window. The nix manager already refreshes every declared flake input on the tier schedule (twice-weekly + 3-day + first-party-immediate), so flake locks stay fresh without it.",
+      "enabled": false
+    }
   },
   "customManagers": [
     {
