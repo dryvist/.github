@@ -38,7 +38,7 @@ enable_list:
 # don't have these files are unaffected — ansible-lint ignores absent
 # entries.
 kinds:
-  - playbook: "**/load_terraform.yml"
+  - playbook: "**/load_tofu.yml"
 
 use_default_rules: true
 offline: false
