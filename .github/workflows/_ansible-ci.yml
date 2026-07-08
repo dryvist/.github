@@ -152,6 +152,11 @@ jobs:
         run: uv pip install --system -r "$REQ"
       - name: Install Ansible collections
         run: ansible-galaxy collection install -r requirements.yml --force
+      # `collection install` ignores a `roles:` key, so any role a repo pins in
+      # requirements.yml (e.g. splunk.splunk, the shared inventory_resolve) was
+      # never installed. Skips cleanly when the file has no `roles:` entries.
+      - name: Install Ansible roles
+        run: ansible-galaxy role install -r requirements.yml --force
       - name: Fetch Doppler secrets
         if: ${{ inputs.molecule_doppler }}
         uses: dopplerhq/secrets-fetch-action@451892f16195f9ac360e1a5bcbf0b5fd0e957534 # v2.0.0
