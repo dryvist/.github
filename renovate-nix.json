@@ -1,0 +1,13 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": [
+    "dryvist/.github nix-manager opt-in preset. Nix repos extend `local>dryvist/.github:renovate-nix` to get the full org default policy PLUS Renovate's native `nix` manager (flake.lock input updates).",
+    "The nix manager is intentionally OFF in the default preset: nearly every dryvist repo carries a devshell flake.nix, and enabling it everywhere would churn dev-only lockfiles. Use this preset only for repos whose flake inputs are real, tracked dependencies."
+  ],
+  "extends": [
+    "local>dryvist/.github"
+  ],
+  "nix": {
+    "enabled": true
+  }
+}

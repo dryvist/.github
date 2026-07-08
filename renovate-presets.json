@@ -97,6 +97,18 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\s+[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}"
+    },
+    {
+      "description": "Manage the Biome version pinned in each repo's biome.jsonc `$schema` URL. Every dryvist repo carries a scaffolded biome.jsonc, so this keeps @biomejs/biome current in lockstep with the schema URL. Moved here from renovate.json so it reaches every consumer through the shared preset instead of the deprecated renovate.json-as-preset fallback.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/(^|/)biome\\.jsonc$/"
+      ],
+      "matchStrings": [
+        "\"\\$schema\": \"https://biomejs\\.dev/schemas/(?<currentValue>[^/]+)/schema\\.json\""
+      ],
+      "depNameTemplate": "@biomejs/biome",
+      "datasourceTemplate": "npm"
     }
   ],
   "pep723": {
