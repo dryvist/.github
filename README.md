@@ -39,7 +39,7 @@ Example Renovate configuration to inherit these presets:
 | Inheritance mechanism | Where it shows up |
 | --- | --- |
 | GitHub auto-applied org files (`SECURITY.md`, `profile/README.md`) | Visible on every dryvist repo's Security tab + at <https://github.com/dryvist> |
-| Renovate `extends` | Each repo: `extends: ["config:recommended", "local>dryvist/.github"]` — this repo is the **master** (extends nothing external) |
+| Renovate `extends` | Each repo: `["local>dryvist/.github"]` (resolves `default.json`); nix repos use `:renovate-nix`. This repo is the **master** |
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
 | markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
 | Pre-commit hooks (shared) | `precommit/` — Nix flake import or static YAML copy; see [`precommit/README.md`](precommit/README.md) |
@@ -57,7 +57,10 @@ For a new TS-based dryvist repo, copy the canonical configs from this repo:
 # decoding, portable across macOS and Linux):
 gh api repos/dryvist/.github/contents/biome.jsonc -H "Accept: application/vnd.github.raw" > biome.jsonc
 gh api repos/dryvist/.github/contents/.markdownlint-cli2.yaml -H "Accept: application/vnd.github.raw" > .markdownlint-cli2.yaml
-gh api repos/dryvist/.github/contents/renovate.json -H "Accept: application/vnd.github.raw" > renovate.json
+# Renovate: write a thin wrapper that inherits the org default preset. Do NOT
+# copy this repo's renovate.json — that is dryvist/.github's own self-config.
+# Nix repos: use "local>dryvist/.github:renovate-nix" instead.
+printf '%s\n' '{ "$schema": "https://docs.renovatebot.com/renovate-schema.json", "extends": ["local>dryvist/.github"] }' > renovate.json
 # Default .gitignore baseline (secrets + AI local state) — append, then de-dupe:
 gh api repos/dryvist/.github/contents/configs/gitignore -H "Accept: application/vnd.github.raw" >> .gitignore
 ```
@@ -124,7 +127,9 @@ This repo exposes the following inheritance surfaces:
 | `CLAUDE.md` | AI assistant policy (read by Claude Code) |
 | `biome.jsonc` | Canonical Biome lint + format config (code) |
 | `.markdownlint-cli2.yaml` | Canonical markdownlint-cli2 config (`.md` files) |
-| `renovate.json` | Org-default Renovate entry point (master; extends only `config:recommended` + local presets) |
+| `default.json` | Shareable Renovate entry point consumers resolve via `extends: ["local>dryvist/.github"]` (config:recommended + master policy) |
+| `renovate-nix.json` | Nix-manager opt-in variant of `default.json`; nix repos extend `["local>dryvist/.github:renovate-nix"]` |
+| `renovate.json` | This repo's OWN Renovate self-config (consumes `default.json`) — not the shared preset |
 | `renovate-presets.json` | Master Renovate policy: auto-merge, trusted orgs, custom managers |
 | `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |

@@ -38,7 +38,8 @@ Python is not used for new dryvist work.
 
 The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo at
 the root. Repos copy them at scaffold time; periodic sync is handled by
-Renovate's custom manager (or manual update for now — see `renovate.json`).
+Renovate's custom manager (or manual update for now — see the biome
+`customManagers` entry in `renovate-presets.json`).
 
 ## Release-please (org-native)
 

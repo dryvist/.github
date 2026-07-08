@@ -10,7 +10,9 @@ name: Renovate Config Validate
 on:
   pull_request:
     paths:
+      - "default.json"
       - "renovate.json"
+      - "renovate-nix.json"
       - "renovate-presets.json"
       - "renovate-grouping.json"
 
@@ -33,4 +35,5 @@ jobs:
         run: >-
           npx --yes --package renovate@latest --
           renovate-config-validator --strict
-          renovate.json renovate-presets.json renovate-grouping.json
+          default.json renovate.json renovate-nix.json
+          renovate-presets.json renovate-grouping.json
