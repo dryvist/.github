@@ -116,6 +116,7 @@ jobs:
             molecule:
               - 'roles/**'
               - 'molecule/**'
+              - '.config/molecule/**'
               - 'requirements.yml'
 
   ansible-lint:
