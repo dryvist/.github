@@ -37,7 +37,7 @@ jobs:
           path: .org-github
 
       - name: Run markdownlint with the forced org config
-        uses: DavidAnson/markdownlint-cli2-action@v23
+        uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25 # v24
         with:
           config: .org-github/.markdownlint-cli2.yaml
           globs: |
