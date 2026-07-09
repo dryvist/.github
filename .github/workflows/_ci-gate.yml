@@ -43,9 +43,10 @@
 #
 # Filter name convention (caller defines these in `filters:` input):
 #
-#   nix            -> gates `nix_validate`
+#   nix            -> gates `nix_validate` and `nix_build`
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #   python         -> gates `python_security`
+#   ansible        -> gates `ansible_ci`
 #
 # `dependency_review` runs on PUBLIC repos only: `actions/dependency-review-
 # action` needs GitHub Advanced Security to read the dependency graph, which
@@ -58,6 +59,31 @@
 # `zizmor` (workflow-security scan) is likewise NOT filter-gated — it runs on
 # every `pull_request` event when enabled, regardless of which paths changed,
 # since a security scan must not be evadable by touching only untracked paths.
+#
+# `osv_scan` (Google OSV-Scanner) is likewise NOT filter-gated. Callers
+# enabling it MUST grant `security-events: write` and `actions: read` in
+# their own caller-workflow `jobs.gate.permissions` (alongside the
+# `actions: write` the watchdog already requires) — a called workflow can
+# never exceed the caller's token grant, so a missing grant here fails the
+# SARIF upload, not the whole run.
+#
+# `nix_skip_deps_only` (default false, opt-in): when enabled, `nix-validate`
+# and `nix-build` are skipped for dependency-only bot PRs (Renovate: author
+# prefix `jacobpevans-github-actions` + title `chore(deps)*`; Dependabot:
+# author `dependabot[bot]`) — UNLESS `flake.lock` itself changed, since a
+# lockfile bump must still build. Both signals are computed once in
+# `changes` (`is-deps-only`, `is-flake-lock-change`) and reused by both jobs.
+#
+# Fork-PR runner guard (central invariant): every `runs-on:`/`runner_label:`
+# in this file resolves through
+#   (github.event_name != 'pull_request' ||
+#    github.event.pull_request.head.repo.full_name == github.repository)
+#     && inputs.runner_label || 'ubuntu-latest'
+# A fork PR must never execute fork-author-controlled code on a caller's
+# self-hosted RunsOn runners; same-repo PRs and non-PR events keep the
+# caller's label. Centralized here so consumers (nix-ai, nix-darwin, ...) no
+# longer repeat the guard on every job. Pattern reference:
+# runs-on.com/configuration/job-labels (Fork PRs).
 #
 # Callers may include additional filters; this workflow ignores them. To add
 # a new conditional check, add: input toggle, conditional job, and entry in
@@ -89,6 +115,21 @@ on:
           checks to the CI system).
         type: boolean
         default: true
+      nix_build:
+        description: >-
+          Enable `Nix Build` (gated on `nix` filter). Builds the flake on
+          macos-latest via `_nix-build.yml` (hardcoded macOS runner — that
+          workflow has no `runner_label` input, so the fork-PR guard below
+          does not apply to it).
+        type: boolean
+        default: false
+      nix_skip_deps_only:
+        description: >-
+          Skip `nix-validate`/`nix-build` on dependency-only bot PRs (see
+          header). Default false — a repo opts in once its dependency-bump
+          PRs are stable enough to trust without a full build.
+        type: boolean
+        default: false
       markdown_lint:
         description: Enable `Markdown Lint` (gated on `markdown` filter)
         type: boolean
@@ -123,6 +164,15 @@ on:
           (e.g. to min + latest) by passing its own array.
         type: string
         default: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+      ansible_ci:
+        description: >-
+          Enable `Ansible CI` (ansible-lint + molecule via `_ansible-ci.yml`,
+          gated on `ansible` filter). Callers must define an `ansible:` key
+          in their `filters` input, same convention as `python`. Called with
+          `emit_gate: false` — this gate is the sole "Merge Gate" aggregator,
+          so `_ansible-ci.yml`'s own nested gate job is suppressed.
+        type: boolean
+        default: false
       dependency_review:
         description: >-
           Enable `Dependency Review`. Runs on PUBLIC repos only —
@@ -144,6 +194,25 @@ on:
           paths.
         type: boolean
         default: true
+
+      osv_scan:
+        description: >-
+          Enable `OSV Scan` (Google OSV-Scanner). Runs on every `pull_request`
+          event, unconditionally — NOT gated on any `filters` output, since a
+          security scan must not be skippable by touching only untracked
+          paths. Callers enabling this MUST grant `security-events: write`
+          and `actions: read` in their own caller-workflow
+          `jobs.gate.permissions`, or the SARIF upload fails (a called
+          workflow can never exceed the caller's token grant).
+        type: boolean
+        default: false
+      osv_config_file:
+        description: >-
+          Optional repo-local OSV config path passed through to
+          `_osv-scan.yml` (e.g. osv-scanner.toml). Mirrors that workflow's
+          own `config_file` input name and default.
+        type: string
+        default: ""
 
       runner_label:
         description: >-
@@ -176,17 +245,46 @@ jobs:
   # ============================================================================
   changes:
     name: Detect Changes
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
       markdown: ${{ steps.filter.outputs.markdown }}
       python: ${{ steps.filter.outputs.python }}
+      ansible: ${{ steps.filter.outputs.ansible }}
+      is-deps-only: ${{ steps.detect-deps.outputs.is-deps-only }}
+      is-flake-lock-change: ${{ steps.lockfilter.outputs.flake-lock }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4
         id: filter
         with:
           filters: ${{ inputs.filters }}
+
+      # Static (not caller-supplied) so `is-flake-lock-change` is always
+      # available regardless of whether a caller's `filters` input tracks
+      # flake.lock under its own `nix` key.
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4
+        id: lockfilter
+        with:
+          filters: |
+            flake-lock:
+              - 'flake.lock'
+
+      - name: Sparse-checkout shared scripts from this repo
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-detect-deps-only.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Detect Dependency-Only Commits
+        id: detect-deps
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          COMMIT_MSG: ${{ github.event.pull_request.title }}
+        run: bash .gh-shared/scripts/ci-gate-detect-deps-only.sh
 
   # ============================================================================
   # CONDITIONAL CHECKS
@@ -196,11 +294,19 @@ jobs:
   nix-validate:
     name: Nix Validate
     needs: changes
-    if: ${{ inputs.nix_validate && needs.changes.outputs.nix == 'true' }}
+    if: ${{ inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
     uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
+  # the fork-PR guard doesn't apply here.
+  nix-build:
+    name: Nix Build
+    needs: changes
+    if: ${{ inputs.nix_build && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
+    uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
     name: Markdown Lint
@@ -208,7 +314,7 @@ jobs:
     if: ${{ inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   file-size:
     name: File Size
@@ -216,7 +322,7 @@ jobs:
     if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   token-limits:
     name: Token Limits
@@ -224,7 +330,7 @@ jobs:
     if: ${{ inputs.token_limits && needs.changes.outputs.markdown == 'true' }}
     uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   python-security:
     name: Python Security
@@ -233,7 +339,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     # No `secrets: inherit` — _python-security.yml declares and consumes no
     # secrets, and unconditional inheritance trips zizmor's secrets-inherit
     # audit. (Divergence from the JacobPEvans-personal original, on purpose.)
@@ -245,7 +351,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   # dependency-review is intentionally NOT `needs: changes` / filter-gated —
   # a supply-chain scan must run on every pull_request regardless of which
@@ -256,7 +362,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: ${{ inputs.dependency_review && github.event_name == 'pull_request' && github.event.repository.private == false }}
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: write
@@ -275,7 +381,33 @@ jobs:
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_zizmor.yml@main
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  # osv-scan is intentionally NOT `needs: changes` / filter-gated — a
+  # dependency-vulnerability scan must run on every pull_request regardless
+  # of which paths a diff touches. Job-level permissions grant what
+  # `_osv-scan.yml` needs for the SARIF upload; see the header comment for
+  # what the CALLER of this gate must also grant.
+  osv-scan:
+    name: OSV Scan
+    if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    with:
+      config_file: ${{ inputs.osv_config_file }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  ansible-ci:
+    name: Ansible CI
+    needs: changes
+    if: ${{ inputs.ansible_ci && needs.changes.outputs.ansible == 'true' }}
+    uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
+    with:
+      emit_gate: false
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   # ============================================================================
   # WATCHDOG
@@ -285,7 +417,7 @@ jobs:
   watchdog:
     name: Queue Watchdog
     needs: changes
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     permissions:
       actions: write   # required to cancel sibling jobs
       contents: read   # required for actions/checkout sparse-checkout
@@ -316,14 +448,14 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, zizmor]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, osv-scan]
     if: ${{ always() && !cancelled() }}
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     steps:
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, zizmor, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, osv-scan, watchdog
           jobs: ${{ toJSON(needs) }}
