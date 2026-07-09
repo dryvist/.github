@@ -77,17 +77,6 @@ jobs:
             fallback = true
             log-lines = 1000
 
-      - name: Restore Nix Store Cache
-        uses: actions/cache/restore@v5
-        id: nix-cache
-        with:
-          path: |
-            /nix/store
-            ~/.cache/nix
-          key: nix-linux-${{ runner.os }}-${{ hashFiles('flake.lock') }}
-          restore-keys: |
-            nix-linux-${{ runner.os }}-
-
       - name: Check flake
         # --all-systems evaluates outputs for every declared system to catch
         # darwin-only broken packages from the linux runner. Disabled by setting
@@ -96,12 +85,3 @@ jobs:
         env:
           ALL_SYSTEMS_FLAG: ${{ inputs.all_systems && '--all-systems' || '' }}
         run: nix flake check $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going
-
-      - name: Save Nix Store Cache
-        if: github.event_name == 'push' && steps.nix-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: |
-            /nix/store
-            ~/.cache/nix
-          key: nix-linux-${{ runner.os }}-${{ hashFiles('flake.lock') }}
