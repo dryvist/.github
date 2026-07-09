@@ -8,10 +8,11 @@
 #   gate  -> `uv run --extra dev pre-commit run --all-files` (ruff + ruff-format
 #            + pyright + hygiene + markdownlint, all defined in the consumer's
 #            .pre-commit-config.yaml whose tool config lives in pyproject.toml /
-#            an @org shareable config — never copied), THEN zizmor against the
-#            org's canonical policy fetched from this repo (zero-copy: the policy
-#            is never duplicated into the consumer).
+#            an @org shareable config — never copied).
 #   test  -> pytest across the consumer's supported Python versions.
+#
+# Workflow security (zizmor) is a separate job — see `_zizmor.yml`, wired into
+# `_ci-gate.yml` as its own always-on-PR Merge Gate job, not run here.
 #
 # ┌─────────────────────────── KEEP IN SYNC ───────────────────────────┐
 # │ The hook set this runs is the dryvist Python standard, also defined │
@@ -39,18 +40,6 @@ on:
         type: string
         required: false
         default: "3.14"
-      zizmor_version:
-        description: zizmor version run for the central workflow-security audit.
-        type: string
-        required: false
-        default: "1.26.1"
-      central_config_repo:
-        description: >-
-          Repo that holds the canonical zizmor policy (zizmor.yml at root).
-          Defaults to the org's .github repo; never copy the policy per-consumer.
-        type: string
-        required: false
-        default: dryvist/.github
       runner_label:
         description: >-
           Runner label. Defaults to ubuntu-latest; pass a RunsOn label to opt
@@ -84,25 +73,6 @@ jobs:
       # script. Runs the consumer's .pre-commit-config.yaml hook set.
       - name: Lint / format / type gate (pre-commit)
         run: uv run --extra dev pre-commit run --all-files --show-diff-on-failure
-
-      # zizmor runs centrally against the org's canonical policy, fetched here —
-      # the consumer never copies zizmor.yml.
-      - name: Fetch central zizmor policy
-        uses: actions/checkout@v7.0.0
-        with:
-          repository: ${{ inputs.central_config_repo }}
-          path: .central-config
-          sparse-checkout: zizmor.yml
-          sparse-checkout-cone-mode: false
-
-      - name: Workflow security (zizmor, central policy)
-        env:
-          ZIZMOR_VERSION: ${{ inputs.zizmor_version }}
-        run: >-
-          uvx "zizmor@${ZIZMOR_VERSION}"
-          --persona=regular --min-severity=medium --min-confidence=medium
-          --config .central-config/zizmor.yml
-          .github/workflows
 
   test:
     name: Test

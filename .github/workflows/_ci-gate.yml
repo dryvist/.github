@@ -55,6 +55,10 @@
 # `pull_request` event when enabled, regardless of which paths changed (a
 # supply-chain scan must not be skippable by touching only "safe" paths).
 #
+# `zizmor` (workflow-security scan) is likewise NOT filter-gated — it runs on
+# every `pull_request` event when enabled, regardless of which paths changed,
+# since a security scan must not be evadable by touching only untracked paths.
+#
 # Callers may include additional filters; this workflow ignores them. To add
 # a new conditional check, add: input toggle, conditional job, and entry in
 # the gate's `needs:` and `allowed-skips`.
@@ -128,6 +132,15 @@ on:
           repos where it runs, it fires on every `pull_request` event,
           unconditionally — NOT gated on any `filters` output, since a
           supply-chain scan must not be skippable by touching only untracked
+          paths.
+        type: boolean
+        default: true
+
+      zizmor:
+        description: >-
+          Enable `Workflow Security (zizmor)`. Runs on every `pull_request`
+          event, unconditionally — NOT gated on any `filters` output, since a
+          security scan must not be skippable by touching only untracked
           paths.
         type: boolean
         default: true
@@ -254,6 +267,16 @@ jobs:
           fail-on-severity: moderate
           comment-summary-in-pr: on-failure
 
+  # zizmor is intentionally NOT `needs: changes` / filter-gated — a workflow-
+  # security scan must run on every pull_request regardless of which paths a
+  # diff touches.
+  zizmor:
+    name: Workflow Security (zizmor)
+    if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_zizmor.yml@main
+    with:
+      runner_label: ${{ inputs.runner_label }}
+
   # ============================================================================
   # WATCHDOG
   # Forces a terminal state for queued sibling jobs after queue_timeout_minutes.
@@ -293,7 +316,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review]
+    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
@@ -302,5 +325,5 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, watchdog
+          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
