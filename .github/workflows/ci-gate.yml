@@ -1,0 +1,54 @@
+# CI Gate — thin wrapper over our own org reusable, dogfooded on the hub
+# itself. Same shape as every other dryvist consumer's caller, stripped to
+# the minimum since this repo has no python/nix/ansible surface to gate:
+#
+#   markdown_lint, file_size, token_limits -> the org gate's own reusables.
+#   dependency_review, zizmor              -> ride their default-true.
+#
+# `nix` filter exists only so `file_size` also fires on flake.nix/flake.lock
+# edits (there's no `nix_validate`/`nix_build` toggle here — this repo has no
+# flake outputs worth checking beyond the flake-parts modules it exports).
+#
+# KNOWN OVERLAP: `markdown_lint: true` below duplicates `markdownlint.yml`
+# (job `Lint`) in this same repo, which is an org-wide Required Workflow
+# (injected into every dryvist/JacobPEvans repo's PRs via
+# dryvist/terraform-github's github_organization_ruleset) already enforcing
+# the identical canonical config. Left as-is intentionally — retiring the
+# duplicate is a follow-up once this gate has proven itself, not this PR.
+name: CI Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  standard-ci:
+    name: Standard CI
+    permissions:
+      contents: read
+      pull-requests: read
+      # The org gate's queue watchdog cancels stuck sibling jobs via the
+      # Actions API; a called workflow can never exceed the caller's grant, so
+      # `actions: write` must be granted here or the run fails at graph
+      # validation (startup_failure).
+      actions: write
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+    with:
+      markdown_lint: true
+      file_size: true
+      token_limits: true
+      filters: |
+        markdown:
+          - '**.md'
+          - '.markdownlint*'
+        nix:
+          - '**.nix'
+          - 'flake.lock'
