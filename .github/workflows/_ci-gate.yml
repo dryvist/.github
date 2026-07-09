@@ -47,6 +47,10 @@
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #   python         -> gates `python_security`
 #
+# `dependency_review` is NOT filter-gated: it runs on every `pull_request`
+# event when enabled, regardless of which paths changed (a supply-chain scan
+# must not be skippable by touching only "safe" paths).
+#
 # Callers may include additional filters; this workflow ignores them. To add
 # a new conditional check, add: input toggle, conditional job, and entry in
 # the gate's `needs:` and `allowed-skips`.
@@ -111,6 +115,14 @@ on:
           (e.g. to min + latest) by passing its own array.
         type: string
         default: '["3.10", "3.11", "3.12", "3.13", "3.14"]'
+      dependency_review:
+        description: >-
+          Enable `Dependency Review`. Runs on every `pull_request` event,
+          unconditionally — NOT gated on any `filters` output, since a
+          supply-chain scan must not be skippable by touching only untracked
+          paths.
+        type: boolean
+        default: true
 
       runner_label:
         description: >-
@@ -214,6 +226,23 @@ jobs:
       python_versions: ${{ inputs.python_ci_versions }}
       runner_label: ${{ inputs.runner_label }}
 
+  # dependency-review is intentionally NOT `needs: changes` / filter-gated —
+  # a supply-chain scan must run on every pull_request regardless of which
+  # paths a diff touches.
+  dependency-review:
+    name: Dependency Review
+    if: ${{ inputs.dependency_review && github.event_name == 'pull_request' }}
+    runs-on: ${{ inputs.runner_label }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
+
   # ============================================================================
   # WATCHDOG
   # Forces a terminal state for queued sibling jobs after queue_timeout_minutes.
@@ -253,7 +282,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci]
+    needs: [changes, watchdog, nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
@@ -262,5 +291,5 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, watchdog
+          allowed-skips: nix-validate, markdown-lint, file-size, token-limits, python-security, python-ci, dependency-review, watchdog
           jobs: ${{ toJSON(needs) }}
