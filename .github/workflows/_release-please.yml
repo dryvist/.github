@@ -95,6 +95,11 @@ jobs:
         with:
           app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+          # Scope the minted token down to exactly what release-please needs
+          # (release commits/tags + release PRs) instead of inheriting the
+          # App's full installed permissions.
+          permission-contents: write
+          permission-pull-requests: write
 
       - uses: googleapis/release-please-action@v5
         id: release

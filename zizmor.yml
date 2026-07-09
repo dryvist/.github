@@ -25,4 +25,6 @@ rules:
         astral-sh/*: ref-pin
         DeterminateSystems/*: ref-pin
         dryvist/*: ref-pin
+        # google/* (osv-scanner-action) — same trusted-publisher family as googleapis/*.
+        google/*: ref-pin
         googleapis/*: ref-pin
