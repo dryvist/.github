@@ -16,6 +16,14 @@
 # referenced via `@main` per the self-reference convention, so they must
 # be trusted here rather than SHA-pinned.
 rules:
+  # `secrets: inherit` from thin callers into first-party (dryvist/*)
+  # reusable workflows is the org's standard delegation pattern: the callee
+  # is same-org and needs repo secrets (Claude OAuth token, GH App keys) at
+  # runtime. zizmor cannot scope this audit to first-party callees, so it is
+  # disabled centrally rather than re-enumerated as ignores in every repo.
+  secrets-inherit:
+    disable: true
+
   unpinned-uses:
     config:
       policies:
