@@ -53,17 +53,22 @@ gate minor/patch; they gate only majors and PR-creation cadence.
   advisory only — it labels findings for human follow-up but does not gate or block
   auto-merge.
 
-GitHub Actions from untrusted orgs are pinned to SHA digests, not tags; dryvist
-self-references ride `@main` (see Version Pinning below).
+All third-party GitHub Actions — trusted orgs included — are pinned to SHA
+digests, not tags; dryvist self-references ride `@main` (see Version Pinning
+below).
 
 ## Version Pinning
 
 | Source | Strategy |
 | --- | --- |
 | dryvist self-references | `@main` — never SHA or minor/patch pins |
-| Trusted GitHub Actions | Semantic version tags (`@v6`) |
-| External/untrusted GitHub Actions | SHA commit hash pins |
+| All third-party GitHub Actions | SHA commit hash pins, with the released version tag as a trailing comment (`# v4.2.2`); Renovate bumps the SHA and comment together |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
+
+Trust tiers govern *review cadence for majors* (above), never the pin style:
+there is no semver-tag allowance for trusted actions. Non-`uses:` pins that
+Renovate cannot infer from context carry an explicit
+`# renovate: datasource=… depName=… versioning=…` tag.
 
 ### Scanner posture for `@main` self-references
 
