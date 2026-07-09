@@ -21,7 +21,7 @@ jobs:
       # Step 1: Sync labels.yml -> this repo's GitHub labels via EndBug/label-sync.
       # This ensures .github repo matches the file before step 2 clones from it.
       - name: Sync labels to this repo from labels.yml
-        uses: EndBug/label-sync@v2
+        uses: EndBug/label-sync@52074158190acb45f3077f9099fea818aa43f97a # v2
         with:
           config-file: .github/labels.yml
           delete-other-labels: true
