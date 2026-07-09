@@ -42,32 +42,12 @@ jobs:
             narinfo-cache-positive-ttl = 86400
             fallback = true
 
-      - name: Restore Nix Store Cache
-        uses: actions/cache/restore@v5
-        id: nix-cache
-        with:
-          path: |
-            /nix/store
-            ~/.cache/nix
-          key: nix-macos-${{ runner.os }}-${{ hashFiles('flake.lock') }}
-          restore-keys: |
-            nix-macos-${{ runner.os }}-
-
       - name: Build
         run: ${{ inputs.build-command }}
 
       - name: Garbage Collect Nix Store
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nix-cache.outputs.cache-hit != 'true'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           echo "Store size before GC: $(du -sh /nix/store | cut -f1)"
           nix-collect-garbage --delete-older-than 1d
           echo "Store size after GC: $(du -sh /nix/store | cut -f1)"
-
-      - name: Save Nix Store Cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.nix-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5
-        with:
-          path: |
-            /nix/store
-            ~/.cache/nix
-          key: nix-macos-${{ runner.os }}-${{ hashFiles('flake.lock') }}
