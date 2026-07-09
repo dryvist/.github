@@ -62,7 +62,7 @@ below).
 | Source | Strategy |
 | --- | --- |
 | dryvist self-references | `@main` — never SHA or minor/patch pins |
-| All third-party GitHub Actions | SHA commit hash pins, with the released version tag as a trailing comment (`# v4.2.2`); Renovate bumps the SHA and comment together |
+| All third-party GitHub Actions | SHA commit hash pins + released version tag as a trailing comment (`# v4.2.2`); Renovate bumps both together |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
 
 Trust tiers govern *review cadence for majors* (above), never the pin style:
