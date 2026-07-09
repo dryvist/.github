@@ -44,10 +44,3 @@ jobs:
 
       - name: Build
         run: ${{ inputs.build-command }}
-
-      - name: Garbage Collect Nix Store
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          echo "Store size before GC: $(du -sh /nix/store | cut -f1)"
-          nix-collect-garbage --delete-older-than 1d
-          echo "Store size after GC: $(du -sh /nix/store | cut -f1)"
