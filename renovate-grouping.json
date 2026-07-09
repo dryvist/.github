@@ -6,7 +6,7 @@
   ],
   "packageRules": [
     {
-      "description": "Fallback grouping for .nix custom-regex version pins: batch each repo's **/*.nix custom.regex pins into one scheduled, auto-merged 'nix version pins' PR (minor/patch) so slow-moving pins don't each take a branch/PR slot and starve (e.g. nix-ai huggingface-hub stalled at 1.15.0 for ~6 weeks, breaking the hf CLI). Placed FIRST so the more specific ecosystem groups below (HuggingFace, OpenTelemetry, ...) still override groupName for their packages, and repo-specific interlock groups (e.g. nix-ai mlx-core, evaluated last in the consuming repo) still win. Scoped to **/*.nix so the Ansible-YAML and Docker-image custom.regex managers are unaffected. Majors excluded so they open individually under the 30-day major-default hold. Schedule/automerge for members come from renovate-presets.json (Mon/Thu custom.regex schedule, trusted-source automerge).",
+      "description": "Fallback grouping for .nix custom-regex version pins: batch each repo's **/*.nix custom.regex pins into one scheduled, auto-merged 'nix version pins' PR (minor/patch) so slow-moving pins don't each take a branch/PR slot and starve (e.g. nix-ai huggingface-hub stalled at 1.15.0 for ~6 weeks, breaking the hf CLI). Placed FIRST so the more specific ecosystem groups below (HuggingFace, OpenTelemetry, ...) still override groupName for their packages, and repo-specific interlock groups (e.g. nix-ai mlx-core, evaluated last in the consuming repo) still win. Scoped to **/*.nix so the Ansible-YAML and Docker-image custom.regex managers are unaffected. Majors excluded so they open individually under the 30-day major-default hold. Auto-merge here mirrors the publisher-agnostic minor/patch rule in renovate-presets.json (any package, any ecosystem, 3-day stabilization + green CI) — it is not a trust carve-out, just keeping grouped members on the same auto-merge behavior as every other minor/patch update. PR-creation cadence for custom.regex members (twice-weekly, Mon/Thu) also comes from renovate-presets.json.",
       "matchManagers": [
         "custom.regex"
       ],
@@ -44,7 +44,7 @@
       "groupName": "OpenTelemetry"
     },
     {
-      "description": "Group TypeScript type definitions (@types/*). Type-only updates are mechanical and almost never break runtime behavior. Auto-merged minor/patch.",
+      "description": "Group TypeScript type definitions (@types/*). Type-only updates are mechanical and almost never break runtime behavior. Auto-merge here is just the publisher-agnostic minor/patch rule in renovate-presets.json (any package, any ecosystem, 3-day stabilization + green CI) applied to the grouped batch — not a trust carve-out for @types/*.",
       "matchPackageNames": [
         "@types/**"
       ],
