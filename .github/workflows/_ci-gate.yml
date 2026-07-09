@@ -60,19 +60,25 @@
 # every `pull_request` event when enabled, regardless of which paths changed,
 # since a security scan must not be evadable by touching only untracked paths.
 #
-# `osv_scan` (Google OSV-Scanner) is likewise NOT filter-gated. Callers
-# enabling it MUST grant `security-events: write` and `actions: read` on the
-# caller job that `uses:` this gate (alongside the `actions: write` the
-# watchdog already requires); the grant flows through to the called workflow.
-# A missing grant fails the SARIF upload at runtime, only when enabled.
-#
 # PERMISSIONS INVARIANT for jobs in this file: never request more than the
 # STANDARD caller grant (contents: read, pull-requests: read, actions: write).
 # A called workflow's job that requests more than its caller granted kills
 # the ENTIRE run at graph validation (startup_failure) — even if the job's
 # `if:` is false — taking every consumer's Merge Gate down with it.
 # Anything needing an elevated scope must receive it from the caller's own
-# job-level grant, never from a `permissions:` block here.
+# job-level grant, never from a `permissions:` block here. The invariant
+# applies TRANSITIVELY to every workflow this gate calls: a child (or a
+# child's child) declaring an elevated workflow-level `permissions:` block
+# poisons the whole graph the same way.
+#
+# OSV scanning is deliberately NOT a toggle in this gate: `_osv-scan.yml`
+# wraps Google's reusable workflows, which declare workflow-level
+# `security-events: write` unconditionally (github/codeql-action#2117) —
+# nesting that under this gate would force EVERY caller to carry that grant
+# just to keep graph validation alive, even with the toggle off. Repos that
+# want OSV keep the proven standalone pattern instead: a small osv-scan.yml
+# caller whose own job grants {actions: read, contents: read,
+# security-events: write} directly (see terraform-runs-on / nix-ai).
 #
 # `nix_skip_deps_only` (default false, opt-in): when enabled, `nix-validate`
 # and `nix-build` are skipped for dependency-only bot PRs (Renovate: author
@@ -201,25 +207,6 @@ on:
           paths.
         type: boolean
         default: true
-
-      osv_scan:
-        description: >-
-          Enable `OSV Scan` (Google OSV-Scanner). Runs on every `pull_request`
-          event, unconditionally — NOT gated on any `filters` output, since a
-          security scan must not be skippable by touching only untracked
-          paths. Callers enabling this MUST grant `security-events: write`
-          and `actions: read` on the caller job that `uses:` this gate, or
-          the SARIF upload fails (a called workflow can never exceed the
-          caller's token grant; the grant flows through automatically).
-        type: boolean
-        default: false
-      osv_config_file:
-        description: >-
-          Optional repo-local OSV config path passed through to
-          `_osv-scan.yml` (e.g. osv-scanner.toml). Mirrors that workflow's
-          own `config_file` input name and default.
-        type: string
-        default: ""
 
       runner_label:
         description: >-
@@ -394,22 +381,8 @@ jobs:
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
-  # osv-scan is intentionally NOT `needs: changes` / filter-gated — a
-  # dependency-vulnerability scan must run on every pull_request regardless
-  # of which paths a diff touches. NO explicit `permissions:` here — an
-  # explicit block requesting more than the caller granted startup-fails the
-  # whole run at graph validation, even when `if:` is false. Left unset, the
-  # caller's grant flows through; callers that ENABLE osv_scan must grant
-  # `security-events: write` + `actions: read` on the job that `uses:` this
-  # gate, or the SARIF upload fails at runtime (only when enabled).
-  osv-scan:
-    name: OSV Scan
-    if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
-    uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
-    with:
-      config_file: ${{ inputs.osv_config_file }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
-
+  # NOTE: no osv-scan job here, on purpose — see the header ("OSV scanning is
+  # deliberately NOT a toggle in this gate").
   ansible-ci:
     name: Ansible CI
     needs: changes
@@ -458,7 +431,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, osv-scan]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     steps:
@@ -467,5 +440,5 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, osv-scan, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
