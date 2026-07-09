@@ -97,7 +97,7 @@ jobs:
       ansible: ${{ steps.filter.outputs.ansible }}
       molecule: ${{ steps.filter.outputs.molecule }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4
         id: filter
         with:
@@ -125,7 +125,7 @@ jobs:
     if: ${{ needs.changes.outputs.ansible == 'true' }}
     runs-on: ${{ inputs.runner_label }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: ansible/ansible-lint@v26
         with:
           args: ${{ inputs.lint_args }}
@@ -140,7 +140,7 @@ jobs:
       matrix:
         scenario: ${{ fromJSON(inputs.molecule_scenarios) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - uses: actions/setup-python@v6
         with:
           python-version: ${{ inputs.python_version }}

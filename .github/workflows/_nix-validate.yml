@@ -42,7 +42,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       # Free ~30GB on the ubuntu-latest runner so `nix flake check --all-systems`
       # has space to substitute darwin source paths (rustc-src, cctools,
