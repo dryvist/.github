@@ -105,6 +105,13 @@ jobs:
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # Cut releases from main on every repo. Without this, the action
+          # defaults to the repo's DEFAULT branch — which on git-flow repos is
+          # `develop`, so release-please ran the whole release lifecycle on
+          # develop and failed to create the tag/release. main is the release
+          # branch in both models, so pinning it is a no-op for trunk repos
+          # (default already main) and the fix for git-flow repos.
+          target-branch: main
           release-type: ${{ inputs.release-type }}
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
@@ -130,6 +137,16 @@ jobs:
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           PR_NUMBER=$(jq -r '.number' <<<"$PR_JSON")
+          # The release PR targets main. main's allowed merge method differs by
+          # repo model: trunk repos are squash-only on main; git-flow repos
+          # (default branch develop) are merge-commit-only on main (the
+          # org-gitflow-main ruleset bans squash there). Pick by default branch —
+          # a fixed --squash would fail auto-merge on every git-flow release PR.
+          if [ "$(gh api "repos/${GH_REPO}" --jq .default_branch)" = "main" ]; then
+            METHOD=--squash
+          else
+            METHOD=--merge
+          fi
           gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
-          for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto --squash && exit 0; sleep 15; done
+          for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto "$METHOD" && exit 0; sleep 15; done
           exit 1
