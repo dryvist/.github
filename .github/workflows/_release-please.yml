@@ -150,3 +150,38 @@ jobs:
           gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
           for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto "$METHOD" && exit 0; sleep 15; done
           exit 1
+
+  # Back-merge the release commit main -> develop on git-flow repos, so develop's
+  # manifest and CHANGELOG track released versions instead of drifting behind
+  # main after every release. Runs only when a release was actually cut
+  # (release_created) — a run that merely opened/updated the release PR has
+  # nothing on main to back-merge. No-op on trunk repos (handled in the script).
+  back-merge:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Sparse-checkout shared scripts from this repo
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/release-backmerge.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Back-merge main into develop
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: bash .gh-shared/scripts/release-backmerge.sh
