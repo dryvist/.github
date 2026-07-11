@@ -33,6 +33,25 @@ rules:
         astral-sh/*: ref-pin
         DeterminateSystems/*: ref-pin
         dryvist/*: ref-pin
+        # JacobPEvans / JacobPEvans-personal are the same first-party family as
+        # dryvist/* (the org is mid-migration); their reusables (e.g.
+        # `_gh-aw-pin-refresh.yml`) are referenced via `@main` like dryvist/*.
+        JacobPEvans/*: ref-pin
+        JacobPEvans-personal/*: ref-pin
         # google/* (osv-scanner-action) — same trusted-publisher family as googleapis/*.
         google/*: ref-pin
         googleapis/*: ref-pin
+
+  # gh-aw compiles its `*.lock.yml` artifacts with SHA pins carrying major-tag
+  # comments (e.g. `actions/github-script@<sha>  # v9`); when that tag later
+  # moves to a newer SHA, zizmor flags a `ref-version-mismatch`. The consuming
+  # repo cannot remediate gh-aw's generated output — only a gh-aw recompile can,
+  # and that is gated on the gh-aw pin-refresh — so the audit is un-actionable
+  # noise on these compiled files. Ignore it on the org-standard gh-aw lock
+  # files. Add new gh-aw `*.lock.yml` names here as agentic workflows are added.
+  ref-version-mismatch:
+    ignore:
+      - "ci-doctor.lock.yml"
+      - "daily-malicious-code-scan.lock.yml"
+      - "link-checker.lock.yml"
+      - "sub-issue-closer.lock.yml"
