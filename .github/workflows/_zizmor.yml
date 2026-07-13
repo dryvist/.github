@@ -34,7 +34,7 @@ jobs:
     name: Workflow Security (zizmor)
     runs-on: ${{ inputs.runner_label }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Install uv
         # TODO: switch to @v8 (major-moving) once Astral publishes that tag;
@@ -44,7 +44,7 @@ jobs:
       # zizmor runs centrally against the org's canonical policy, fetched here —
       # the consumer never copies zizmor.yml.
       - name: Fetch central zizmor policy
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: dryvist/.github
           path: .central-config
