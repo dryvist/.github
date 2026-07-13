@@ -22,7 +22,7 @@ if not limits:
     sys.exit(0)
 
 enc = tiktoken.get_encoding("o200k_base")
-SKIP = {".git", "node_modules", "result", ".terraform", ".terragrunt-cache", ".direnv", ".gh-shared"}
+SKIP = {".git", "node_modules", "result", ".terraform", ".direnv", ".gh-shared"}
 
 
 def hit(path, name, pat):

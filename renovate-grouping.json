@@ -21,12 +21,11 @@
       "automerge": true
     },
     {
-      "description": "Group Terraform providers, modules, and Terragrunt updates into a single PR. Prevents deploy-queue saturation when a provider bump arrives alongside a terragrunt dependency. Applies to every repo using either manager.",
+      "description": "Group OpenTofu/Terraform providers and modules into a single PR. Prevents deploy-queue saturation when related provider and module bumps arrive together.",
       "matchManagers": [
-        "terraform",
-        "terragrunt"
+        "terraform"
       ],
-      "groupName": "Terraform & Terragrunt"
+      "groupName": "OpenTofu and Terraform"
     },
     {
       "description": "Group Ansible Galaxy collection updates. Collections almost always release together (e.g., community.general + ansible.posix) and breakage manifests at the playbook level, so reviewing them as a unit is correct.",

@@ -136,14 +136,15 @@ production hosts are all declared in Nix, `nix build` becomes the universal
 
 ### [Infrastructure as code](https://docs.jacobpevans.com/infrastructure/overview)
 
-Terraform / OpenTofu for everything provisionable — virtual machines,
-networks, cloud accounts, even GitHub itself. Modules are written to be
-reused: per-project state-backend bootstrap, golden-image builders, and the
-governance layer that keeps the whole org consistent.
+OpenTofu for everything provisionable — virtual machines, networks, cloud
+accounts, even GitHub itself. Terrakube runs the workspaces inside the homelab,
+with short-lived credentials supplied natively by OpenBao. Modules are written
+to be reused: golden-image builders and the governance layer that keeps the
+whole org consistent.
 
 - Proxmox VMs, LXC containers, networking, firewall rules — declarative,
   with safe concurrent state.
-- AWS state-backend bootstrap (S3 + IAM + OIDC) as a per-project starter.
+- Terrakube workspace definitions with native remote state and state locking.
 - Self-hosted GitHub Actions runners on spot capacity for fast, cheap CI.
 - Org-wide GitHub configuration (rulesets, required workflows, repo
   settings) managed in code, not in the UI.
@@ -197,7 +198,7 @@ thing fast — so the categories above can grow without rewriting boilerplate.
 
 - Project templates with linting, formatting, type-checking, pre-commit
   hooks, and 100% coverage gates wired up from minute zero.
-- Per-project starters for AWS-backed Terraform / Terragrunt / OpenTofu work.
+- Per-project starters for Terrakube-managed OpenTofu workspaces.
 - Cribl pack scaffolding for new edge / stream pack repos.
 - Small workflow utilities — local-AI-powered issue drafting, scheduled
   maintenance helpers — that smooth the rough edges between humans, AI
@@ -212,9 +213,10 @@ place; each layer is observable to the one above it.
 
 1. **Reproducibility layer (Nix).** Every machine — laptop, dev VM, server —
    starts from a Nix flake. `nix build` is the only way in.
-2. **Provisioning layer (Terraform / OpenTofu).** Once a Nix-built host
-   exists, IaC modules carve up cloud and homelab capacity around it: VMs,
-   LXC containers, AWS state backends, GitHub org governance.
+2. **Provisioning layer (Terrakube / OpenTofu).** Once a Nix-built host
+   exists, Terrakube workspaces carve up cloud and homelab capacity around it:
+   VMs, LXC containers, cloud resources, and GitHub org governance. OpenBao
+   supplies short-lived workspace credentials without storing them in code.
 3. **Configuration layer (Ansible).** Provisioned hosts get turned into
    services by idempotent roles that pull secrets at runtime and converge
    on a declared state.

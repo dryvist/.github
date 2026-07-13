@@ -120,7 +120,6 @@ doppler.json
 *.tfplan
 crash.log
 crash.*.log
-terragrunt-debug.tfvars.json
 *.tfvars
 *.tfvars.json
 !*.tfvars.example
