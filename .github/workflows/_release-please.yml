@@ -160,8 +160,11 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ubuntu-latest
+    # pull-requests: write is required — the back-merge now opens a PR and enables
+    # auto-merge (develop's ruleset rejects a direct merge), not a direct merge.
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Generate GitHub App token
         id: app-token
@@ -170,6 +173,7 @@ jobs:
           app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
           permission-contents: write
+          permission-pull-requests: write
 
       - name: Sparse-checkout shared scripts from this repo
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
