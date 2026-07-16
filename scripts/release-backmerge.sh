@@ -59,7 +59,9 @@ fi
 # auto-merge holds a conflicting PR open rather than mis-merging it.
 mergeable=null
 for _ in 1 2 3 4 5 6; do
-  mergeable=$(gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq '.mergeable // "null"')
+  # jq's `//` treats false as empty, so `.mergeable // "null"` would turn a real
+  # conflict (false) into "null" and skip the fail path. Map explicitly instead.
+  mergeable=$(gh api "repos/${GH_REPO}/pulls/${pr_number}" --jq 'if .mergeable == null then "null" else (.mergeable | tostring) end')
   [ "$mergeable" != "null" ] && break
   sleep 5
 done
