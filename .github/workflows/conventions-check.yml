@@ -1,0 +1,75 @@
+# Standalone repo-conventions presence check for org-wide enforcement via
+# Required Workflows.
+#
+# Referenced by dryvist/tofu-github's github_organization_ruleset, which injects
+# this workflow into the default-branch PRs of EVERY repo in the org. It mirrors
+# markdownlint.yml (the proven required-workflow pattern) but checks PRESENCE,
+# not content, of the four repo conventions below.
+#
+# SOFT ROLLOUT: this defaults to WARN mode (annotate + exit 0) so it NEVER
+# breaks a PR, even on the ~22 repos currently missing AGENTS.md. A repo opts in
+# to hard enforcement by setting the repository variable CONVENTIONS_STRICT=true
+# (Settings > Secrets and variables > Actions > Variables). Escalation path:
+# warn org-wide -> per-repo strict opt-in as each repo becomes compliant ->
+# flip the default once the fleet is green.
+name: Conventions Check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: org-conventions-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: Presence
+    runs-on: ubuntu-latest
+    env:
+      # Repo opt-in to hard enforcement; unset repos stay in WARN mode.
+      CONVENTIONS_STRICT: ${{ vars.CONVENTIONS_STRICT || 'false' }}
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Check presence of required repo conventions
+        shell: sh
+        run: |
+          miss=0
+          warn() {
+            printf '::warning title=Missing convention::%s\n' "$1"
+            miss=1
+          }
+
+          # LICENSE (accept the GitHub-recognized filename variants).
+          [ -f LICENSE ] || [ -f LICENSE.md ] || [ -f LICENSE.txt ] \
+            || warn "LICENSE file is missing"
+
+          # AGENTS.md — canonical AI-assistant policy; sharpest drift axis.
+          [ -f AGENTS.md ] || warn "AGENTS.md is missing"
+
+          # Nix dev-shell entry: a local flake.nix OR a committed .envrc (many
+          # repos legitimately use a shared remote devShell via .envrc alone).
+          [ -f flake.nix ] || [ -f .envrc ] \
+            || warn "Nix dev-shell entry (flake.nix or .envrc) is missing"
+
+          # release-please manifest config.
+          [ -f release-please-config.json ] \
+            || warn "release-please-config.json is missing"
+
+          if [ "$miss" -eq 0 ]; then
+            echo "All repo conventions present."
+            exit 0
+          fi
+
+          if [ "$CONVENTIONS_STRICT" = "true" ]; then
+            echo "STRICT mode (CONVENTIONS_STRICT=true): conventions missing, failing."
+            exit 1
+          fi
+
+          echo "WARN mode: conventions missing (see annotations). Not failing."
+          echo "Set repository variable CONVENTIONS_STRICT=true to enforce."
+          exit 0
