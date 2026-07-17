@@ -139,6 +139,15 @@
   color: "94A3B8"
   description: "Skip AI review - Opt out of all automated AI reviews"
 
+# =============================================================================
+# HUMAN REVIEW LABEL - The human counterpart to ai:* review state
+# Applied by an AI flow to a main-targeted PR to request a human before merge.
+# Neon lime stands out from the crowded amber/red ramps on purpose.
+# =============================================================================
+- name: "human:review"
+  color: "A3E635"
+  description: "Human review required before merge to main - AI must not merge without explicit instruction"
+
 # -----------------------------------------------------------------------------
 # TRIAGE LABELS - Administrative
 # -----------------------------------------------------------------------------
