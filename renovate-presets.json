@@ -26,11 +26,6 @@
   "rebaseWhen": "conflicted",
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
-  "ignorePaths": [
-    ".github/workflows/*.lock.yml",
-    ".github/workflows/agentics-maintenance.yml",
-    ".github/aw/**"
-  ],
   "minimumReleaseAge": "3 days",
   "schedule": [
     "after 7am on Monday"
@@ -117,15 +112,6 @@
     ]
   },
   "packageRules": [
-    {
-      "description": "Disable all updates in gh-aw generated files — managed by gh-aw-pin-refresh workflow, not Renovate",
-      "matchFileNames": [
-        ".github/workflows/*.lock.yml",
-        ".github/workflows/agentics-maintenance.yml",
-        ".github/aw/**"
-      ],
-      "enabled": false
-    },
     {
       "description": "Tag major updates with an additive `update:major` label (minor/patch are inferred by its absence). Gives the dryvist/ai-workflows dependency reviewer a deterministic, AI-independent 'is this a major?' gate so majors never auto-merge, and lets humans filter. addLabels is additive: it does not disturb scheduling, auto-merge, or the dep:review label.",
       "matchUpdateTypes": [
