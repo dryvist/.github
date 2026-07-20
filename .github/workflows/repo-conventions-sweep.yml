@@ -1,0 +1,162 @@
+# Org-wide repo-conventions drift sweep.
+#
+# conventions-check.yml catches drift at PR time, but only on repos that have
+# PRs — a repo created and left alone is never evaluated, and NO check can see
+# whether a repo is registered in the governance IaC at all. This sweep covers
+# both blind spots on a schedule and reports them where an agent or human will
+# actually look: a job summary plus one upserted tracking issue in this repo.
+#
+# PUBLIC REPOS ONLY, deliberately. This repo is public, so its issue bodies,
+# job summaries, and Actions logs are world-readable — naming a private repo
+# here would publish the org's private topology. Private repos are reported as
+# an aggregate COUNT with no names; run the same checks locally for per-repo
+# private detail (see AGENTS.md > New repo checklist).
+#
+# Registration is read from the governance IaC's own inventory at run time, so
+# this workflow never keeps a second copy of the repo list.
+name: Repo Conventions Sweep
+
+on:
+  schedule:
+    # Weekly, off the :00 mark so the org's runs do not pile onto the hour.
+    - cron: "37 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repo-conventions-sweep
+  cancel-in-progress: true
+
+jobs:
+  sweep:
+    name: Sweep
+    runs-on: ubuntu-latest
+    # GH_PAT_WORKFLOW_DISPATCH is scoped to this environment. It is needed only
+    # to COUNT private repos; no private repo name leaves this job.
+    environment: automation
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Sweep public repos for conventions and registration drift
+        env:
+          # Broad listing token (private count only). Kept separate from
+          # GH_TOKEN below so the issue write uses the repo-scoped token.
+          LIST_TOKEN: ${{ secrets.GH_PAT_WORKFLOW_DISPATCH }}
+          GH_TOKEN: ${{ github.token }}
+          ORG: ${{ github.repository_owner }}
+          # Governance IaC inventory: single source of truth for which repos
+          # are managed and which are recorded as legitimate opt-outs.
+          INVENTORY_REPO: tofu-github
+          INVENTORY_PATH: config/repos.yml
+        run: |
+          set -euo pipefail
+
+          # --- inputs -------------------------------------------------------
+          gh api "repos/${ORG}/${INVENTORY_REPO}/contents/${INVENTORY_PATH}" \
+            --jq '.content' | base64 -d > inventory.yml
+          yq -r '.repos | keys | .[]' inventory.yml | sort > registered.txt
+
+          gh repo list "$ORG" --visibility public --no-archived --limit 200 \
+            --json name --jq '.[].name' | sort > public.txt
+          test -s public.txt  # an empty listing is an auth failure, not "no drift"
+
+          # --- per-repo checks ----------------------------------------------
+          # A repo "releases" iff it has the caller workflow. The caller picks
+          # the mode: config-free (passes release-type:) needs no config files;
+          # manifest mode needs both. Asserting the config unconditionally
+          # would flag config-free repos that release correctly.
+          rows=""; drift=0; ok=0; exempted=0
+          while read -r repo; do
+            tree=$(gh api "repos/${ORG}/${repo}/git/trees/HEAD" \
+              --jq '[.tree[].path] | join(" ")' 2>/dev/null || echo "")
+            caller=$(gh api "repos/${ORG}/${repo}/contents/.github/workflows/release-please.yml" \
+              --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+
+            # Opt-outs are per-CHECK, not per-repo: a template that legitimately
+            # never releases should still be told it is missing a LICENSE. A
+            # whole-repo exemption would hide unrelated drift behind one
+            # justified skip.
+            skips=$(repo="$repo" yq -r \
+              '.conventions_exempt[strenv(repo)] // [] | join(" ")' inventory.yml)
+            [ -n "$skips" ] && exempted=$((exempted + 1))
+
+            gaps=""
+            note_gap() {
+              case " $skips " in *" $1 "*) return 0;; esac
+              gaps="${gaps:+$gaps, }$1"
+            }
+
+            case " $tree " in *" LICENSE "*) ;; *) note_gap LICENSE;; esac
+            case " $tree " in *" AGENTS.md "*) ;; *) note_gap AGENTS.md;; esac
+            case " $tree " in
+              *" flake.nix "*|*" .envrc "*) ;;
+              *) note_gap dev-shell;;
+            esac
+            if [ -z "$caller" ]; then
+              note_gap release-please
+            elif ! printf '%s' "$caller" | grep -Eq "^[[:space:]]*release-type:[[:space:]]*[^[:space:]'\"]"; then
+              case " $tree " in
+                *" release-please-config.json "*) ;;
+                *) note_gap rp-config;;
+              esac
+              case " $tree " in
+                *" .release-please-manifest.json "*) ;;
+                *) note_gap rp-manifest;;
+              esac
+            fi
+
+            reg=yes
+            grep -qxF "$repo" registered.txt || { reg=no; note_gap UNREGISTERED; }
+
+            if [ -z "$gaps" ]; then
+              ok=$((ok + 1))
+            else
+              drift=$((drift + 1))
+              rows="${rows}| \`${repo}\` | ${reg} | ${gaps} |"$'\n'
+            fi
+          done < public.txt
+
+          private_count=$(GH_TOKEN="$LIST_TOKEN" gh repo list "$ORG" \
+            --visibility private --no-archived --limit 200 --json name --jq 'length')
+
+          # --- report -------------------------------------------------------
+          {
+            echo "## Repo conventions drift"
+            echo
+            echo "Public repos scanned: $((ok + drift)) | compliant: ${ok} | drifted: ${drift}"
+            echo "Repos with a recorded per-check opt-out: ${exempted}"
+            echo "Private repos: ${private_count} (not named here — this repo is public)"
+            echo
+            if [ "$drift" -gt 0 ]; then
+              echo "| Repo | Registered | Gaps |"
+              echo "| --- | --- | --- |"
+              printf '%s' "$rows"
+              echo
+              echo "\`UNREGISTERED\` = absent from the governance IaC inventory."
+              echo "Fix by following AGENTS.md > New repo checklist, or record a"
+              echo "justified opt-out under \`conventions_exempt:\` in the inventory."
+            else
+              echo "No drift."
+            fi
+          } > report.md
+
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+          # Upsert exactly one tracking issue; the body is regenerated each run
+          # so stale rows never accumulate.
+          title="Repo conventions drift (public repos)"
+          existing=$(gh issue list --state open --search "$title in:title" \
+            --json number,title --jq "map(select(.title == \"${title}\")) | .[0].number // empty")
+          if [ "$drift" -eq 0 ]; then
+            [ -n "$existing" ] && gh issue close "$existing" \
+              --comment "Sweep is clean: every public repo meets the standard."
+            exit 0
+          fi
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body-file report.md
+          else
+            gh issue create --title "$title" --body-file report.md
+          fi

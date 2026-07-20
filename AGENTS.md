@@ -77,6 +77,55 @@ no per-repo config at all; manifest mode (with the file above) is the default.
 Do not hand-tweak a repo's `release-please-config.json` away from canonical
 without a recorded reason.
 
+## New repo checklist
+
+A repo that skips any of these is *born ungoverned*: org rulesets still bind it
+(they select every repo by name or custom property), but nothing else does.
+Work through this in order when creating a dryvist repo.
+
+1. **Create it with its custom properties.** A bare `gh repo create` is
+   rejected in this org — repo creation must supply the org's custom
+   properties, including the `gitflow` boolean. Set `gitflow` to match the
+   branching model you actually intend; the `org-gitflow-*` rulesets bind on
+   that property, not on the default branch.
+2. **Add release automation.** A thin `.github/workflows/release-please.yml`
+   calling `dryvist/.github/.github/workflows/_release-please.yml@main` and
+   forwarding `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY`. Copy an existing caller
+   verbatim rather than writing one. Manifest mode is the default and also
+   needs `release-please-config.json` (copy `configs/release-please-config.json`
+   from this repo), `.release-please-manifest.json`, and the `VERSION` file that
+   config declares. Config-free mode (`release-type:` set, blank
+   `config-file`/`manifest-file`) is a supported alternative and needs none of
+   those files. **A repo with a release config but no caller releases nothing.**
+3. **Register it in the governance IaC.** Add an entry to
+   [`tofu-github`](https://github.com/dryvist/tofu-github)'s `config/repos.yml`.
+   This is what actually manages merge methods, auto-merge, branch deletion,
+   Dependabot, the public-only secret-scanning block, and — for git-flow repos —
+   the `develop` branch and default-branch switch. Look the visibility up live
+   (`gh repo view <repo> --json visibility`); never assume public, because the
+   secret-scanning block is cost-gated on it. If the repo already has a
+   `develop` branch or custom property set out of band, the entry needs an
+   `import` block — a plain create 422s.
+4. **Add the baseline files:** `LICENSE`, `AGENTS.md`, and a Nix dev-shell entry
+   (`flake.nix` or a committed `.envrc`).
+5. **Record any legitimate opt-out.** If a convention genuinely does not apply
+   (a template that should not release, a state-only repo), add the repo to
+   `conventions_exempt:` in that same `config/repos.yml`, listing the specific
+   check names to skip and why. Opt-outs are per check, never per repo — an
+   exemption from releasing does not excuse a missing LICENSE.
+
+Two checks watch this. `conventions-check.yml` here runs on PRs org-wide via a
+required-workflow ruleset and annotates missing conventions (warn-only unless
+the repo sets `CONVENTIONS_STRICT=true`). `repo-conventions-sweep.yml` runs
+weekly, covers repos with no PR traffic, additionally reports repos missing
+from `config/repos.yml`, and upserts one tracking issue in this repo.
+
+The sweep reports **public repos only** — this repo is public, so its issues,
+job summaries, and Actions logs are world-readable, and naming a private repo
+there would publish private topology. Private repos appear as a count. To check
+a private repo, run the same presence checks locally against a repo you can
+already read; do not paste the result into any public artifact.
+
 ## Master source of truth (no upstream inheritance)
 
 `dryvist/.github` is the **master**: it extends no other repository's config.
