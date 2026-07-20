@@ -4,7 +4,11 @@
 # Referenced by dryvist/tofu-github's github_organization_ruleset, which injects
 # this workflow into the default-branch PRs of EVERY repo in the org. It mirrors
 # markdownlint.yml (the proven required-workflow pattern) but checks PRESENCE,
-# not content, of the four repo conventions below.
+# not content, of the repo conventions below.
+#
+# Repos with no PR traffic are never evaluated here, and no per-repo check can
+# see whether a repo is registered in the governance IaC at all. Both blind
+# spots are covered by repo-conventions-sweep.yml in this repo.
 #
 # SOFT ROLLOUT: this defaults to WARN mode (annotate + exit 0) so it NEVER
 # breaks a PR, even on the ~22 repos currently missing AGENTS.md. A repo opts in
@@ -56,9 +60,27 @@ jobs:
           [ -f flake.nix ] || [ -f .envrc ] \
             || warn "Nix dev-shell entry (flake.nix or .envrc) is missing"
 
-          # release-please manifest config.
-          [ -f release-please-config.json ] \
-            || warn "release-please-config.json is missing"
+          # Release automation. The property that actually makes a repo
+          # release is the CALLER workflow — a repo can hold a pristine
+          # release-please-config.json and still never cut a release. Assert
+          # the caller first.
+          #
+          # The reusable supports two modes. Manifest mode (the org default)
+          # reads release-please-config.json + .release-please-manifest.json
+          # from the repo. Config-free mode passes `release-type:` and blank
+          # config/manifest inputs, and is CORRECT with no config files at
+          # all — so the config files are only required when the caller does
+          # not select a release-type. Checking the config unconditionally
+          # flags config-free repos that release perfectly well.
+          caller=.github/workflows/release-please.yml
+          if [ ! -f "$caller" ]; then
+            warn "release-please caller workflow ($caller) is missing"
+          elif ! grep -Eq '^[[:space:]]*release-type:[[:space:]]*[^[:space:]'"'"'"]' "$caller"; then
+            [ -f release-please-config.json ] \
+              || warn "release-please-config.json is missing (caller runs manifest mode)"
+            [ -f .release-please-manifest.json ] \
+              || warn ".release-please-manifest.json is missing (caller runs manifest mode)"
+          fi
 
           if [ "$miss" -eq 0 ]; then
             echo "All repo conventions present."
