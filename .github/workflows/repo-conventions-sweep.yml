@@ -58,6 +58,13 @@ jobs:
           gh api "repos/${ORG}/${INVENTORY_REPO}/contents/${INVENTORY_PATH}" \
             --jq '.content' | base64 -d > inventory.yml
           yq -r '.repos | keys | .[]' inventory.yml | sort > registered.txt
+          # Flatten opt-outs once, as "<repo> <check> <check>...". Deliberately
+          # expressed with to_entries/join rather than env-var indexing, which
+          # is spelled differently by the two widely-installed yq
+          # implementations — this form is identical in both, so the sweep can
+          # be exercised locally and not only on a runner.
+          yq -r '.conventions_exempt // {} | to_entries | .[]
+                 | .key + " " + (.value | join(" "))' inventory.yml > exempt.txt
 
           gh repo list "$ORG" --visibility public --no-archived --limit 200 \
             --json name --jq '.[].name' | sort > public.txt
@@ -79,8 +86,7 @@ jobs:
             # never releases should still be told it is missing a LICENSE. A
             # whole-repo exemption would hide unrelated drift behind one
             # justified skip.
-            skips=$(repo="$repo" yq -r \
-              '.conventions_exempt[strenv(repo)] // [] | join(" ")' inventory.yml)
+            skips=$(awk -v r="$repo" '$1 == r { $1 = ""; print }' exempt.txt)
             [ -n "$skips" ] && exempted=$((exempted + 1))
 
             gaps=""
