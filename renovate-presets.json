@@ -4,7 +4,7 @@
     "dryvist/.github master Renovate preset — the single source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. This is the MASTER: it extends no other repository’s config. JacobPEvans/.github extends THIS (github>dryvist/.github:renovate-presets), never the reverse. Consumers extend it via local>dryvist/.github (the default preset, which extends this) or directly via github>dryvist/.github:renovate-presets.",
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation — keep them current.",
     "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true.",
-    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: the top-level schedule defaults to WEEKLY (the untrusted long tail); the broad minor/patch rule and the trusted-org major rule raise it to TWICE-WEEKLY (Mon/Thu); first-party (own-org) overrides to 'at any time' for immediate propagation. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a 3-day review PR, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
+    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows — Friday ~15:00 and Monday ~05:00 America/New_York (cron `* 15 * * 5` / `* 5 * * 1`); first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
   ],
   "extends": [
     "local>dryvist/.github:renovate-grouping"
@@ -26,9 +26,16 @@
   "rebaseWhen": "conflicted",
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
+  "ignorePaths": [
+    ".github/workflows/*.lock.yml",
+    ".github/workflows/agentics-maintenance.yml",
+    ".github/aw/**"
+  ],
   "minimumReleaseAge": "3 days",
+  "timezone": "America/New_York",
   "schedule": [
-    "after 7am on Monday"
+    "* 15 * * 5",
+    "* 5 * * 1"
   ],
   "vulnerabilityAlerts": {
     "description": "Security/CVE remediation branches. minimumReleaseAge 0 + schedule 'at any time' surface the fix as a 0-day PR, bypassing the normal stabilization window. AUTOMERGE IS DELIBERATELY NOT SET HERE so the decision falls to packageRules (deterministic and order-independent): a security minor/patch inherits the broad rule's automerge:true (fast auto-merge), while a security MAJOR inherits major-default automerge:false and opens for human review — a CVE fix that needs a breaking major is exactly when blind auto-merge is most dangerous. Setting automerge:true here would auto-merge security majors too, contradicting the majors-always-reviewed policy.",
@@ -46,14 +53,14 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "after 7am on Monday",
-      "after 7am on Thursday"
+      "* 15 * * 5",
+      "* 5 * * 1"
     ],
     "automerge": true
   },
   "nix": {
     "lockFileMaintenance": {
-      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the Mon/Thu window. The nix manager already refreshes every declared flake input on the tier schedule (twice-weekly + 3-day + first-party-immediate), so flake locks stay fresh without it.",
+      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. The nix manager already refreshes every declared flake input on the tier schedule (twice-weekly + 3-day + first-party-immediate), so flake locks stay fresh without it.",
       "enabled": false
     }
   },
@@ -113,6 +120,15 @@
   },
   "packageRules": [
     {
+      "description": "Disable all updates in gh-aw generated files — managed by gh-aw-pin-refresh workflow, not Renovate",
+      "matchFileNames": [
+        ".github/workflows/*.lock.yml",
+        ".github/workflows/agentics-maintenance.yml",
+        ".github/aw/**"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Tag major updates with an additive `update:major` label (minor/patch are inferred by its absence). Gives the dryvist/ai-workflows dependency reviewer a deterministic, AI-independent 'is this a major?' gate so majors never auto-merge, and lets humans filter. addLabels is additive: it does not disturb scheduling, auto-merge, or the dep:review label.",
       "matchUpdateTypes": [
         "major"
@@ -130,11 +146,11 @@
       "automerge": false
     },
     {
-      "description": "Publisher-agnostic minor/patch auto-merge (the broad tier). ANY package, ANY ecosystem: minor and patch updates auto-merge after a 3-day stabilization + green CI. Trust tiers now gate ONLY majors and PR-creation cadence, never minor/patch — a non-major SemVer bump with green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos) is sufficient assurance, and a stale pin is drift to eliminate. Placed AFTER the major-default rule (majors do not match here) and BEFORE the own-org rule so first-party minor/patch keep their 0-day/any-time immediacy (Renovate is last-match-wins per attribute). PR creation is twice-weekly (Mon/Thu); merges flow continuously via automergeSchedule once the 3-day age + CI are satisfied, so a PR that turns green mid-week is not stalled to the next creation window (platformAutomerge stays false — see the top-level warning). This SUPERSEDES the former curated trusted-org minor/patch allowlist and the per-manager pre-commit / Terraform-provider / HuggingFace-PyPI / Python minor/patch carve-outs, all redundant once minor/patch is publisher-agnostic. Majors are unaffected: first-party majors auto-merge immediately (own-org rule), trusted-org majors open a 3-day review PR, all other majors are held 30 days — none auto-merge. Security/CVE fixes open a 0-day PR via the top-level vulnerabilityAlerts block.",
+      "description": "Publisher-agnostic minor/patch auto-merge (the broad tier). ANY package, ANY ecosystem: minor and patch updates auto-merge after a 3-day stabilization + green CI. Trust tiers now gate ONLY majors and PR-creation cadence, never minor/patch — a non-major SemVer bump with green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos) is sufficient assurance, and a stale pin is drift to eliminate. Placed AFTER the major-default rule (majors do not match here) and BEFORE the own-org rule so first-party minor/patch keep their 0-day/any-time immediacy (Renovate is last-match-wins per attribute). PR creation is Fri ~15:00/Mon ~05:00 ET; merges flow continuously via automergeSchedule once the 3-day age + CI are satisfied, so a PR that turns green mid-week is not stalled to the next creation window (platformAutomerge stays false — see the top-level warning). This SUPERSEDES the former curated trusted-org minor/patch allowlist and the per-manager pre-commit / Terraform-provider / HuggingFace-PyPI / Python minor/patch carve-outs, all redundant once minor/patch is publisher-agnostic. Majors are unaffected: first-party majors auto-merge immediately (own-org rule), trusted-org majors open a 3-day review PR, all other majors are held 30 days — none auto-merge. Security/CVE fixes open a 0-day PR via the top-level vulnerabilityAlerts block.",
       "matchUpdateTypes": ["minor", "patch"],
       "automerge": true,
       "minimumReleaseAge": "3 days",
-      "schedule": ["after 7am on Monday", "after 7am on Thursday"],
+      "schedule": ["* 15 * * 5", "* 5 * * 1"],
       "automergeSchedule": ["at any time"]
     },
     {
@@ -170,7 +186,7 @@
       "pinDigests": false
     },
     {
-      "description": "Trusted-org MAJOR updates: shorten the major-default 30-day hold to 3 days and open a review PR, but do NOT auto-merge — a trusted publisher is not proof of a compatible API (breaking majors can pass shallow CI yet break runtime behavior, infra convergence, provider schemas, or CLI flags). Same curated allowlist as the minor/patch rule above. Labelled dep:review so humans can find them; twice-weekly (Mon/Thu) visibility. Non-trusted majors are unaffected and stay in the 30-day hold.",
+      "description": "Trusted-org MAJOR updates: shorten the major-default 30-day hold to 3 days and open a review PR, but do NOT auto-merge — a trusted publisher is not proof of a compatible API (breaking majors can pass shallow CI yet break runtime behavior, infra convergence, provider schemas, or CLI flags). Same curated allowlist as the minor/patch rule above. Labelled dep:review so humans can find them; Fri ~15:00/Mon ~05:00 ET visibility. Non-trusted majors are unaffected and stay in the 30-day hold.",
       "matchPackageNames": [
         "actions/**",
         "ansible/**",
@@ -231,8 +247,8 @@
       "automerge": false,
       "minimumReleaseAge": "3 days",
       "schedule": [
-        "after 7am on Monday",
-        "after 7am on Thursday"
+        "* 15 * * 5",
+        "* 5 * * 1"
       ],
       "addLabels": [
         "dep:review"
@@ -249,13 +265,13 @@
       "extractVersion": "^v(?<version>.+)$"
     },
     {
-      "description": "Twice-weekly schedule for all custom regex managers",
+      "description": "Fri ~15:00 / Mon ~05:00 America/New_York schedule for all custom regex managers",
       "matchManagers": [
         "custom.regex"
       ],
       "schedule": [
-        "after 7am on Monday",
-        "after 7am on Thursday"
+        "* 15 * * 5",
+        "* 5 * * 1"
       ]
     }
   ]
