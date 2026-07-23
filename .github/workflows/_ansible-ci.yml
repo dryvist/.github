@@ -67,7 +67,20 @@ on:
         type: boolean
         default: true
       runner_label:
-        description: Runner label for all jobs.
+        description: >-
+          Runner label for the quick jobs (changes, ansible-lint, gate). These
+          finish in well under a minute on hosted runners, so they stay hosted
+          by default; `molecule_runner_label` retargets the heavy molecule job
+          separately.
+        type: string
+        default: ubuntu-latest
+      molecule_runner_label:
+        description: >-
+          Runner label for the molecule job only. Default ubuntu-latest keeps it
+          hosted; a caller whose repo has the self-hosted fleet passes a fleet
+          label (e.g. `proxmox`) to run molecule on a pre-baked runner. Fork PRs
+          always fall back to ubuntu-latest so fork-author code never runs on the
+          fleet (guard idiom matches _ci-gate.yml).
         type: string
         default: ubuntu-latest
     secrets:
@@ -134,7 +147,9 @@ jobs:
     name: Molecule (${{ matrix.scenario }})
     needs: changes
     if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
-    runs-on: ${{ inputs.runner_label }}
+    # Molecule gets its own label so it can run on the self-hosted fleet while
+    # the quick jobs stay hosted. Fork PRs fall back to ubuntu-latest.
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.molecule_runner_label || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
