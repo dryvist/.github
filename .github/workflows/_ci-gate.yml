@@ -434,6 +434,14 @@ jobs:
     needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    permissions:
+      # `actions: read` lets the run-report step read this run's jobs (durations
+      # + queue delays) via the Actions API; `contents: read` is for the sparse
+      # checkout of the report script. Both stay within the STANDARD caller grant
+      # (contents: read, pull-requests: read, actions: write), so this never
+      # exceeds what the caller granted — see the PERMISSIONS INVARIANT header.
+      actions: read
+      contents: read
     steps:
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
@@ -442,3 +450,26 @@ jobs:
           # allowed-skip lets `alls-green` ignore its result either way.
           allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
+
+      # Retrospective run report (job durations + a runner-capacity queue-delay
+      # warning). Runs last, when every sibling is terminal and timestamps are
+      # final. Non-blocking: `always()` renders it even on a failed gate, and
+      # `continue-on-error` keeps a report hiccup from ever gating a merge.
+      - name: Sparse-checkout run-report script from this repo
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-run-report.sh
+          sparse-checkout-cone-mode: false
+      - name: Job durations + queue-delay summary
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: bash .gh-shared/scripts/ci-gate-run-report.sh
