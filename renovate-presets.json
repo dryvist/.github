@@ -60,7 +60,7 @@
   },
   "nix": {
     "lockFileMaintenance": {
-      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. The nix manager already refreshes every declared flake input on the tier schedule (twice-weekly + 3-day + first-party-immediate), so flake locks stay fresh without it.",
+      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. The nix manager already refreshes every declared flake input on the tier schedule (Fri ~15:00/Mon ~05:00 ET + 3-day + first-party-immediate), so flake locks stay fresh without it.",
       "enabled": false
     }
   },
@@ -138,7 +138,7 @@
       ]
     },
     {
-      "description": "Major-version default, org-wide: hold non-trusted-vendor majors 30 days before a PR opens, and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. Rules below are placed AFTER this one so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-org restores immediate auto-merge for JacobPEvans/** and dryvist/** majors; the trusted-orgs MAJOR rule shortens the hold to 3 days and opens a review PR (still no auto-merge — a trusted publisher is not proof of a compatible API); the trusted-orgs minor/patch rule auto-merges those (3-day stabilization, twice-weekly). Non-trusted-vendor majors match only this rule and stay held 30 days. CVE-driven bumps bypass the grace entirely via the top-level vulnerabilityAlerts block (0 days, any time).",
+      "description": "Major-version default, org-wide: hold non-trusted-vendor majors 30 days before a PR opens, and never auto-merge (human review required). The grace gives upstream ecosystems time to surface breaking-change regressions before we adopt them. Rules below are placed AFTER this one so their values win per-attribute (Renovate merges packageRule attributes by last-match wins): own-org restores immediate auto-merge for JacobPEvans/** and dryvist/** majors; the trusted-orgs MAJOR rule shortens the hold to 3 days and opens a review PR (still no auto-merge — a trusted publisher is not proof of a compatible API); the trusted-orgs minor/patch rule auto-merges those (3-day stabilization, Fri ~15:00/Mon ~05:00 ET). Non-trusted-vendor majors match only this rule and stay held 30 days. CVE-driven bumps bypass the grace entirely via the top-level vulnerabilityAlerts block (0 days, any time).",
       "matchUpdateTypes": [
         "major"
       ],
@@ -154,7 +154,7 @@
       "automergeSchedule": ["at any time"]
     },
     {
-      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. Also overrides the top-level weekly `schedule` with `at any time` so first-party changes propagate on merge, not on the weekly window — release-please cuts + auto-merges the release, and consumers pick it up here at 0-day. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
+      "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. Also overrides the top-level two-window `schedule` with `at any time` so first-party changes propagate on merge, not on the Fri/Mon window — release-please cuts + auto-merges the release, and consumers pick it up here at 0-day. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
       "matchPackageNames": [
         "JacobPEvans/**",
         "JacobPEvans-personal/**",
