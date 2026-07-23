@@ -77,6 +77,23 @@ jobs:
             fallback = true
             log-lines = 1000
 
+      # Restore-only on PRs; saves on pushes to the default branch (branch-agnostic
+      # so both trunk and git-flow callers save where their PRs can read). Gated to
+      # ubuntu-* runners so it is a no-op on RunsOn s3-cache labels, which already
+      # warm the store at the Nix level.
+      - name: Cache Nix Store
+        if: startsWith(inputs.runner_label, 'ubuntu-')
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
+          # Partial by design; a partial warm store still beats substituting the
+          # whole flake-check closure. Kept under the 10G per-repo cache quota
+          # shared with the macOS build cache.
+          gc-max-store-size-linux: 6G
+          save: ${{ github.event_name != 'pull_request' }}
+
       - name: Check flake
         # --all-systems evaluates outputs for every declared system to catch
         # darwin-only broken packages from the linux runner. Disabled by setting

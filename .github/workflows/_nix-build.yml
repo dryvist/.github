@@ -42,6 +42,23 @@ jobs:
             narinfo-cache-positive-ttl = 86400
             fallback = true
 
+      # Restore-only on PRs; saves on pushes to the default branch. Branch-agnostic
+      # via `github.event_name != 'pull_request'` because this shared workflow is
+      # called by both trunk (main) and git-flow (develop) repos — hardcoding either
+      # branch would silently disable saves for half the callers. GitHub scopes a
+      # cache to the creating branch plus the default branch, so a push-triggered
+      # save lands where PRs can read it.
+      - name: Cache Nix Store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-
+          # The activation closure exceeds this cap, so the cache is partial by
+          # design; a partial warm store still beats substituting everything.
+          gc-max-store-size-macos: 8G
+          save: ${{ github.event_name != 'pull_request' }}
+
       - name: Build
         env:
           BUILD_COMMAND: ${{ inputs.build-command }}
