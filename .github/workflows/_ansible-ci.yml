@@ -130,6 +130,11 @@ jobs:
               - 'roles/**'
               - 'molecule/**'
               - '.config/molecule/**'
+              # Callers that keep a local molecule workflow hang their
+              # template-render job off this same output, so a change to the
+              # render tests themselves has to trigger it. Without this, a PR
+              # editing only that playbook goes green without ever running it.
+              - 'tests/template_render/**'
               - 'requirements.yml'
 
   ansible-lint:
