@@ -126,6 +126,15 @@ jobs:
               - '.ansible-lint'
               - '.yamllint'
               - 'requirements.yml'
+              # Callers gate pytest and ansible-lint on THIS filter, so a
+              # test-only change has to match it. The globs above cover YAML
+              # suites via '**.yml', but a Python suite under tests/ matched
+              # nothing: both jobs reported SKIPPED, Merge Gate allowed the
+              # skips, and a test-only PR could merge on a green board having
+              # never been run. Same fix already applied to the molecule filter
+              # below — they were fixed separately because they gate different
+              # jobs, which is exactly why the second gap survived the first.
+              - 'tests/**'
             molecule:
               - 'roles/**'
               - 'molecule/**'
