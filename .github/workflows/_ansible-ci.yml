@@ -131,6 +131,12 @@ jobs:
               - 'molecule/**'
               - '.config/molecule/**'
               - 'requirements.yml'
+              # Suites that live outside molecule/ but run under the molecule
+              # workflow. Without these, editing one of those tests does not
+              # run it: a change confined to the suite leaves this filter
+              # false, every molecule job is skipped, and the PR merges green
+              # having never exercised the thing it changed.
+              - 'tests/**'
 
   ansible-lint:
     name: Ansible Lint
