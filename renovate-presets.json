@@ -60,7 +60,11 @@
   },
   "nix": {
     "lockFileMaintenance": {
-      "description": "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. The nix manager already refreshes every declared flake input on the tier schedule (Fri ~15:00/Mon ~05:00 ET + 3-day + first-party-immediate), so flake locks stay fresh without it.",
+      "description": [
+        "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. KEEP IT OFF.",
+        "WHAT THIS DOES NOT COVER: the previous wording here claimed the nix manager 'already refreshes every declared flake input on the tier schedule, so flake locks stay fresh without it'. That is true only for DIGEST-TRACKED inputs (devenv, git-hooks, treefmt-nix); Renovate bumps those reliably. It is FALSE for CHANNEL-PINNED inputs such as github:NixOS/nixpkgs/nixpkgs-26.05-darwin. Renovate updates an input when its REFERENCE changes, and a channel branch's reference never changes, so there is nothing to diff and the locked rev freezes permanently.",
+        "Measured 2026-07-28: nix-devenv/channels/flake.lock had been modified exactly once since creation 8 weeks earlier, nix-claude-code was 65 days stale and nix-home 58 days, all with Renovate running and the nix manager enabled. Channel pins are refreshed instead by the scheduled _refresh-nixpkgs-channel.yml reusable workflow in this repo, which every nix repo calls via .github/workflows/deps-refresh-nixpkgs.yml. Do not remove that caller on the assumption Renovate covers it."
+      ],
       "enabled": false
     }
   },
@@ -147,11 +151,19 @@
     },
     {
       "description": "Publisher-agnostic minor/patch auto-merge (the broad tier). ANY package, ANY ecosystem: minor and patch updates auto-merge after a 3-day stabilization + green CI. Trust tiers now gate ONLY majors and PR-creation cadence, never minor/patch — a non-major SemVer bump with green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos) is sufficient assurance, and a stale pin is drift to eliminate. Placed AFTER the major-default rule (majors do not match here) and BEFORE the own-org rule so first-party minor/patch keep their 0-day/any-time immediacy (Renovate is last-match-wins per attribute). PR creation is Fri ~15:00/Mon ~05:00 ET; merges flow continuously via automergeSchedule once the 3-day age + CI are satisfied, so a PR that turns green mid-week is not stalled to the next creation window (platformAutomerge stays false — see the top-level warning). This SUPERSEDES the former curated trusted-org minor/patch allowlist and the per-manager pre-commit / Terraform-provider / HuggingFace-PyPI / Python minor/patch carve-outs, all redundant once minor/patch is publisher-agnostic. Majors are unaffected: first-party majors auto-merge immediately (own-org rule), trusted-org majors open a 3-day review PR, all other majors are held 30 days — none auto-merge. Security/CVE fixes open a 0-day PR via the top-level vulnerabilityAlerts block.",
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
       "automerge": true,
       "minimumReleaseAge": "3 days",
-      "schedule": ["* 15 * * 5", "* 5 * * 1"],
-      "automergeSchedule": ["at any time"]
+      "schedule": [
+        "* 15 * * 5",
+        "* 5 * * 1"
+      ],
+      "automergeSchedule": [
+        "at any time"
+      ]
     },
     {
       "description": "Auto-merge own-org dependencies (JacobPEvans / JacobPEvans-personal + dryvist) — immediate, all ecosystems, all update types including major. Placed AFTER the major-default rule so we restore immediate auto-merge for our own majors that the major-default rule would otherwise hold for 30 days. Also overrides the top-level two-window `schedule` with `at any time` so first-party changes propagate on merge, not on the Fri/Mon window — release-please cuts + auto-merges the release, and consumers pick it up here at 0-day. JacobPEvans-personal is the renamed legacy personal account (dryvist/JacobPEvans account split); JacobPEvans/** still resolves via redirect but the current owner is listed explicitly.",
