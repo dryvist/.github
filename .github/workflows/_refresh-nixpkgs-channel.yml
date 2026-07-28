@@ -1,0 +1,188 @@
+# Reusable: Refresh the nixpkgs channel lock
+#
+# WHY THIS EXISTS — read before assuming Renovate covers this.
+#
+# Every dryvist nix repo pins nixpkgs to a moving CHANNEL BRANCH, e.g.
+#   nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-26.05-darwin";
+# That is deliberate: the branch is the "major version pin". Staying on a
+# release channel is what keeps builds reproducible and binary-cache-backed.
+#
+# Renovate's `nix` manager updates a flake input when its REFERENCE changes
+# (a new tag, a new rev on a digest-pinned input). A channel branch's
+# reference never changes — new commits simply land on the same branch — so
+# Renovate has nothing to diff and never advances the locked rev. Advancing
+# it requires `nix flake update`, which in Renovate terms is
+# lockFileMaintenance, and that is intentionally DISABLED for nix in
+# renovate-presets.json (it previously looped ~60 PRs/week).
+#
+# Net effect without this workflow: the lock freezes forever. Observed
+# 2026-07-28 — nix-devenv/channels/flake.lock had been modified exactly once
+# since it was created, 8 weeks earlier, with Renovate running the whole
+# time; nix-claude-code was 65 days stale.
+#
+# This workflow is the missing half of that arrangement. Renovate keeps
+# digest-tracked inputs current; this keeps the channel pin current.
+#
+# Staleness is not cosmetic. A pin that drifts off the Hydra-evaluated
+# channel head loses binary-cache coverage: nix-darwin#1804 measured 236 of
+# 1009 closure paths with no substitute, forcing a source rebuild.
+name: _refresh-nixpkgs-channel
+
+on:
+  workflow_call:
+    inputs:
+      input_name:
+        description: >-
+          Flake input to refresh. Defaults to "nixpkgs". Set this when the
+          repo names its channel input differently.
+        type: string
+        required: false
+        default: "nixpkgs"
+      channels_dir:
+        description: >-
+          Optional path to a sub-flake that owns the channel pin (nix-devenv
+          uses "channels"). When set, that sub-flake is updated first and the
+          root lock is then relocked so its `follows` picks up the new rev.
+          Leave empty for repos that pin nixpkgs directly in the root flake.
+        type: string
+        required: false
+        default: ""
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to the RunsOn 2-cpu linux
+          runner used by the rest of the dryvist automation stack.
+        type: string
+        required: false
+        default: "runs-on=${{ github.run_id }}/runner=2cpu-linux-x64"
+    secrets:
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+concurrency:
+  group: refresh-nixpkgs-channel-${{ github.repository }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  refresh:
+    name: Refresh ${{ inputs.input_name }}
+    runs-on: ${{ inputs.runner_label }}
+    environment: automation
+    timeout-minutes: 30
+    # No job-level permissions: every caller sets `permissions: {}`, and a
+    # called workflow may only downgrade. Checkout and PR creation use the
+    # minted App token, never GITHUB_TOKEN.
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@2a0be2498974c2b6327e19780488744384637d88 # v3
+
+      - name: Record the channel rev before the update
+        id: before
+        env:
+          INPUT_NAME: ${{ inputs.input_name }}
+          CHANNELS_DIR: ${{ inputs.channels_dir }}
+        run: |
+          lock="${CHANNELS_DIR:+$CHANNELS_DIR/}flake.lock"
+          rev=$(jq -r --arg n "$INPUT_NAME" \
+            '.nodes[$n].locked.rev // ""' "$lock" 2>/dev/null || echo "")
+          echo "rev=$rev" >> "$GITHUB_OUTPUT"
+          echo "before: ${rev:-<none>}"
+
+      - name: Update the channel input
+        # env vars, never direct interpolation into run: (injection risk).
+        env:
+          INPUT_NAME: ${{ inputs.input_name }}
+          CHANNELS_DIR: ${{ inputs.channels_dir }}
+        run: |
+          if [ -n "$CHANNELS_DIR" ]; then
+            # The sub-flake owns the pin; the root only `follows` it, so the
+            # root lock must be relocked afterwards or it keeps the old rev.
+            (cd "$CHANNELS_DIR" && nix flake update "$INPUT_NAME")
+            nix flake update "$(basename "$CHANNELS_DIR")"
+          else
+            nix flake update "$INPUT_NAME"
+          fi
+
+      - name: Validate flake
+        run: nix flake check --no-build
+
+      - name: Report channel drift
+        # Advisory only. The channel URL can lag briefly after a Hydra
+        # evaluation, so a mismatch is a warning, never a hard failure.
+        continue-on-error: true
+        env:
+          CHANNELS_DIR: ${{ inputs.channels_dir }}
+        run: |
+          lock="${CHANNELS_DIR:+$CHANNELS_DIR/}flake.lock"
+          ref=$(jq -r '.nodes | to_entries[]
+            | select(.value.original.ref? | strings | test("-darwin$|^nixos-"))
+            | .value.original.ref' "$lock" | head -1)
+          if [ -z "$ref" ]; then
+            echo "No channel-style nixpkgs ref found in $lock — skipping"
+            exit 0
+          fi
+          channel_rev=$(curl --connect-timeout 5 --max-time 15 -sfL \
+            "https://channels.nixos.org/$ref/git-revision" || echo "")
+          flake_rev=$(jq -r --arg ref "$ref" '.nodes | to_entries[]
+            | select(.value.original.ref? == $ref)
+            | .value.locked.rev' "$lock" | head -1)
+          if [ -z "$channel_rev" ] || [ -z "$flake_rev" ]; then
+            echo "Could not resolve both revs — skipping"
+            exit 0
+          fi
+          if [ "$flake_rev" != "$channel_rev" ]; then
+            echo "::warning::$ref pinned to ${flake_rev:0:12} but channel head is ${channel_rev:0:12} — binary cache may be sparse"
+          else
+            echo "$ref matches Hydra channel HEAD (${flake_rev:0:12})"
+          fi
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already at the channel head — no PR needed."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Pull Request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          sign-commits: true
+          branch: chore/refresh-nixpkgs-channel
+          delete-branch: true
+          commit-message: "chore(deps): refresh the ${{ inputs.input_name }} channel lock"
+          title: "chore(deps): refresh the ${{ inputs.input_name }} channel lock"
+          body: |
+            Automated refresh of the `${{ inputs.input_name }}` channel lock.
+
+            The channel pin is a moving branch, so Renovate cannot advance it
+            (its reference never changes). This workflow runs
+            `nix flake update` on a schedule to keep the lock at the
+            Hydra-evaluated channel head, which is what keeps binary-cache
+            coverage — and therefore CI build times — healthy.
+
+            Previous rev: `${{ steps.before.outputs.rev }}`
+
+            `nix flake check --no-build` passed. Review the package diff
+            before merging if this repo builds a live machine configuration.
+          labels: dependencies
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
