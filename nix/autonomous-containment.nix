@@ -37,21 +37,30 @@
 
   name ? "autonomous-containment",
 
-  # Substrings that mean "autonomous posture" in any of the three CLIs'
-  # config formats. A home-manager module has no legitimate reason to
-  # mention any of them.
+  # Two unambiguous signals that a module renders autonomous config:
+  # importing a renderer, or ASSIGNING an autonomous value.
+  #
+  # Bare value names are deliberately NOT listed. A home-manager options
+  # module has to name "bypassPermissions" in its `types.enum` to type the
+  # option at all, and its description has to explain what the mode does —
+  # both are legitimate, and matching the bare name flags them. (The first
+  # real consumer, nix-claude-code, hits exactly this in
+  # modules/core.nix and modules/options-settings.nix.) Matching the
+  # assignment form instead distinguishes "declares this value as
+  # permissible" from "sets it as the rendered default".
+  #
+  # Known limitation: prose and enum declarations are intentionally not
+  # flagged, and a value smuggled through string interpolation or a shell
+  # alias (`c = "claude --yolo"`) will not match. This guards the realistic
+  # accident — an import or a changed default — not deliberate evasion.
   forbidden ? [
     "render-autonomous"
     "renderAutonomous"
-    "bypassPermissions"
-    "danger-full-access"
-    "approval_policy"
-    "defaultApprovalMode"
     "requiresContainerBoundary"
-    # The CLIs' flag-shaped equivalents, reachable from a module via a
-    # shell alias or wrapper rather than a settings file.
-    "yolo"
-    "dangerously-skip-permissions"
+    ''= "bypassPermissions"''
+    ''= "danger-full-access"''
+    ''= "yolo"''
+    ''approval_policy = "never"''
   ],
 
   # Paths to skip, relative to homeManagerModules. Use only with a comment
