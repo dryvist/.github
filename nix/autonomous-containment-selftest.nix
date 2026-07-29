@@ -9,8 +9,11 @@
 pkgs.runCommand "autonomous-containment-selftest"
   {
     nativeBuildInputs = [ pkgs.bash ];
-    # Mirrors the default list in autonomous-containment.nix. Written
-    # without a trailing newline by passAsFile, which case 4 relies on.
+    # A representative SUBSET of the default list in
+    # autonomous-containment.nix — one import identifier and two
+    # assignment forms — chosen to exercise the scanner's mechanics, not
+    # to re-assert the production defaults. Written without a trailing
+    # newline by passAsFile, which case 4 relies on.
     forbidden = ''
       renderAutonomous
       = "bypassPermissions"
