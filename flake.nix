@@ -38,22 +38,18 @@
 
       # `nix flake check` does not evaluate `lib.` outputs, so the check
       # above would ship with nothing exercising it. This runs the same
-      # scanner against clean / violating / empty / allowlisted fixtures.
-      checks = builtins.listToAttrs (
-        map
-          (system: {
-            name = system;
-            value.autonomous-containment-selftest =
-              import ./nix/autonomous-containment-selftest.nix {
-                pkgs = inputs.nixpkgs.legacyPackages.${system};
-              };
-          })
-          [
-            "x86_64-linux"
-            "aarch64-linux"
-            "x86_64-darwin"
-            "aarch64-darwin"
-          ]
-      );
+      # scanner against clean / violating / empty / flag-shaped /
+      # allowlisted fixtures.
+      #
+      # Scoped to the CI system deliberately. The scan is pure bash+grep
+      # over source, so its result is system-independent — exposing it for
+      # all four systems only made `nix flake check --all-systems` try to
+      # build darwin derivations on a linux runner and fail with "Cannot
+      # build". This is the "scope source-only checks to the CI system"
+      # case called out in _ci-gate.yml's `all_systems` docs.
+      checks.x86_64-linux.autonomous-containment-selftest =
+        import ./nix/autonomous-containment-selftest.nix {
+          pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+        };
     };
 }
