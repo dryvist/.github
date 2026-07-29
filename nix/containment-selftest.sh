@@ -16,6 +16,18 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 cd "$work"
 
+# A bare `grep -q` assertion exits silently under `set -e`, which makes a
+# CI failure here say nothing about what actually went wrong. Dump the
+# offending file instead.
+assert_contains() {
+  local pattern=$1 file=$2
+  if ! grep -q -- "$pattern" "$file"; then
+    echo "FAIL: expected '$pattern' in $file, got:" >&2
+    cat "$file" >&2
+    exit 1
+  fi
+}
+
 mkdir -p clean dirty empty flagged declaring
 echo '{ ... }: { programs.claude.enable = true; }' >clean/home.nix
 echo '{ ... }: { text = "bypassPermissions"; }' >dirty/home.nix
@@ -46,15 +58,15 @@ if bash "$scan" "$work/dirty" "$forbidden" 2>err_dirty; then
   echo "FAIL: assigned posture should fail" >&2
   exit 1
 fi
-grep -q "VIOLATION" err_dirty
-grep -q "bypassPermissions" err_dirty
+assert_contains "VIOLATION" err_dirty
+assert_contains "bypassPermissions" err_dirty
 
 # 3. a tree with no .nix files fails rather than passing vacuously
 if bash "$scan" "$work/empty" "$forbidden" 2>err_empty; then
   echo "FAIL: empty tree should not pass vacuously" >&2
   exit 1
 fi
-grep -q "vacuously" err_empty
+assert_contains "vacuously" err_empty
 
 # 4. the non-Claude CLIs' posture values are covered too. This is also the
 # last line of the forbidden file, which passAsFile writes without a
@@ -63,7 +75,7 @@ if bash "$scan" "$work/flagged" "$forbidden" 2>err_flag; then
   echo "FAIL: assigned yolo should fail" >&2
   exit 1
 fi
-grep -q "yolo" err_flag
+assert_contains "yolo" err_flag
 
 # 5. REGRESSION: enum + prose declaration must NOT be flagged. The first
 # real consumer (nix-claude-code modules/core.nix) looks exactly like this,
