@@ -64,51 +64,9 @@ pkgs.runCommand name
       "forbidden"
       "allowlist"
     ];
+    nativeBuildInputs = [ pkgs.bash ];
   }
   ''
-    set -euo pipefail
-
-    if [ ! -d "$src" ]; then
-      echo "containment: homeManagerModules is not a directory: $src" >&2
-      exit 1
-    fi
-
-    # Guard against a vacuous pass: with no .nix files every grep below
-    # trivially matches nothing, so the check would look green while
-    # enforcing nothing. A repo that reorganises its modules out from under
-    # this path should fail loudly, not silently stop being checked.
-    count=$(find "$src" -type f -name '*.nix' | wc -l)
-    if [ "$count" -eq 0 ]; then
-      echo "containment: no .nix files under $src — refusing to pass vacuously" >&2
-      exit 1
-    fi
-
-    status=0
-    while IFS= read -r f; do
-      rel=''${f#"$src"/}
-
-      if [ -s "$allowlistPath" ] && grep -Fxq -- "$rel" "$allowlistPath"; then
-        continue
-      fi
-
-      while IFS= read -r pat; do
-        [ -z "$pat" ] && continue
-        if grep -Fq -- "$pat" "$f"; then
-          echo "containment VIOLATION: $rel references '$pat'" >&2
-          status=1
-        fi
-      done < "$forbiddenPath"
-    done < <(find "$src" -type f -name '*.nix' | sort)
-
-    if [ "$status" -ne 0 ]; then
-      echo "" >&2
-      echo "Autonomous config must never render onto a host filesystem." >&2
-      echo "Keep it behind the image-build lib, or add the file to" >&2
-      echo "allowlist with a comment saying why it is not a host-render" >&2
-      echo "path." >&2
-      exit 1
-    fi
-
-    echo "containment OK: $count home-manager .nix file(s) clean"
+    bash ${./containment-scan.sh} "$src" "$forbiddenPath" "$allowlistPath"
     touch "$out"
   ''

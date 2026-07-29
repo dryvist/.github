@@ -46,6 +46,10 @@ jobs:
       markdown_lint: true
       file_size: true
       token_limits: true
+      # This repo ships Nix modules to consumer repos but never ran its own
+      # Nix jobs: the `nix` filter below existed while nix_validate defaulted
+      # to false, so every .nix change here merged unvalidated.
+      nix_validate: true
       filters: |
         markdown:
           - '**.md'

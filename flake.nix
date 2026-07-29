@@ -35,5 +35,25 @@
       # because nix-ai consumes nix-claude-code, so a leaf importing nix-ai
       # would be a circular flake input.
       lib.autonomousContainment = import ./nix/autonomous-containment.nix;
+
+      # `nix flake check` does not evaluate `lib.` outputs, so the check
+      # above would ship with nothing exercising it. This runs the same
+      # scanner against clean / violating / empty / allowlisted fixtures.
+      checks = builtins.listToAttrs (
+        map
+          (system: {
+            name = system;
+            value.autonomous-containment-selftest =
+              import ./nix/autonomous-containment-selftest.nix {
+                pkgs = inputs.nixpkgs.legacyPackages.${system};
+              };
+          })
+          [
+            "x86_64-linux"
+            "aarch64-linux"
+            "x86_64-darwin"
+            "aarch64-darwin"
+          ]
+      );
     };
 }
