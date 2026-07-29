@@ -27,5 +27,13 @@
         inherit (inputs) treefmt-nix git-hooks;
         zizmorConfig = "${self}/zizmor.yml";
       };
+
+      # Shared check for the per-CLI AI repos (nix-claude-code, nix-codex,
+      # nix-agy): autonomous agent config must never render onto a host
+      # filesystem. A plain function, not a flake-parts module, because
+      # those repos are plain flakes. Lives here rather than in nix-ai
+      # because nix-ai consumes nix-claude-code, so a leaf importing nix-ai
+      # would be a circular flake input.
+      lib.autonomousContainment = import ./nix/autonomous-containment.nix;
     };
 }
