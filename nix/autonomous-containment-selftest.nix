@@ -13,7 +13,7 @@
 pkgs.runCommand "autonomous-containment-selftest"
   {
     nativeBuildInputs = [ pkgs.bash ];
-    forbidden = "bypassPermissions\nrenderAutonomous";
+    forbidden = "bypassPermissions\nrenderAutonomous\nyolo";
     passAsFile = [ "forbidden" ];
   }
   ''
@@ -43,13 +43,21 @@ pkgs.runCommand "autonomous-containment-selftest"
     fi
     grep -q "vacuously" err_empty
 
-    # 4. allowlisted file is skipped
+    # 4. a flag-shaped posture is caught too, not just settings keys
+    mkdir -p flagged
+    echo '{ ... }: { shellAliases.c = "claude --yolo"; }' > flagged/home.nix
+    if bash "$scan" "$PWD/flagged" "$forbiddenPath" 2>err_flag; then
+      echo "FAIL: flag-shaped posture should fail" >&2; exit 1
+    fi
+    grep -q "yolo" err_flag
+
+    # 5. allowlisted file is skipped
     printf 'home.nix\n' > allow
     if ! bash "$scan" "$PWD/dirty" "$forbiddenPath" "$PWD/allow" 2>err_allow; then
       echo "FAIL: allowlisted violation should be skipped" >&2
       cat err_allow >&2; exit 1
     fi
 
-    echo "containment selftest: 4/4 cases OK"
+    echo "containment selftest: 5/5 cases OK"
     touch "$out"
   ''

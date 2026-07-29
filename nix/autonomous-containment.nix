@@ -48,6 +48,10 @@
     "approval_policy"
     "defaultApprovalMode"
     "requiresContainerBoundary"
+    # The CLIs' flag-shaped equivalents, reachable from a module via a
+    # shell alias or wrapper rather than a settings file.
+    "yolo"
+    "dangerously-skip-permissions"
   ],
 
   # Paths to skip, relative to homeManagerModules. Use only with a comment

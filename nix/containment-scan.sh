@@ -36,7 +36,11 @@ while IFS= read -r f; do
     continue
   fi
 
-  while IFS= read -r pat; do
+  # `|| [ -n "$pat" ]` is load-bearing: passAsFile writes the pattern list
+  # with no trailing newline, and a bare `while read` silently drops the
+  # final line — which would leave the last forbidden pattern unchecked
+  # while the scan still reported success.
+  while IFS= read -r pat || [ -n "$pat" ]; do
     [ -z "$pat" ] && continue
     if grep -Fq -- "$pat" "$f"; then
       echo "containment VIOLATION: $rel references '$pat'" >&2
