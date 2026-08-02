@@ -24,6 +24,22 @@ rules:
   secrets-inherit:
     disable: true
 
+  # dryvist/docs's ci-fix.yml uses `workflow_run` to react to a failed CI run
+  # with write access (opening a fix PR). dangerous-triggers fires on the
+  # mere presence of `workflow_run`, with no way to express "guarded" in the
+  # trigger itself — but the job carries two mitigations that close the
+  # actual risk: an `if:` guard requiring
+  # `github.event.workflow_run.head_repository.full_name == github.repository`
+  # (a fork-originated run cannot reach the privileged path), and a
+  # least-privilege permission set (`actions: read`, `contents: write`,
+  # `issues: write`, `pull-requests: write`, no `id-token: write`) matching
+  # the callee's own ceiling exactly. zizmor can only ignore by filename, not
+  # by repo/path, so this is scoped to the one filename rather than disabled
+  # org-wide. Revisit if the guard or permission set above ever changes.
+  dangerous-triggers:
+    ignore:
+      - ci-fix.yml
+
   unpinned-uses:
     config:
       policies:
