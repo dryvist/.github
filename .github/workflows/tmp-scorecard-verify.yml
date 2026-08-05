@@ -1,0 +1,24 @@
+# TEMPORARY — delete before merging PR #129.
+#
+# The hub calls its own `_ci-gate.yml@main`, so a branch's gate changes are
+# never exercised by the branch's own PR. This calls the new reusable by local
+# path so `_scorecard.yml` is proven to run and emit a real score before it
+# becomes a required job org-wide.
+name: tmp-scorecard-verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/_scorecard.yml
+    with:
+      # Floor 0 so this reports the baseline score without failing; the floor
+      # itself is exercised separately.
+      min_score: 0
