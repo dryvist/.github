@@ -19,6 +19,6 @@ jobs:
       actions: read
     uses: ./.github/workflows/_scorecard.yml
     with:
-      # Floor 0 so this reports the baseline score without failing; the floor
-      # itself is exercised separately.
-      min_score: 0
+      # Deliberately unreachable: proves the floor actually fails a run. The
+      # baseline measured at floor 0 was 7.9. Expected result: job FAILS.
+      min_score: 10
