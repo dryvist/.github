@@ -4,7 +4,7 @@
     "dryvist/.github master Renovate preset — the single source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. This is the MASTER: it extends no other repository’s config. JacobPEvans/.github extends THIS (github>dryvist/.github:renovate-presets), never the reverse. Consumers extend it via local>dryvist/.github (the default preset, which extends this) or directly via github>dryvist/.github:renovate-presets.",
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation — keep them current.",
     "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true.",
-    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows — Friday ~15:00 and Monday ~05:00 America/New_York (cron `* 15 * * 5` / `* 5 * * 1`); first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
+    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows — Monday ~05:00 America/New_York (cron `* 5 * * 1`) and Thursday 18:00 UTC (cron `* 13-14 * * 4`); first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
   ],
   "extends": [
     "local>dryvist/.github:renovate-grouping"
@@ -34,8 +34,8 @@
   "minimumReleaseAge": "3 days",
   "timezone": "America/New_York",
   "schedule": [
-    "* 15 * * 5",
-    "* 5 * * 1"
+    "* 5 * * 1",
+    "* 13-14 * * 4"
   ],
   "vulnerabilityAlerts": {
     "description": "Security/CVE remediation branches. minimumReleaseAge 0 + schedule 'at any time' surface the fix as a 0-day PR, bypassing the normal stabilization window. AUTOMERGE IS DELIBERATELY NOT SET HERE so the decision falls to packageRules (deterministic and order-independent): a security minor/patch inherits the broad rule's automerge:true (fast auto-merge), while a security MAJOR inherits major-default automerge:false and opens for human review — a CVE fix that needs a breaking major is exactly when blind auto-merge is most dangerous. Setting automerge:true here would auto-merge security majors too, contradicting the majors-always-reviewed policy.",
@@ -53,8 +53,8 @@
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
-      "* 15 * * 5",
-      "* 5 * * 1"
+      "* 5 * * 1",
+      "* 13-14 * * 4"
     ],
     "automerge": true
   },
@@ -62,8 +62,9 @@
     "lockFileMaintenance": {
       "description": [
         "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the two-window schedule. KEEP IT OFF.",
-        "WHAT THIS DOES NOT COVER: the previous wording here claimed the nix manager 'already refreshes every declared flake input on the tier schedule, so flake locks stay fresh without it'. That is true only for DIGEST-TRACKED inputs (devenv, git-hooks, treefmt-nix); Renovate bumps those reliably. It is FALSE for CHANNEL-PINNED inputs such as github:NixOS/nixpkgs/nixpkgs-26.05-darwin. Renovate updates an input when its REFERENCE changes, and a channel branch's reference never changes, so there is nothing to diff and the locked rev freezes permanently.",
-        "Measured 2026-07-28: nix-devenv/channels/flake.lock had been modified exactly once since creation 8 weeks earlier, nix-claude-code was 65 days stale and nix-home 58 days, all with Renovate running and the nix manager enabled. Channel pins are refreshed instead by the scheduled _refresh-nixpkgs-channel.yml reusable workflow in this repo, which every nix repo calls via .github/workflows/deps-refresh-nixpkgs.yml. Do not remove that caller on the assumption Renovate covers it."
+        "SUPERSEDED 2026-08-05 — the whole `nix` MANAGER is now off too (see renovate-nix.json), so this setting is belt-and-braces rather than the operative control. flake.lock has exactly one writer: the _update-flake-lock.yml reusable workflow in this repo, which every nix repo calls via .github/workflows/deps-flake-lock.yml on a weekly schedule, on repository_dispatch, and on demand. It runs a bare `nix flake update` onto the single branch `chore/flake-lock`, so a repo never has more than one open flake PR.",
+        "WHY THE MANAGER COULD NOT COVER IT: Renovate updates an input when its REFERENCE changes. That works for DIGEST-TRACKED inputs (devenv, git-hooks, treefmt-nix) but is FALSE for CHANNEL-PINNED inputs such as github:NixOS/nixpkgs/nixpkgs-26.05-darwin — a channel branch's reference never changes, so there is nothing to diff and the locked rev freezes permanently. Measured 2026-07-28: nix-devenv/channels/flake.lock had been modified exactly once since creation 8 weeks earlier, nix-claude-code was 65 days stale and nix-home 58 days, all with Renovate running and the nix manager enabled.",
+        "SCHEDULE NOTE: the Thursday window is written `* 13-14 * * 4`, not `* 18 * * 4`, because the top-level timezone is America/New_York. The intended wall time is 18:00 UTC, which is 14:00 EDT and 13:00 EST — no single ET hour holds year-round, so the two-hour range covers both. Do not 'simplify' it to one hour."
       ],
       "enabled": false
     }
@@ -158,8 +159,8 @@
       "automerge": true,
       "minimumReleaseAge": "3 days",
       "schedule": [
-        "* 15 * * 5",
-        "* 5 * * 1"
+        "* 5 * * 1",
+        "* 13-14 * * 4"
       ],
       "automergeSchedule": [
         "at any time"
@@ -259,8 +260,8 @@
       "automerge": false,
       "minimumReleaseAge": "3 days",
       "schedule": [
-        "* 15 * * 5",
-        "* 5 * * 1"
+        "* 5 * * 1",
+        "* 13-14 * * 4"
       ],
       "addLabels": [
         "dep:review"
@@ -282,8 +283,8 @@
         "custom.regex"
       ],
       "schedule": [
-        "* 15 * * 5",
-        "* 5 * * 1"
+        "* 5 * * 1",
+        "* 13-14 * * 4"
       ]
     }
   ]

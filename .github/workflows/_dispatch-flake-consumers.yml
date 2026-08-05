@@ -6,10 +6,21 @@
 # own DISPATCH_CONSUMERS list; this workflow holds the shared token-mint
 # and cross-repo dispatch call so it lives in exactly one place.
 #
-# event_type defaults to update-flake-input (the flake-bump consumers used by
+# event_type defaults to update-flake-input (the flake consumers used by
 # nix-ai/nix-darwin). Pass a distinct type — e.g. upstream-released — for a
 # non-flake freshness trigger (terraform-proxmox -> ansible consumers re-run
 # inventory validation).
+#
+# WHAT THE FLAKE CONSUMER NOW DOES (changed 2026-08-05). The event_type name is
+# unchanged so no publisher needed editing, but the receiver no longer bumps the
+# single input named in client_payload.input. It relocks the WHOLE flake
+# (`nix flake update`) onto one shared branch, `chore/flake-lock`, so a repo
+# only ever has one open flake PR — see _update-flake-lock.yml. `source_input`
+# is therefore informational to the consumer rather than a command.
+#
+# Consequence worth knowing: client_payload.input is attacker-settable on any
+# repository_dispatch, and the consumer deliberately does not thread it into a
+# PR body or a run: step. Do not re-add that path.
 #
 # vars.DISPATCH_CONSUMERS, vars.GH_APP_CLIENT_ID, and the
 # GH_APP_PRIVATE_KEY secret all resolve in the caller's context

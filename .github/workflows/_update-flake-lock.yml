@@ -1,0 +1,250 @@
+# Reusable: relock the entire flake and open ONE pull request
+#
+# THE CONTRACT — one repo, one branch, one open flake PR, ever.
+#
+# Every trigger funnels into a single `nix flake update` on the branch
+# `chore/flake-lock`. A repository_dispatch that arrives while that PR is still
+# open re-runs the update from the base branch, so the earlier input's bump is
+# regenerated rather than lost, and the PR is amended in place instead of a
+# second one being opened.
+#
+# WHY THIS REPLACED TWO WORKFLOWS (2026-08-05)
+#
+# `_refresh-nixpkgs-channel.yml` refreshed exactly ONE input per call, so repos
+# with both `nixpkgs` and `nixpkgs-unstable` used a matrix to call it twice.
+# That never worked: its `concurrency` group keyed on `github.repository` alone,
+# so both matrix legs landed in the same group and `cancel-in-progress: true`
+# made leg two kill leg one after ~1 second. Measured on dryvist/nix-ai —
+# 2026-07-28 and 2026-08-03 both show one leg cancelled at 1s and the survivor
+# failing minutes later. Consequence: nix-home, nix-devenv and nix-ai all
+# carried a permanently frozen `nixpkgs-unstable`.
+#
+# `_update-flake-input.yml` bumped one input onto `chore/bump-<input>`, a branch
+# per input. nix-darwin took ten such PRs in the seven days to 2026-08-05, some
+# duplicated the same day.
+#
+# `cancel-in-progress: false` below is deliberate and load-bearing: a dispatch
+# must QUEUE behind a running relock, never cancel it. Do not "tidy" it to true.
+#
+# WHY RENOVATE DOES NOT DO THIS. Renovate advances a flake input when its
+# REFERENCE changes. A channel branch's reference never changes — new commits
+# land on the same branch — so Renovate has nothing to diff and the locked rev
+# freezes forever. Advancing it means `nix flake update`, which in Renovate
+# terms is lockFileMaintenance, and that is disabled for nix in
+# renovate-presets.json (it looped ~60 PRs/week). The nix manager itself is off
+# in renovate-nix.json, so this workflow is the single writer of flake.lock.
+#
+# Staleness is not cosmetic. A pin that drifts off the Hydra-evaluated channel
+# head loses binary-cache coverage: nix-darwin#1804 measured 236 of 1009 closure
+# paths with no substitute, forcing a source rebuild.
+#
+# NOTE ON UNTRUSTED INPUT: this workflow deliberately takes NO caller-supplied
+# free text. Callers are dispatched by `repository_dispatch`, whose
+# `client_payload.*` is attacker-settable, and threading it through to a PR body
+# would be an injection surface for zero benefit — the moved-inputs table below
+# already says exactly what changed.
+name: _update-flake-lock
+
+on:
+  workflow_call:
+    inputs:
+      channels_dir:
+        description: >-
+          Optional path to a sub-flake that owns the channel pins (nix-devenv
+          uses "channels"). When set, that sub-flake is relocked first, then the
+          root flake, so the root lock picks up the new revs. Leave empty for
+          repos that pin nixpkgs directly in the root flake.
+        type: string
+        required: false
+        default: ""
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to the RunsOn 2-cpu linux
+          runner used by the rest of the dryvist automation stack.
+        type: string
+        required: false
+        default: "runs-on=${{ github.run_id }}/runner=2cpu-linux-x64"
+    secrets:
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+concurrency:
+  group: flake-lock-${{ github.repository }}
+  # MUST stay false — see the header. A queued dispatch is correct; a cancelled
+  # sibling is the bug this workflow was created to fix.
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  relock:
+    name: Relock flake.lock
+    runs-on: ${{ inputs.runner_label }}
+    environment: automation
+    timeout-minutes: 30
+    # No job-level permissions: every caller sets `permissions: {}`, and a
+    # called workflow may only downgrade. Checkout, PR creation and auto-merge
+    # use the minted App token, never GITHUB_TOKEN.
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@2a0be2498974c2b6327e19780488744384637d88 # v3
+
+      # Always read the ROOT flake.lock, even for repos with a channels
+      # sub-flake: the root lock lists `channels` alongside every other root
+      # input and carries their resolved revs, so it is the complete picture.
+      - name: Snapshot the lock before relocking
+        run: |
+          # Resolve ROOT inputs via .nodes[.root].inputs. Node NAMES are not
+          # root input names — a node literally called "nixpkgs" can belong to a
+          # transitive dependency, which has produced wrong staleness readings
+          # before. Only the root input map is authoritative.
+          jq -S '. as $l | $l.nodes[$l.root].inputs
+                 | with_entries(.value = ($l.nodes[(if (.value|type)=="string"
+                     then .value else (.value|last) end)].locked.rev // "unlocked"))' \
+            flake.lock > /tmp/lock-before.json
+          echo "root inputs before:"; cat /tmp/lock-before.json
+
+      - name: Relock the flake
+        # env var, never direct interpolation into run: (injection risk).
+        env:
+          CHANNELS_DIR: ${{ inputs.channels_dir }}
+        run: |
+          if [ -n "$CHANNELS_DIR" ]; then
+            # The sub-flake owns its own lock; a root relock does not descend
+            # into it, so it must be relocked first.
+            (cd "$CHANNELS_DIR" && nix flake update)
+          fi
+          # No input argument: relock every root input in one operation. This is
+          # what makes a single PR cover the whole lock.
+          nix flake update
+
+      - name: Validate flake
+        run: nix flake check --no-build
+
+      - name: Report channel drift
+        # Advisory only. The channel URL can lag briefly after a Hydra
+        # evaluation, so a mismatch is a warning, never a hard failure. This is
+        # the only real Hydra-alignment signal we have — the Renovate
+        # `minimumReleaseAge` guard that claimed to cover it never once fired,
+        # because Renovate cannot advance a channel pin at all.
+        continue-on-error: true
+        run: |
+          ref=$(jq -r '.nodes | to_entries[]
+            | select(.value.original.ref? | strings | test("-darwin$|^nixos-"))
+            | .value.original.ref' flake.lock | head -1)
+          if [ -z "$ref" ]; then
+            echo "No channel-style nixpkgs ref found in flake.lock — skipping"
+            exit 0
+          fi
+          channel_rev=$(curl --connect-timeout 5 --max-time 15 -sfL \
+            "https://channels.nixos.org/$ref/git-revision" || echo "")
+          flake_rev=$(jq -r --arg ref "$ref" '.nodes | to_entries[]
+            | select(.value.original.ref? == $ref)
+            | .value.locked.rev' flake.lock | head -1)
+          if [ -z "$channel_rev" ] || [ -z "$flake_rev" ]; then
+            echo "Could not resolve both revs — skipping"
+            exit 0
+          fi
+          if [ "$flake_rev" != "$channel_rev" ]; then
+            echo "::warning::$ref pinned to ${flake_rev:0:12} but channel head is ${channel_rev:0:12} — binary cache may be sparse"
+          else
+            echo "$ref matches Hydra channel HEAD (${flake_rev:0:12})"
+          fi
+
+      - name: Summarise what moved
+        id: moved
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "nixpkgs_moved=false" >> "$GITHUB_OUTPUT"
+            echo "Already fully relocked — no PR needed."
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+          jq -S '. as $l | $l.nodes[$l.root].inputs
+                 | with_entries(.value = ($l.nodes[(if (.value|type)=="string"
+                     then .value else (.value|last) end)].locked.rev // "unlocked"))' \
+            flake.lock > /tmp/lock-after.json
+
+          # Per-input old -> new table for the PR body.
+          jq -r -s '.[0] as $b | .[1] as $a
+            | ($b + $a | keys)[]
+            | . as $k
+            | select(($b[$k] // "") != ($a[$k] // ""))
+            | "| `\($k)` | `\(($b[$k] // "absent")[0:12])` | `\(($a[$k] // "absent")[0:12])` |"' \
+            /tmp/lock-before.json /tmp/lock-after.json > /tmp/moved.md
+          {
+            echo "moved<<MOVED_EOF"
+            cat /tmp/moved.md
+            echo "MOVED_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # Did any root input whose NAME begins with "nixpkgs" change rev?
+          # A nixpkgs channel jump rebuilds the world on live machine configs,
+          # so it gates auto-merge below.
+          if jq -e -s '.[0] as $b | .[1] as $a
+                | ($b + $a | keys)
+                | map(select(startswith("nixpkgs")))
+                | any(. as $k | ($b[$k] // "") != ($a[$k] // ""))' \
+               /tmp/lock-before.json /tmp/lock-after.json > /dev/null; then
+            echo "nixpkgs_moved=true" >> "$GITHUB_OUTPUT"
+            echo "A nixpkgs* input moved — this PR needs human review."
+          else
+            echo "nixpkgs_moved=false" >> "$GITHUB_OUTPUT"
+            echo "No nixpkgs* movement — eligible for auto-merge."
+          fi
+
+      - name: Create Pull Request
+        if: steps.moved.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          sign-commits: true
+          branch: chore/flake-lock
+          delete-branch: true
+          commit-message: "chore(deps): update flake.lock"
+          title: "chore(deps): update flake.lock"
+          body: |
+            Automated whole-lock relock (`nix flake update`), triggered by
+            `${{ github.event_name }}`.
+
+            | input | from | to |
+            | --- | --- | --- |
+            ${{ steps.moved.outputs.moved }}
+
+            `nix flake check --no-build` passed.
+
+            ${{ steps.moved.outputs.nixpkgs_moved == 'true'
+              && '**A `nixpkgs*` input moved, so auto-merge is withheld.** A channel jump rebuilds the world on live machine configurations — review the package diff before merging.'
+              || 'No `nixpkgs*` input moved, so this auto-merges once CI is green.' }}
+          labels: >-
+            ${{ steps.moved.outputs.nixpkgs_moved == 'true'
+              && 'dependencies,needs-review' || 'dependencies' }}
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+
+      - name: Enable auto-merge
+        # Gated: a nixpkgs channel jump always waits for a human. Everything
+        # else keeps the hands-off propagation the dispatch chain relies on.
+        if: >-
+          steps.moved.outputs.changed == 'true' &&
+          steps.moved.outputs.nixpkgs_moved == 'false'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          PR=$(gh pr list --head chore/flake-lock --json number --jq '.[0].number')
+          [ -n "$PR" ] && gh pr merge "$PR" --auto --squash || true
