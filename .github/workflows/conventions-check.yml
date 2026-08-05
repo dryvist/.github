@@ -55,11 +55,13 @@ jobs:
           # AGENTS.md — canonical AI-assistant policy; sharpest drift axis.
           [ -f AGENTS.md ] || warn "AGENTS.md is missing"
 
-          # OpenSSF Best Practices badge — the public counterpart to the
-          # Scorecard job in the Merge Gate. Enrollment at bestpractices.dev
-          # is a manual owner action, so this only checks the badge is present.
-          grep -q 'bestpractices\.dev' README.md 2>/dev/null \
-            || warn "OpenSSF Best Practices badge is missing from README.md"
+          # NOTE: the OpenSSF Best Practices badge is deliberately NOT checked
+          # here. bestpractices.dev accepts genuine FLOSS projects only, and
+          # explicitly forbids enrolling unrelated sites. Most repos in this
+          # org are public-source homelab and infrastructure config, not FLOSS
+          # projects anyone consumes — warning about a missing badge on every
+          # repo would push exactly the spam enrolment their terms prohibit.
+          # The badge is opt-in for true shared FLOSS; see SECURITY.md.
 
           # Nix dev-shell entry: a local flake.nix OR a committed .envrc (many
           # repos legitimately use a shared remote devShell via .envrc alone).

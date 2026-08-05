@@ -109,12 +109,16 @@ Work through this in order when creating a dryvist repo.
    `import` block — a plain create 422s.
 4. **Add the baseline files:** `LICENSE`, `AGENTS.md`, and a Nix dev-shell entry
    (`flake.nix` or a committed `.envrc`).
-5. **Enroll it in the OpenSSF Best Practices Badge** at
-   [bestpractices.dev](https://www.bestpractices.dev) and add the badge to
-   `README.md` (see `README.template.md`). Enrollment requires the owner's
-   account — **an agent must not attempt it**; an agent adds the badge markup
-   once the owner supplies the project id. Scorecard itself needs no
-   enrollment: it runs automatically inside the Merge Gate.
+5. **Only if the repo is true shared FLOSS** — released for others to use,
+   with its own users and contribution path — consider enrolling it in the
+   [OpenSSF Best Practices Badge](https://www.bestpractices.dev) and adding
+   the badge to `README.md`. **This is not the default and not a convention.**
+   bestpractices.dev accepts FLOSS projects only and forbids unrelated
+   submissions; public-source homelab or infra config does not qualify, and
+   enrolling it would be spam. Enrolment needs the owner's account and is
+   **never an agent action** — an agent only adds badge markup once the owner
+   supplies a project id. Scorecard needs no enrolment: it runs automatically
+   inside the Merge Gate on every repo.
 6. **Record any legitimate opt-out.** If a convention genuinely does not apply
    (a template that should not release, a state-only repo), add the repo to
    `conventions_exempt:` in that same `config/repos.yml`, listing the specific

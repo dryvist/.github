@@ -20,8 +20,15 @@ One sentence: what this repo is and who it's for.
 
 [![CI](https://github.com/dryvist/repo-name/actions/workflows/ci.yml/badge.svg)](https://github.com/dryvist/repo-name/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-<!-- Enroll the repo at bestpractices.dev to get <id>; owner action, not an agent's. -->
+<!--
+  OPTIONAL, and ONLY for true shared FLOSS — a project released for others to
+  use, with its own users and contribution path. bestpractices.dev accepts
+  FLOSS projects only and forbids unrelated submissions, so public-source
+  homelab or infra config must NOT be enrolled. Delete these two lines for
+  every repo that is not such a project. <id> comes from enrolling; that is an
+  owner action, never an agent's.
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<id>/badge)](https://www.bestpractices.dev/projects/<id>)
+-->
 
 ## Requirements
 

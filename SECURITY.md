@@ -91,10 +91,25 @@ OpenSSF is an org standard, enforced two ways:
   A **missing** score always fails, at any floor — an unparseable result is
   never a pass. When a blocking check does fail, fix the finding; never
   remove the check from the list to get a PR through.
-- **Best Practices Badge** — every repo enrolls at
-  [bestpractices.dev](https://www.bestpractices.dev) and carries the badge in
-  its `README.md`. Presence is checked by `conventions-check.yml` alongside the
-  other repo conventions; enrollment itself is a manual owner action.
+- **Best Practices Badge** — opt-in, and **only for true shared FLOSS
+  projects**: something released for others to use, with its own users,
+  releases, and contribution path.
+
+  It is deliberately **not** an org-wide convention and **not** checked by
+  `conventions-check.yml`. [bestpractices.dev](https://www.bestpractices.dev)
+  accepts FLOSS projects only and explicitly forbids enrolling unrelated
+  sites. Most repos here are public-source homelab and infrastructure config —
+  readable by anyone, but not projects anyone consumes. Enrolling those would
+  be the spam submission their terms prohibit, so **do not enrol a repo just
+  because it is public**.
+
+  Enrolment is a manual owner judgement, per repo, and never an agent action.
+  Once a project is enrolled, add the badge to its `README.md`
+  (see `README.template.md`).
+
+  Scorecard's own `CII-Best-Practices` check scores 0 for unenrolled repos.
+  That is expected and harmless here: it feeds only the report-only aggregate,
+  never a blocking check — one more reason the aggregate is not a merge gate.
 
 ## Version Pinning
 
