@@ -19,18 +19,38 @@ name: _scorecard
 on:
   workflow_call:
     inputs:
+      blocking_checks:
+        description: >-
+          Comma-separated Scorecard checks that MUST score 10. This is the
+          enforcing half of the gate, and it is deliberately narrow: only
+          checks that are (a) deterministic and (b) caused by files in the
+          diff belong here.
+
+          Defaults to Dangerous-Workflow (untrusted checkout / script
+          injection — the "pwn request" class) and Binary-Artifacts (a
+          committed executable). Both are properties a pull request can
+          introduce and a reviewer can fix.
+
+          A check that is absent or reports -1 (not applicable to this repo)
+          is skipped, never failed.
+        type: string
+        required: false
+        default: Dangerous-Workflow,Binary-Artifacts
       min_score:
         description: >-
-          Aggregate Scorecard floor, 0-10. The job fails below this value, and
-          fails outright if the score is absent — a missing score is never a
-          pass, at any floor.
+          Aggregate Scorecard floor, 0-10. Fails below this value.
 
-          Defaults to 0 (ADVISORY): the job runs and reports everywhere, but
-          never fails a merge. This is the rollout stance, not the end state —
-          the hub calls its own `_ci-gate.yml@main`, so this job cannot be
-          exercised in the gate before it goes live org-wide, and a floor that
-          has never run against the fleet would break every repo at once.
-          Raise it once real scores across the fleet are known.
+          Defaults to 0 (REPORT-ONLY) on purpose, and this is not a rollout
+          hedge. The aggregate mixes in checks that measure repo state rather
+          than the diff — `Maintained` decays with 90-day activity,
+          `Vulnerabilities` moves when a CVE lands in OSV overnight,
+          `Code-Review` reflects past PR history. Hard-failing on it would
+          block pull requests for reasons no reviewer can act on and no diff
+          caused. Enforcement lives in `blocking_checks` instead, which is
+          attributable.
+
+          A repo may raise this to hold a line it has already earned. A
+          MISSING score fails at any floor, including 0.
         type: number
         required: false
         default: 0
@@ -69,23 +89,19 @@ jobs:
           results_format: json
           publish_results: false
 
-      - name: Enforce score floor
+      - name: Sparse-checkout enforcement script from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: scripts/scorecard-enforce.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Enforce posture
         env:
+          RESULTS: scorecard.json
+          BLOCKING_CHECKS: ${{ inputs.blocking_checks }}
           MIN_SCORE: ${{ inputs.min_score }}
-        run: |
-          set -euo pipefail
-          score=$(jq -r '.score // empty' scorecard.json)
-          if [ -z "$score" ]; then
-            echo "::error title=OpenSSF Scorecard::No aggregate score in scorecard.json"
-            jq -r '.' scorecard.json || cat scorecard.json
-            exit 1
-          fi
-
-          jq -r '.checks[] | "\(.score)\t\(.name)"' scorecard.json | sort -n
-
-          echo "Aggregate score: ${score} (floor: ${MIN_SCORE})"
-          if awk -v s="$score" -v m="$MIN_SCORE" 'BEGIN { exit !(s < m) }'; then
-            echo "::error title=OpenSSF Scorecard::Score ${score} is below the ${MIN_SCORE} floor"
-            exit 1
-          fi
-          echo "Score meets the floor."
+        run: bash .gh-shared/scripts/scorecard-enforce.sh

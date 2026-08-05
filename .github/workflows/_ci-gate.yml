@@ -216,15 +216,22 @@ on:
           untracked paths. Fails below `scorecard_min_score`.
         type: boolean
         default: true
+      scorecard_blocking_checks:
+        description: >-
+          Comma-separated Scorecard checks that MUST score 10 or the Merge
+          Gate fails. Deliberately narrow — only checks that are deterministic
+          AND caused by files in the diff, so a reviewer can act on a failure.
+          Absent or N/A (-1) checks are skipped.
+        type: string
+        default: Dangerous-Workflow,Binary-Artifacts
       scorecard_min_score:
         description: >-
-          Aggregate OpenSSF Scorecard floor, 0-10. Below this, the Merge Gate
-          fails.
-
-          Defaults to 0 (ADVISORY) during rollout: the job reports on every PR
-          but fails none. A repo raises it to start enforcing; the org default
-          rises once fleet-wide scores are known. Raise it as posture
-          improves; never lower it to get a PR through.
+          Aggregate OpenSSF Scorecard floor, 0-10. Defaults to 0
+          (REPORT-ONLY), because the aggregate mixes in repo-state checks that
+          drift with time rather than with the diff — hard-failing on it would
+          block PRs for reasons no diff caused. Enforcement lives in
+          `scorecard_blocking_checks`. A repo may raise this to hold a line it
+          has already earned; a MISSING score fails at any floor.
         type: number
         default: 0
 
@@ -409,6 +416,7 @@ jobs:
     if: ${{ inputs.scorecard && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_scorecard.yml@main
     with:
+      blocking_checks: ${{ inputs.scorecard_blocking_checks }}
       min_score: ${{ inputs.scorecard_min_score }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 

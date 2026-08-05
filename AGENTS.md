@@ -33,7 +33,7 @@ Python is not used for new dryvist work.
 | Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 100` for JS/TS/JSON/CSS |
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
-| Security posture | OpenSSF Scorecard | `_scorecard.yml`, a mandatory Merge Gate job; score floor advisory (0) during rollout |
+| Security posture | OpenSSF Scorecard | `_scorecard.yml`, mandatory Merge Gate job; blocks on `Dangerous-Workflow` + `Binary-Artifacts` |
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
 | Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
 

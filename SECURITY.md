@@ -65,15 +65,32 @@ OpenSSF is an org standard, enforced two ways:
   **Merge Gate** on every pull request ([`_scorecard.yml`](.github/workflows/_scorecard.yml)).
   Like `dependency-review` and `zizmor`, it is **not** path-filtered — a
   security-posture measurement must not be evadable by touching only untracked
-  paths. It fails when the aggregate score drops below the gate's
-  `scorecard_min_score` floor.
+  paths.
 
-  **Rollout stance:** the floor defaults to `0` — the job reports on every PR
-  but fails none, and a missing score still fails at any floor. A repo opts
-  into enforcement by raising `scorecard_min_score` in its gate caller; the
-  org default rises once fleet-wide scores are known. This mirrors the
-  warn-first escalation used by `conventions-check.yml`. Raise the floor as a
-  repo's posture improves; never lower it to get a PR through.
+  **What blocks a merge, and what only reports.** The job splits these on
+  purpose:
+
+  | | Setting | Default | Effect |
+  | --- | --- | --- | --- |
+  | **Blocks** | `scorecard_blocking_checks` | `Dangerous-Workflow,Binary-Artifacts` | Each listed check must score 10 |
+  | **Reports** | `scorecard_min_score` | `0` | Aggregate printed; gates only if a repo raises it |
+
+  Only checks that are **deterministic and caused by files in the diff** are
+  allowed to block, because a blocked merge has to be something a reviewer can
+  act on. `Dangerous-Workflow` catches untrusted checkout and script injection
+  (the "pwn request" class); `Binary-Artifacts` catches a committed
+  executable.
+
+  The **aggregate is report-only by design, not as a rollout hedge**. It mixes
+  in checks that measure repo state rather than the diff — `Maintained` decays
+  with 90-day activity, `Vulnerabilities` moves when a CVE lands in OSV
+  overnight, `Code-Review` reflects past PR history. Hard-failing on it would
+  block pull requests for reasons no diff caused and no reviewer can fix. A
+  repo may raise `scorecard_min_score` to hold a line it has already earned.
+
+  A **missing** score always fails, at any floor — an unparseable result is
+  never a pass. When a blocking check does fail, fix the finding; never
+  remove the check from the list to get a PR through.
 - **Best Practices Badge** — every repo enrolls at
   [bestpractices.dev](https://www.bestpractices.dev) and carries the badge in
   its `README.md`. Presence is checked by `conventions-check.yml` alongside the

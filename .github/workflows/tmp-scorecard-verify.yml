@@ -1,0 +1,59 @@
+# TEMPORARY — deleted before merge.
+#
+# `_scorecard.yml` sparse-checkouts its enforcement script from
+# dryvist/.github@main, where it does not exist until this PR merges, so the
+# reusable cannot be called as-is from this branch. This runs the same action
+# against the same script taken from the branch checkout, proving the
+# action -> JSON -> enforcement path end to end on real Scorecard output.
+# (The sparse-checkout step itself is the pattern already used twice in
+# _ci-gate.yml, so it is not what needs proving here.)
+name: tmp-scorecard-verify
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: tmp verify scorecard enforcement
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Unit checks for the enforcement script
+        run: bash tests/scorecard-enforce/test-scorecard-enforce.sh
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard.json
+          results_format: json
+          publish_results: false
+
+      - name: Enforce posture (real output, default settings)
+        env:
+          RESULTS: scorecard.json
+          BLOCKING_CHECKS: Dangerous-Workflow,Binary-Artifacts
+          MIN_SCORE: 0
+        run: bash scripts/scorecard-enforce.sh
+
+      - name: A regressed blocking check must fail the run
+        env:
+          RESULTS: scorecard.json
+          # Pinned-Dependencies measured 7 on this repo, so requiring it to be
+          # 10 exercises the blocking path against REAL output, not a fixture.
+          BLOCKING_CHECKS: Pinned-Dependencies
+          MIN_SCORE: 0
+        run: |
+          if bash scripts/scorecard-enforce.sh; then
+            echo "::error::Blocking check did not fail as expected"
+            exit 1
+          fi
+          echo "Confirmed: a sub-10 blocking check fails the run."
