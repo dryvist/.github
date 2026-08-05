@@ -219,10 +219,14 @@ on:
       scorecard_min_score:
         description: >-
           Aggregate OpenSSF Scorecard floor, 0-10. Below this, the Merge Gate
-          fails. Raise it as a repo's posture improves; never lower it to get
-          a PR through.
+          fails.
+
+          Defaults to 0 (ADVISORY) during rollout: the job reports on every PR
+          but fails none. A repo raises it to start enforcing; the org default
+          rises once fleet-wide scores are known. Raise it as posture
+          improves; never lower it to get a PR through.
         type: number
-        default: 7
+        default: 0
 
       runner_label:
         description: >-

@@ -23,10 +23,17 @@ on:
         description: >-
           Aggregate Scorecard floor, 0-10. The job fails below this value, and
           fails outright if the score is absent — a missing score is never a
-          pass.
+          pass, at any floor.
+
+          Defaults to 0 (ADVISORY): the job runs and reports everywhere, but
+          never fails a merge. This is the rollout stance, not the end state —
+          the hub calls its own `_ci-gate.yml@main`, so this job cannot be
+          exercised in the gate before it goes live org-wide, and a floor that
+          has never run against the fleet would break every repo at once.
+          Raise it once real scores across the fleet are known.
         type: number
         required: false
-        default: 7
+        default: 0
       runner_label:
         description: >-
           Runner label. Defaults to ubuntu-latest; pass a RunsOn label to opt

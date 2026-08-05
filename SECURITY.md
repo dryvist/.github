@@ -66,8 +66,14 @@ OpenSSF is an org standard, enforced two ways:
   Like `dependency-review` and `zizmor`, it is **not** path-filtered — a
   security-posture measurement must not be evadable by touching only untracked
   paths. It fails when the aggregate score drops below the gate's
-  `scorecard_min_score` floor (default 7). Raise the floor as a repo improves;
-  never lower it to get a PR through.
+  `scorecard_min_score` floor.
+
+  **Rollout stance:** the floor defaults to `0` — the job reports on every PR
+  but fails none, and a missing score still fails at any floor. A repo opts
+  into enforcement by raising `scorecard_min_score` in its gate caller; the
+  org default rises once fleet-wide scores are known. This mirrors the
+  warn-first escalation used by `conventions-check.yml`. Raise the floor as a
+  repo's posture improves; never lower it to get a PR through.
 - **Best Practices Badge** — every repo enrolls at
   [bestpractices.dev](https://www.bestpractices.dev) and carries the badge in
   its `README.md`. Presence is checked by `conventions-check.yml` alongside the
