@@ -1,0 +1,84 @@
+# Reusable: OpenSSF Scorecard (security posture)
+#
+# Measures the repo's overall security practices and fails when the aggregate
+# score drops below a floor. Complements the scans already in the gate:
+# `_osv-scan.yml` covers dependency vulnerabilities and `_zizmor.yml` covers
+# workflow security; neither says anything about the repo's practices as a
+# whole.
+#
+# `publish_results: false` deliberately: publishing to the Scorecard API is
+# only valid from the default branch, and a PR run must never publish. That
+# also means the action needs no `id-token: write`, so consumers grant nothing
+# beyond the gate's existing permissions.
+#
+# No SARIF upload, for the same reason `_osv-scan.yml` sets `upload-sarif:
+# false` — see the `_ci-gate.yml` header on why `security-events: write` is
+# kept out of the gate (github/codeql-action#2117).
+name: _scorecard
+
+on:
+  workflow_call:
+    inputs:
+      min_score:
+        description: >-
+          Aggregate Scorecard floor, 0-10. The job fails below this value, and
+          fails outright if the score is absent — a missing score is never a
+          pass.
+        type: number
+        required: false
+        default: 7
+      runner_label:
+        description: >-
+          Runner label. Defaults to ubuntu-latest; pass a RunsOn label to opt
+          into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+concurrency:
+  group: scorecard-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ${{ inputs.runner_label }}
+    permissions:
+      contents: read
+      # Scorecard reads workflow run history for the CI-Tests / SAST checks.
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run OpenSSF Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: scorecard.json
+          results_format: json
+          publish_results: false
+
+      - name: Enforce score floor
+        env:
+          MIN_SCORE: ${{ inputs.min_score }}
+        run: |
+          set -euo pipefail
+          score=$(jq -r '.score // empty' scorecard.json)
+          if [ -z "$score" ]; then
+            echo "::error title=OpenSSF Scorecard::No aggregate score in scorecard.json"
+            jq -r '.' scorecard.json || cat scorecard.json
+            exit 1
+          fi
+
+          jq -r '.checks[] | "\(.score)\t\(.name)"' scorecard.json | sort -n
+
+          echo "Aggregate score: ${score} (floor: ${MIN_SCORE})"
+          if awk -v s="$score" -v m="$MIN_SCORE" 'BEGIN { exit !(s < m) }'; then
+            echo "::error title=OpenSSF Scorecard::Score ${score} is below the ${MIN_SCORE} floor"
+            exit 1
+          fi
+          echo "Score meets the floor."

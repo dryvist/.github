@@ -20,6 +20,8 @@ One sentence: what this repo is and who it's for.
 
 [![CI](https://github.com/dryvist/repo-name/actions/workflows/ci.yml/badge.svg)](https://github.com/dryvist/repo-name/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+<!-- Enroll the repo at bestpractices.dev to get <id>; owner action, not an agent's. -->
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/<id>/badge)](https://www.bestpractices.dev/projects/<id>)
 
 ## Requirements
 

@@ -33,6 +33,7 @@ Python is not used for new dryvist work.
 | Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 100` for JS/TS/JSON/CSS |
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
+| Security posture | OpenSSF Scorecard | `_scorecard.yml`, a mandatory Merge Gate job with a score floor |
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
 | Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
 
@@ -108,7 +109,13 @@ Work through this in order when creating a dryvist repo.
    `import` block — a plain create 422s.
 4. **Add the baseline files:** `LICENSE`, `AGENTS.md`, and a Nix dev-shell entry
    (`flake.nix` or a committed `.envrc`).
-5. **Record any legitimate opt-out.** If a convention genuinely does not apply
+5. **Enroll it in the OpenSSF Best Practices Badge** at
+   [bestpractices.dev](https://www.bestpractices.dev) and add the badge to
+   `README.md` (see `README.template.md`). Enrollment requires the owner's
+   account — **an agent must not attempt it**; an agent adds the badge markup
+   once the owner supplies the project id. Scorecard itself needs no
+   enrollment: it runs automatically inside the Merge Gate.
+6. **Record any legitimate opt-out.** If a convention genuinely does not apply
    (a template that should not release, a state-only repo), add the repo to
    `conventions_exempt:` in that same `config/repos.yml`, listing the specific
    check names to skip and why. Opt-outs are per check, never per repo — an

@@ -208,6 +208,22 @@ on:
         type: boolean
         default: true
 
+      scorecard:
+        description: >-
+          Enable `OpenSSF Scorecard`. Runs on every `pull_request` event,
+          unconditionally — NOT gated on any `filters` output, since a
+          security-posture measurement must not be skippable by touching only
+          untracked paths. Fails below `scorecard_min_score`.
+        type: boolean
+        default: true
+      scorecard_min_score:
+        description: >-
+          Aggregate OpenSSF Scorecard floor, 0-10. Below this, the Merge Gate
+          fails. Raise it as a repo's posture improves; never lower it to get
+          a PR through.
+        type: number
+        default: 7
+
       runner_label:
         description: >-
           GitHub Actions runner label for the orchestration jobs in this
@@ -381,6 +397,17 @@ jobs:
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
+  # scorecard is intentionally NOT `needs: changes` / filter-gated, for the same
+  # reason as zizmor — a security-posture measurement must not be evadable by
+  # touching only untracked paths.
+  scorecard:
+    name: OpenSSF Scorecard
+    if: ${{ inputs.scorecard && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_scorecard.yml@main
+    with:
+      min_score: ${{ inputs.scorecard_min_score }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
   # NOTE: no osv-scan job here, on purpose — see the header ("OSV scanning is
   # deliberately NOT a toggle in this gate").
   ansible-ci:
@@ -431,7 +458,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, scorecard]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     permissions:
@@ -448,7 +475,7 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, scorecard, watchdog
           jobs: ${{ toJSON(needs) }}
 
       # Retrospective run report (job durations + a runner-capacity queue-delay

@@ -57,6 +57,22 @@ All third-party GitHub Actions — trusted orgs included — are pinned to SHA
 digests, not tags; dryvist self-references ride `@main` (see Version Pinning
 below).
 
+## Security Posture (OpenSSF)
+
+OpenSSF is an org standard, enforced two ways:
+
+- **Scorecard** runs as the `OpenSSF Scorecard` job inside the required
+  **Merge Gate** on every pull request ([`_scorecard.yml`](.github/workflows/_scorecard.yml)).
+  Like `dependency-review` and `zizmor`, it is **not** path-filtered — a
+  security-posture measurement must not be evadable by touching only untracked
+  paths. It fails when the aggregate score drops below the gate's
+  `scorecard_min_score` floor (default 7). Raise the floor as a repo improves;
+  never lower it to get a PR through.
+- **Best Practices Badge** — every repo enrolls at
+  [bestpractices.dev](https://www.bestpractices.dev) and carries the badge in
+  its `README.md`. Presence is checked by `conventions-check.yml` alongside the
+  other repo conventions; enrollment itself is a manual owner action.
+
 ## Version Pinning
 
 | Source | Strategy |
