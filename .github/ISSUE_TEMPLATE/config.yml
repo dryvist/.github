@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/dryvist/.github/security/advisories/new
+    about: >-
+      For security vulnerabilities, use private vulnerability reporting on
+      the affected repository (or here for org-wide issues). Do not open a
+      public issue.
