@@ -141,11 +141,14 @@ crash.*.log
 .claude-wt/
 .claude/skills/retrospecting/reports/
 
-# Per-user (never-committed) instruction overlays — symlinked per machine
+# Per-user (never-committed) instruction overlays — symlinked per machine.
+# The named entries below are redundant with the glob but kept for clarity;
+# the glob is what actually covers every variant (e.g. REPOS.local.md).
 CLAUDE.local.md
 .CLAUDE.local.md
 GEMINI.local.md
 AGENTS.local.md
+*.local.md
 
 # Other AI tools' local history / caches
 .aider*
