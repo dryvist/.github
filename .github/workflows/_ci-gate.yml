@@ -81,9 +81,10 @@
 # security-events: write} directly (see terraform-runs-on / nix-ai).
 #
 # `nix_skip_deps_only` (default false, opt-in): when enabled, `nix-validate`
-# and `nix-build` are skipped for dependency-only bot PRs (Renovate: author
-# prefix `jacobpevans-github-actions` + title `chore(deps)*`; Dependabot:
-# author `dependabot[bot]`) — UNLESS `flake.lock` itself changed, since a
+# and `nix-build` are skipped for dependency-only bot PRs — the authors live
+# in `scripts/ci-gate-detect-deps-only.sh` and are pinned by its self-check,
+# rather than restated here where a copy silently rotted once already —
+# UNLESS `flake.lock` itself changed, since a
 # lockfile bump must still build. Both signals are computed once in
 # `changes` (`is-deps-only`, `is-flake-lock-change`) and reused by both jobs.
 #
@@ -229,6 +230,32 @@ on:
         type: number
         default: 10
 
+    # Export the change detection this workflow already performs. Without
+    # these, a caller that needs to gate a job of its own has no way to reach
+    # the answer and has to re-run dorny/paths-filter in a duplicate `changes`
+    # job — which is what tofu-proxmox, nix-darwin and mlx-benchmarks each do
+    # today, with three copies of the filter body free to drift apart.
+    # `_ansible-ci.yml` already exports its filters; this matches it.
+    outputs:
+      nix:
+        description: Whether the change touched Nix paths
+        value: ${{ jobs.changes.outputs.nix }}
+      markdown:
+        description: Whether the change touched Markdown paths
+        value: ${{ jobs.changes.outputs.markdown }}
+      python:
+        description: Whether the change touched Python paths
+        value: ${{ jobs.changes.outputs.python }}
+      ansible:
+        description: Whether the change touched Ansible paths
+        value: ${{ jobs.changes.outputs.ansible }}
+      is-deps-only:
+        description: Whether the pull request is a dependency-only update
+        value: ${{ jobs.changes.outputs.is-deps-only }}
+      is-flake-lock-change:
+        description: Whether the change touched flake.lock
+        value: ${{ jobs.changes.outputs.is-flake-lock-change }}
+
 permissions:
   contents: read
   pull-requests: read
@@ -240,6 +267,7 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 5
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
       markdown: ${{ steps.filter.outputs.markdown }}
@@ -268,10 +296,22 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          # The commit this reusable workflow was loaded from, NOT main.
+          # Hardcoding `main` made a workflow running from a branch pull its
+          # scripts from a different commit than the one under test: the
+          # self-check below ran main's copy, which has no --self-check flag,
+          # so it ignored the argument, did its normal work and exited 0 —
+          # green, having verified nothing. The same mismatch pairs a changed
+          # workflow with an incompatible script in ordinary use.
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-detect-deps-only.sh
           sparse-checkout-cone-mode: false
+
+      # Milliseconds, and it is the only thing standing between a stale author
+      # literal and a detector that answers "false" forever without saying so.
+      - name: Verify the deps-only detector still classifies
+        run: bash .gh-shared/scripts/ci-gate-detect-deps-only.sh --self-check
 
       - name: Detect Dependency-Only Commits
         id: detect-deps
@@ -357,6 +397,7 @@ jobs:
     name: Dependency Review
     if: ${{ inputs.dependency_review && github.event_name == 'pull_request' && github.event.repository.private == false }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 10
     # contents:read ONLY — a called workflow's job may never request more than
     # the caller granted, or the whole run dies at graph validation
     # (startup_failure) before any job starts. `pull-requests: write` (for
@@ -413,7 +454,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-watchdog.sh
           sparse-checkout-cone-mode: false
@@ -434,6 +475,7 @@ jobs:
     needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 5
     permissions:
       # `actions: read` lets the run-report step read this run's jobs (durations
       # + queue delays) via the Actions API; `contents: read` is for the sparse
@@ -461,7 +503,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-run-report.sh
           sparse-checkout-cone-mode: false
