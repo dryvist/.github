@@ -229,6 +229,32 @@ on:
         type: number
         default: 10
 
+    # Export the change detection this workflow already performs. Without
+    # these, a caller that needs to gate a job of its own has no way to reach
+    # the answer and has to re-run dorny/paths-filter in a duplicate `changes`
+    # job — which is what tofu-proxmox, nix-darwin and mlx-benchmarks each do
+    # today, with three copies of the filter body free to drift apart.
+    # `_ansible-ci.yml` already exports its filters; this matches it.
+    outputs:
+      nix:
+        description: Whether the change touched Nix paths
+        value: ${{ jobs.changes.outputs.nix }}
+      markdown:
+        description: Whether the change touched Markdown paths
+        value: ${{ jobs.changes.outputs.markdown }}
+      python:
+        description: Whether the change touched Python paths
+        value: ${{ jobs.changes.outputs.python }}
+      ansible:
+        description: Whether the change touched Ansible paths
+        value: ${{ jobs.changes.outputs.ansible }}
+      is-deps-only:
+        description: Whether the pull request is a dependency-only update
+        value: ${{ jobs.changes.outputs.is-deps-only }}
+      is-flake-lock-change:
+        description: Whether the change touched flake.lock
+        value: ${{ jobs.changes.outputs.is-flake-lock-change }}
+
 permissions:
   contents: read
   pull-requests: read
