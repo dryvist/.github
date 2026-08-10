@@ -41,6 +41,13 @@
 #             - '**.md'
 #             - '.markdownlint*'
 #
+# Scope policy (canonical): a check runs in proportion to the change that
+# triggered it; the one guaranteed end-to-end sweep is promotion to a
+# git-flow repo's production branch. Narrow at the consumer, never in a
+# filter several repos share, and never let the job that decides what to
+# skip be skippable itself.
+# https://docs.jacobpevans.com/d/decisions/ci-scope-follows-the-change/
+#
 # Filter name convention (caller defines these in `filters:` input):
 #
 #   nix            -> gates `nix_validate` and `nix_build`

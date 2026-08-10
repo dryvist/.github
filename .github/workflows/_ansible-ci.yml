@@ -22,6 +22,13 @@
 #     ci:
 #       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
+# Scope policy (canonical): a check runs in proportion to the change that
+# triggered it; the one guaranteed end-to-end sweep is promotion to a
+# git-flow repo's production branch. Narrow at the consumer, never in a
+# filter several repos share, and never let the job that decides what to
+# skip be skippable itself.
+# https://docs.jacobpevans.com/d/decisions/ci-scope-follows-the-change/
+#
 
 name: _ansible-ci
 
