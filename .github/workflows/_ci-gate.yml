@@ -81,9 +81,10 @@
 # security-events: write} directly (see terraform-runs-on / nix-ai).
 #
 # `nix_skip_deps_only` (default false, opt-in): when enabled, `nix-validate`
-# and `nix-build` are skipped for dependency-only bot PRs (Renovate: author
-# prefix `jacobpevans-github-actions` + title `chore(deps)*`; Dependabot:
-# author `dependabot[bot]`) — UNLESS `flake.lock` itself changed, since a
+# and `nix-build` are skipped for dependency-only bot PRs — the authors live
+# in `scripts/ci-gate-detect-deps-only.sh` and are pinned by its self-check,
+# rather than restated here where a copy silently rotted once already —
+# UNLESS `flake.lock` itself changed, since a
 # lockfile bump must still build. Both signals are computed once in
 # `changes` (`is-deps-only`, `is-flake-lock-change`) and reused by both jobs.
 #
@@ -295,7 +296,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          # The commit this reusable workflow was loaded from, NOT main.
+          # Hardcoding `main` made a workflow running from a branch pull its
+          # scripts from a different commit than the one under test: the
+          # self-check below ran main's copy, which has no --self-check flag,
+          # so it ignored the argument, did its normal work and exited 0 —
+          # green, having verified nothing. The same mismatch pairs a changed
+          # workflow with an incompatible script in ordinary use.
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-detect-deps-only.sh
           sparse-checkout-cone-mode: false
@@ -446,7 +454,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-watchdog.sh
           sparse-checkout-cone-mode: false
@@ -495,7 +503,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: main
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-run-report.sh
           sparse-checkout-cone-mode: false
