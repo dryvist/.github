@@ -300,6 +300,11 @@ jobs:
           sparse-checkout: scripts/ci-gate-detect-deps-only.sh
           sparse-checkout-cone-mode: false
 
+      # Milliseconds, and it is the only thing standing between a stale author
+      # literal and a detector that answers "false" forever without saying so.
+      - name: Verify the deps-only detector still classifies
+        run: bash .gh-shared/scripts/ci-gate-detect-deps-only.sh --self-check
+
       - name: Detect Dependency-Only Commits
         id: detect-deps
         env:
