@@ -13,6 +13,7 @@ jobs:
   # The canonical repo is pruned to exactly labels.yml (delete-other-labels).
   self:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     environment: automation
     permissions:
       contents: read
@@ -31,6 +32,7 @@ jobs:
   # built from an unauthenticated listing.
   list:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     environment: automation
     outputs:
       repos: ${{ steps.list.outputs.repos }}
@@ -57,6 +59,7 @@ jobs:
   sync:
     needs: list
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: automation
     strategy:
       fail-fast: false

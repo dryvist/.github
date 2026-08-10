@@ -240,6 +240,7 @@ jobs:
   changes:
     name: Detect Changes
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 5
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
       markdown: ${{ steps.filter.outputs.markdown }}
@@ -357,6 +358,7 @@ jobs:
     name: Dependency Review
     if: ${{ inputs.dependency_review && github.event_name == 'pull_request' && github.event.repository.private == false }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 10
     # contents:read ONLY — a called workflow's job may never request more than
     # the caller granted, or the whole run dies at graph validation
     # (startup_failure) before any job starts. `pull-requests: write` (for
@@ -434,6 +436,7 @@ jobs:
     needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    timeout-minutes: 5
     permissions:
       # `actions: read` lets the run-report step read this run's jobs (durations
       # + queue delays) via the Actions API; `contents: read` is for the sparse

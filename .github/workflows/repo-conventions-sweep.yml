@@ -33,6 +33,7 @@ jobs:
   sweep:
     name: Sweep
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # GH_PAT_WORKFLOW_DISPATCH is scoped to this environment. It is needed only
     # to COUNT private repos; no private repo name leaves this job.
     environment: automation
