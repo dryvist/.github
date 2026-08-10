@@ -8,6 +8,8 @@
 #   ansible-lint -> ansible/ansible-lint
 #   molecule     -> matrix from the caller's `molecule_scenarios`, optional
 #                   Doppler secrets via dopplerhq/secrets-fetch-action
+#   token-limits -> _token-limits.yml, so a repo's .token-limits.yaml is
+#                   enforced; a no-op where that file is absent
 #   gate         -> name MUST stay "Merge Gate" (branch-protection ruleset)
 #
 # Repo-specific data-contract tests (inventory schema/load, template render,
@@ -219,14 +221,30 @@ jobs:
           MOLECULE_SCENARIO: ${{ matrix.scenario }}
         run: molecule test -s "$MOLECULE_SCENARIO"
 
+  # Token budgets reach the Ansible fleet only from here. _token-limits.yml is
+  # otherwise only wired through _ci-gate.yml, and no Ansible repo calls that —
+  # every one of them wires THIS workflow directly, so the budget was
+  # unreachable for the whole fleet. It is a no-op in a repo with no
+  # .token-limits.yaml, so adding it changes nothing until a repo opts in by
+  # committing one.
+  token-limits:
+    name: Token Limits
+    needs: changes
+    if: ${{ needs.changes.outputs.ansible == 'true' }}
+    permissions:
+      contents: read
+    uses: dryvist/.github/.github/workflows/_token-limits.yml@main
+    with:
+      runner_label: ${{ inputs.runner_label }}
+
   gate:
     name: Merge Gate
-    needs: [changes, ansible-lint, molecule]
+    needs: [changes, ansible-lint, molecule, token-limits]
     if: ${{ inputs.emit_gate && always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     steps:
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
-          allowed-skips: ansible-lint, molecule
+          allowed-skips: ansible-lint, molecule, token-limits
           jobs: ${{ toJSON(needs) }}
