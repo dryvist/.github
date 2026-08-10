@@ -41,7 +41,7 @@ jobs:
       # `actions: write` must be granted here or the run fails at graph
       # validation (startup_failure).
       actions: write
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@perf/shared-workflow-timeouts
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
     with:
       markdown_lint: true
       file_size: true
