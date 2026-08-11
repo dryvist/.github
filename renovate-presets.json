@@ -4,7 +4,7 @@
     "dryvist/.github master Renovate preset — the single source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. This is the MASTER: it extends no other repository’s config. JacobPEvans/.github extends THIS (github>dryvist/.github:renovate-presets), never the reverse. Consumers extend it via local>dryvist/.github (the default preset, which extends this) or directly via github>dryvist/.github:renovate-presets.",
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation — keep them current.",
     "WARNING: platformAutomerge MUST stay false. GitHub’s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge — PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true.",
-    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows — Monday ~05:00 America/New_York (cron `* 5 * * 1`) and Thursday 18:00 UTC (cron `* 13-14 * * 4`); first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
+    "Tiered freshness model (canonical: SECURITY.md → Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY — any package, any ecosystem — after a 3-day release-age stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Lock-file maintenance cannot use Renovate's minimumReleaseAge because a package manager selects every changed version. Instead, Renovate creates the branch only in one of two fixed source windows and considers automerge only in a later fixed window at least 72 elapsed hours away; the branch is never refreshed outside its source window, so the policy is a real current-head soak without custom automation. The four-hour windows preserve the existing Monday 05:00 and Thursday 13:00 starts while matching Renovate's hosted scheduler guidance, preventing a once-per-four-hours scheduler from missing either run. Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows — Monday early morning and Thursday afternoon America/New_York; first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): first-party majors auto-merge immediately, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
   ],
   "extends": [
     "local>dryvist/.github:renovate-grouping"
@@ -51,12 +51,19 @@
     "vulnerabilityFixStrategy": "highest"
   },
   "lockFileMaintenance": {
+    "description": "Bulk lock regeneration delegates version choice to the package manager, so Renovate cannot apply minimumReleaseAge and a stale renovate/stability-days status is expected rather than actionable. Disable that unsupported check only for lock maintenance. Renovate creates/updates lock-maintenance branches only in the Monday 05:00-08:59 or Thursday 13:00-16:59 America/New_York source windows, then directly automerges only during the Thursday 09:00-12:59 or Sunday 18:00-21:59 windows. Each later window begins more than 72 actual hours after the latest possible source-window update, including the spring DST transition. updateNotScheduled:false prevents an intervening head refresh. With platformAutomerge:false, Renovate honors this automergeSchedule and still requires green CI.",
     "enabled": true,
     "schedule": [
-      "* 5 * * 1",
-      "* 13-14 * * 4"
+      "* 5-8 * * 1",
+      "* 13-16 * * 4"
     ],
-    "automerge": true
+    "automerge": true,
+    "minimumReleaseAge": null,
+    "updateNotScheduled": false,
+    "automergeSchedule": [
+      "* 9-12 * * 4",
+      "* 18-21 * * 0"
+    ]
   },
   "nix": {
     "lockFileMaintenance": {
