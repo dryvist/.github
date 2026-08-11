@@ -83,11 +83,13 @@
     },
     {
       "description": [
-        "Docker images pinned in Ansible role defaults as `<name>_image: \"repo:tag\"`. These live in plain YAML vars that no built-in Renovate manager scans, so image pins across ansible-proxmox-apps roles (prometheus_stack, netmon, qdrant_docker, ntfy_docker, mailpit_docker, unifi_metrics, seerr, ...) were untracked. Matched as the `docker` datasource so Renovate bumps the tag in place; image refs are self-describing (repo:tag) so no per-line `# renovate:` annotation is needed. Untagged refs (no colon) are not matched; local-only tags resolve to nothing and are skipped."
+        "Docker images pinned in Ansible role defaults as `<name>_image: \"repo:tag\"`. These live in plain YAML vars that no built-in Renovate manager scans, so image pins across ansible-proxmox-apps roles (prometheus_stack, netmon, qdrant_docker, ntfy_docker, mailpit_docker, unifi_metrics, seerr, ...) were untracked. Matched as the `docker` datasource so Renovate bumps the tag in place; image refs are self-describing (repo:tag) so no per-line `# renovate:` annotation is needed. Untagged refs (no colon) are not matched; local-only tags resolve to nothing and are skipped.",
+        "BOTH defaults layouts are matched, and the second pattern is not optional. A role may keep its defaults in one `defaults/main.yml` OR split them into a `defaults/main/` directory of topic-named files, which the per-file token budget pushes roles toward. A pattern matching only the file form silently drops every pin in a split role: no warning, no error, no dashboard entry — the role just stops being tracked the moment it is refactored, and the omission is invisible until someone reads a version by hand. Splitting a role is therefore a Renovate-affecting change: any new defaults layout needs a pattern here in the same change that introduces it, and nix/renovate-manager-coverage-selftest.py asserts both shapes stay matched."
       ],
       "customType": "regex",
       "managerFilePatterns": [
-        "/roles/.+/defaults/main\\.ya?ml$/"
+        "/roles/.+/defaults/main\\.ya?ml$/",
+        "/roles/.+/defaults/main/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "_image:\\s*[\"'](?<depName>[^:\"'\\s]+):(?<currentValue>[^\"'\\s]+)[\"']"
@@ -95,10 +97,11 @@
       "datasourceTemplate": "docker"
     },
     {
-      "description": "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for roles/**/defaults/main.yml — binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed.",
+      "description": "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for role defaults — binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed. Matches both the single `defaults/main.yml` and the split `defaults/main/*.yml` layouts — see the image manager above for why omitting the second pattern silently un-tracks a role.",
       "customType": "regex",
       "managerFilePatterns": [
-        "/roles/.+/defaults/main\\.ya?ml$/"
+        "/roles/.+/defaults/main\\.ya?ml$/",
+        "/roles/.+/defaults/main/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\s+[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"

@@ -51,5 +51,14 @@
         import ./nix/autonomous-containment-selftest.nix {
           pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
         };
+
+      # renovate-presets.json is consumed by every dryvist repo, and a
+      # customManager whose file pattern matches nothing fails silently —
+      # nothing goes red, the pins just stop being tracked. Same CI-system
+      # scoping and same reason as the check above: pure source inspection.
+      checks.x86_64-linux.renovate-manager-coverage-selftest =
+        import ./nix/renovate-manager-coverage-selftest.nix {
+          pkgs = inputs.nixpkgs.legacyPackages.x86_64-linux;
+        };
     };
 }
