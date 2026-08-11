@@ -211,11 +211,18 @@ class TestRouteCrossReference:
                 continue
             if pipeline in self.BUILTIN_PIPELINES:
                 continue
-            yml = pipelines_dir / f"{pipeline}.yml"
-            conf = pipelines_dir / f"{pipeline}.conf.yml"
-            assert yml.exists() or conf.exists(), (
+            # Three accepted layouts: a flat <name>.yml, a flat
+            # <name>.conf.yml, and a <name>/conf.yml directory. The
+            # directory form is what the pack templates scaffold.
+            candidates = [
+                pipelines_dir / f"{pipeline}.yml",
+                pipelines_dir / f"{pipeline}.conf.yml",
+                pipelines_dir / pipeline / "conf.yml",
+            ]
+            assert any(c.exists() for c in candidates), (
                 f"Route '{route.get('id')}' references pipeline "
-                f"'{pipeline}' but {yml} not found"
+                f"'{pipeline}' but none of these exist: "
+                + ", ".join(str(c) for c in candidates)
             )
 
 
