@@ -6,6 +6,14 @@ name: _cribl-pack-validate
 on:
   workflow_call:
     inputs:
+      test_suite_owner:
+        description: >-
+          Owner of the `.github` repo holding tests/cribl-pack. Defaults to
+          the calling repo's own owner. Set this when the caller lives in a
+          different org from the shared test suite.
+        type: string
+        required: false
+        default: ""
       pack_type:
         description: "Pack type: edge or stream"
         required: true
@@ -38,7 +46,7 @@ jobs:
       - name: Checkout shared test suite
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: ${{ github.repository_owner }}/.github
+          repository: ${{ inputs.test_suite_owner || github.repository_owner }}/.github
           path: .github-shared
           sparse-checkout: tests/cribl-pack
 
