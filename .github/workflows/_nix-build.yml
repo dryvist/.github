@@ -32,7 +32,7 @@ jobs:
       # determinate-nix-action@v3 is ONLY a Nix installer (replaced nix-installer-action@v21).
       # It does NOT include flake checking — flake validation is in _nix-validate.yml.
       - name: Install Nix
-        uses: DeterminateSystems/determinate-nix-action@2a0be2498974c2b6327e19780488744384637d88 # v3
+        uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3
         with:
           extra-conf: |
             max-jobs = auto
