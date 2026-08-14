@@ -36,10 +36,11 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner_label }}
-    # Hard cap so a wedged `nix flake check` (network hang, runner stall) can't
-    # block `Merge Gate` indefinitely. Queue-stuck handling lives in the
-    # _ci-gate watchdog; this is the running-job side of defense in depth.
-    timeout-minutes: 30
+    # Intentionally non-negotiable: more than 20 minutes signals a dependency,
+    # cache, or closure regression. Do not raise this cap; fix the root cause
+    # so this required check fails and blocks the regression instead. Queue-stuck
+    # handling lives in the _ci-gate watchdog; this is running-job defense.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -101,4 +102,6 @@ jobs:
         # derivations (require darwin binaries).
         env:
           ALL_SYSTEMS_FLAG: ${{ inputs.all_systems && '--all-systems' || '' }}
-        run: nix flake check $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going
+        run: |
+          # shellcheck disable=SC2086 # Expands deliberately to zero or one flag.
+          nix flake check $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going

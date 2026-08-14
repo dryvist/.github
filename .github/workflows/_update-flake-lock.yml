@@ -81,7 +81,10 @@ jobs:
     name: Relock flake.lock
     runs-on: ${{ inputs.runner_label }}
     environment: automation
-    timeout-minutes: 30
+    # Intentionally non-negotiable: relocking or validating past 20 minutes is
+    # a dependency or cache regression. Do not raise this cap; fix the root
+    # cause so the failed workflow blocks the unhealthy lock update.
+    timeout-minutes: 20
     # No job-level permissions: every caller sets `permissions: {}`, and a
     # called workflow may only downgrade. Checkout, PR creation and auto-merge
     # use the minted App token, never GITHUB_TOKEN.
