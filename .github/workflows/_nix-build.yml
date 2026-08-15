@@ -22,10 +22,26 @@ jobs:
   build:
     name: Build
     runs-on: macos-latest
-    # Intentionally non-negotiable: more than 20 minutes signals a dependency,
-    # cache, or closure regression. Do not raise this cap; fix the root cause
-    # so this required check fails and blocks the regression instead.
-    timeout-minutes: 20
+    # Intentionally non-negotiable: exceeding this cap signals a dependency,
+    # cache, or closure regression, not a reason to spend more CI time. Do not
+    # raise it; remove the source-build cause so this required check keeps
+    # blocking the regression until it is fixed.
+    #
+    # The number comes from the org variable so it can change for every consumer
+    # without editing this file or any calling repository. `vars` is permitted
+    # here — the context table allows github/needs/strategy/matrix/vars/inputs
+    # for job-level timeout-minutes (not env, not secrets). In a reusable
+    # workflow `vars` resolves from the CALLER's repository and organization.
+    #
+    # fromJSON is required, not decoration: every `vars.*` value is typed as a
+    # STRING while timeout-minutes demands a number. Without it the workflow
+    # fails graph validation and the job never starts — it surfaces as a failed
+    # required check with no job and no logs.
+    #
+    # The `|| '15'` literal is likewise required: an unset variable interpolates
+    # to an empty string, fromJSON('') errors, and fork PRs resolve org
+    # variables empty.
+    timeout-minutes: ${{ fromJSON(vars.GH_ACTION_TIMEOUT_NIX || '15') }}
     permissions:
       contents: read
     steps:
