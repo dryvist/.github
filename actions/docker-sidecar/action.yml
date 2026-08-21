@@ -1,0 +1,44 @@
+name: Docker sidecar
+description: >
+  Start or stop a Docker container that shares the job network namespace when
+  the runner itself is a container, and otherwise publishes a host port.
+
+inputs:
+  phase:
+    description: start or stop
+    required: true
+  image:
+    description: Container image (required when phase is start)
+    required: false
+    default: ''
+  name:
+    description: Container name. Defaults to sidecar-<run id> on start.
+    required: false
+    default: ''
+  environment:
+    description: Extra KEY=VALUE docker environment entries, one per line
+    required: false
+    default: ''
+  publish:
+    description: docker -p spec used when the runner is not a container
+    required: false
+    default: '127.0.0.1:9420:9420'
+
+outputs:
+  container-name:
+    description: Name of the started container
+    value: ${{ steps.run.outputs.container-name }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      name: Docker sidecar ${{ inputs.phase }}
+      shell: bash
+      env:
+        PHASE: ${{ inputs.phase }}
+        IMAGE: ${{ inputs.image }}
+        SIDECAR_NAME: ${{ inputs.name }}
+        EXTRA_ENV: ${{ inputs.environment }}
+        PUBLISH: ${{ inputs.publish }}
+      run: bash "${{ github.action_path }}/run.sh"
