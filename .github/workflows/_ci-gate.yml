@@ -492,6 +492,14 @@ jobs:
       actions: read
       contents: read
     steps:
+      # alls-green is a composite Python action. GitHub-hosted images provide
+      # `python`; install the same maintained runtime explicitly so this gate
+      # has the identical contract on self-hosted runners.
+      - name: Set up Python for the result aggregator
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.x'
+
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
