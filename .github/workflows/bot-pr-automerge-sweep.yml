@@ -176,6 +176,7 @@ jobs:
 
           merged=0; skipped=0; stalled=0; failed=0; examined=0
           rows=""; stall_rows=""
+          : > reasons.txt
 
           while read -r repo num; do
             examined=$(( examined + 1 ))
@@ -278,6 +279,9 @@ jobs:
             if [ -n "$reason" ]; then
               skipped=$(( skipped + 1 ))
               echo "skipped  ${repo}#${num}  ${reason}"
+              # Tallied so a reason holding several PRs can be surfaced once,
+              # loudly, at the end of the run.
+              echo "$reason" >> reasons.txt
               rows="${rows}| \`${repo}#${num}\` | skipped | ${reason} |"$'\n'
               # A PR this sweep will not merge, and that has outlived the
               # policy, is a defect in the config above — not a backlog item.
@@ -314,6 +318,20 @@ jobs:
           done < work.txt
 
           [ "$DRY_RUN" = "true" ] && mode="dry-run" || mode="live"
+
+          # A gate that holds the same PRs for the same reason on every run,
+          # and says nothing louder each time, is how a correct gate gets
+          # loosened by someone who cannot see why it was tight. A check that
+          # is broken on the BASE branch blocks every PR in that repo forever
+          # — the sweep is then not merely cautious there, it has zero
+          # throughput — and the hold reason is identical each time, so
+          # nothing distinguishes it from ordinary caution. Any reason holding
+          # more than one PR is called out once, as a warning annotation.
+          if [ -s reasons.txt ]; then
+            while read -r n why; do
+              [ "$n" -gt 1 ] && echo "::warning::${n} PRs are held on the same reason: ${why} — check whether this is broken on the base branch rather than in the PRs"
+            done < <(sort reasons.txt | uniq -c | sort -rn)
+          fi
 
           # Repeated on stdout as well as in the summary. A step summary is
           # readable in the web UI and essentially not readable from the API,
