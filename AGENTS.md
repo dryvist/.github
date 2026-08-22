@@ -126,6 +126,23 @@ there would publish private topology. Private repos appear as a count. To check
 a private repo, run the same presence checks locally against a repo you can
 already read; do not paste the result into any public artifact.
 
+## Bot PRs merge themselves — never hand-merge one
+
+Renovate PRs are merged by `.github/workflows/bot-pr-automerge-sweep.yml`, an
+hourly deterministic backstop that re-derives eligibility from the GitHub API
+(bot author, no `update:major` label, mergeable, no failing or pending check,
+head commit older than the 3-day soak) and squash-merges into the PR's own base
+branch. Renovate still tries to merge its own PRs first; the sweep exists
+because it usually does not succeed, and the gap was being filled by hand.
+
+**Do not merge a bot PR yourself, and do not review one to unblock it.** A bot
+PR the sweep will not merge is a defect in `renovate-presets.json` or in the
+sweep's gates — fix it there so the next hundred PRs are covered too. Merging
+one by hand fixes exactly one PR and hides the defect from the next agent. The
+sweep fails its own run when a bot PR outlives the policy, which is the signal
+that something needs fixing; record the follow-up in Vikunja, never a GitHub
+issue.
+
 ## Master source of truth (no upstream inheritance)
 
 `dryvist/.github` is the **master**: it extends no other repository's config.
