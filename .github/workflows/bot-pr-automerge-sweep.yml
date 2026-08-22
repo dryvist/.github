@@ -1,0 +1,250 @@
+# Deterministic backstop that merges eligible Renovate PRs org-wide.
+#
+# WHY THIS EXISTS. Renovate is configured to merge its own PRs
+# (renovate-presets.json: automerge:true, platformAutomerge:false), but in
+# practice it almost never does. Sampling merged Renovate PRs across five
+# dryvist repos in 2026-08, `app/renovate` was the merging actor on 2 of ~14;
+# in mlx-benchmarks it was the merging actor on none of ~30. Every other one
+# was merged by a person or by an ad-hoc agent sweep. Two causes were fixed in
+# renovate-presets.json alongside this workflow (digest updates matched no
+# auto-merge rule at all; the lock-file automerge windows were four hours wide
+# and a hosted Renovate run had to land inside one). Neither fix is a
+# guarantee: both still depend on a hosted Renovate run happening at the right
+# moment. This workflow is the guarantee. It re-derives eligibility from the
+# GitHub API on its own schedule and merges, so a missed Renovate run costs
+# nothing.
+#
+# IT IS A BACKSTOP, NOT THE PRIMARY PATH. When Renovate merges a PR first,
+# this workflow simply finds nothing to do. Do not move policy here: the
+# freshness/trust model stays in renovate-presets.json, and this workflow only
+# re-checks the parts of it that are observable from the API.
+#
+# NO MODEL IS IN THE LOOP. Eligibility is computed in shell from API fields so
+# the outcome is reproducible and auditable. An agent must never hand-merge a
+# bot PR to "help" — a bot PR that this sweep will not merge is a policy defect
+# to fix here, not to route around.
+#
+# PUBLIC REPO NAMES ONLY IN THE SUMMARY, deliberately. This repo is public, so
+# its job summaries and Actions logs are world-readable. Private repos are
+# swept and merged the same way, but appear in the report as an aggregate count
+# with no names.
+name: Bot PR Automerge Sweep
+
+on:
+  schedule:
+    # Hourly, off the :00 mark so the org's runs do not pile onto the hour.
+    - cron: "23 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: >-
+          Report what would be merged without merging. Defaults to true so a
+          manual run is always safe; scheduled runs are always live.
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bot-pr-automerge-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Cross-repo merges need an App installation token: the job's own
+    # GITHUB_TOKEN is scoped to this repo, and a merge it performed would not
+    # trigger the downstream release-please run on the target repo.
+    environment: automation
+    steps:
+      - name: Mint org App token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          # Reuses the existing org release App rather than provisioning a
+          # second one: it is already installed org-wide with the Contents +
+          # Pull requests write it needs. Swap both lines if a dedicated
+          # automation App is ever created.
+          app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Merge eligible bot PRs
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+          # Scheduled runs are always live; a manual run honours its input.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          # Minimum age of the PR head commit. Mirrors the 3-day stabilization
+          # in renovate-presets.json, enforced here from the commit timestamp
+          # so it holds even when Renovate never refreshes its own
+          # renovate/stability-days status.
+          MIN_AGE_HOURS: "72"
+          # A bot PR still open past this is a policy defect, not a backlog
+          # item. The job fails so the failure notification surfaces it.
+          STALL_DAYS: "7"
+          BOT_AUTHOR: "app/renovate"
+        run: |
+          set -euo pipefail
+
+          now=$(date -u +%s)
+          min_age=$(( MIN_AGE_HOURS * 3600 ))
+          stall_age=$(( STALL_DAYS * 86400 ))
+
+          gh repo list "$ORG" --no-archived --limit 300 \
+            --json name,visibility > repos.json
+          test -s repos.json  # an empty listing is an auth failure, not "no work"
+          jq -r '.[].name' repos.json | sort > all.txt
+          jq -r '.[] | select(.visibility == "PUBLIC") | .name' repos.json | sort > public.txt
+
+          merged=0; skipped=0; stalled=0; failed=0; private_merged=0
+          rows=""; stall_rows=""
+
+          # Name a repo in the report only if it is public (see header).
+          label() { grep -qxF "$1" public.txt && printf '%s' "$1" || printf '%s' "(private)"; }
+
+          while read -r repo; do
+            nums=$(gh pr list --repo "${ORG}/${repo}" --state open --limit 50 \
+              --json number,author \
+              --jq ".[] | select(.author.login == \"${BOT_AUTHOR}\") | .number" 2>/dev/null || true)
+            [ -z "$nums" ] && continue
+
+            while read -r num; do
+              # Re-read each PR individually rather than trusting the list
+              # payload. GitHub computes mergeability ASYNCHRONOUSLY: a cold
+              # query returns mergeable/mergeStateStatus of UNKNOWN and only
+              # kicks off the computation, so a single read would skip an
+              # eligible PR as "not-mergeable" on every run and quietly defeat
+              # this whole workflow. Observed live on a PR that read MERGEABLE
+              # moments earlier. Retry until GitHub answers.
+              pr=""
+              for attempt in 1 2 3 4; do
+                pr=$(gh pr view "$num" --repo "${ORG}/${repo}" \
+                  --json number,labels,mergeable,mergeStateStatus,headRefName,headRefOid,createdAt \
+                  2>/dev/null || echo '{}')
+                [ "$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr")" != "UNKNOWN" ] && break
+                sleep $(( attempt * 3 ))
+              done
+
+              sha=$(jq -r '.headRefOid // ""' <<<"$pr")
+              state=$(jq -r '.mergeStateStatus // "UNKNOWN"' <<<"$pr")
+              mergeable=$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr")
+              created=$(jq -r '.createdAt // ""' <<<"$pr")
+              branch=$(jq -r '.headRefName // "?"' <<<"$pr")
+              is_major=$(jq -r 'any(.labels[]?; .name == "update:major")' <<<"$pr")
+
+              if [ -z "$sha" ] || [ -z "$created" ]; then
+                skipped=$((skipped + 1))
+                rows="${rows}| \`$(label "$repo")#${num}\` | skipped | pr-unreadable |"$'\n'
+                continue
+              fi
+
+              created_ts=$(date -u -d "$created" +%s)
+              age=$(( now - created_ts ))
+
+              reason=""
+              # Majors never auto-merge. The label is added deterministically by
+              # renovate-presets.json, so this needs no version parsing.
+              [ "$is_major" = "true" ] && reason="major"
+              [ -z "$reason" ] && [ "$mergeable" != "MERGEABLE" ] && reason="not-mergeable"
+              # BLOCKED covers unresolved review threads and missing required
+              # checks; DIRTY is a conflict; BEHIND/DRAFT are Renovate's to fix.
+              case "$state" in
+                CLEAN|UNSTABLE) ;;
+                *) [ -z "$reason" ] && reason="state:${state}" ;;
+              esac
+              [ -z "$reason" ] && [ "$age" -lt "$min_age" ] \
+                && reason="age:$(( age / 3600 ))h<${MIN_AGE_HOURS}h"
+
+              # UNSTABLE is accepted only when the sole non-green signal is
+              # Renovate's own renovate/stability-days status. That status goes
+              # green only on a Renovate run, so gating on it would reintroduce
+              # the very dependency this workflow exists to remove — the commit
+              # age checked above is the independent soak. Any other failing or
+              # pending signal still blocks.
+              if [ -z "$reason" ]; then
+                bad=$(gh api "repos/${ORG}/${repo}/commits/${sha}/check-runs" --paginate \
+                  --jq '[.check_runs[]
+                         | select(.status != "completed"
+                                  or (.conclusion | IN("success","neutral","skipped") | not))
+                         | .name] | join(",")' 2>/dev/null || echo "API_ERROR")
+                [ "$bad" = "API_ERROR" ] && reason="checks-unreadable"
+                [ -z "$reason" ] && [ -n "$bad" ] && reason="checks:${bad}"
+              fi
+              if [ -z "$reason" ]; then
+                bad=$(gh api "repos/${ORG}/${repo}/commits/${sha}/status" \
+                  --jq '[.statuses[]
+                         | select(.context != "renovate/stability-days")
+                         | select(.state != "success")
+                         | .context] | join(",")' 2>/dev/null || echo "API_ERROR")
+                [ "$bad" = "API_ERROR" ] && reason="status-unreadable"
+                [ -z "$reason" ] && [ -n "$bad" ] && reason="status:${bad}"
+              fi
+
+              if [ -n "$reason" ]; then
+                skipped=$((skipped + 1))
+                rows="${rows}| \`$(label "$repo")#${num}\` | skipped | ${reason} |"$'\n'
+                # A PR this sweep will not merge, and that has outlived the
+                # policy, is a defect in the config above — not a backlog item.
+                # Counted only here: a PR merged on this run was never stuck.
+                if [ "$age" -gt "$stall_age" ]; then
+                  stalled=$((stalled + 1))
+                  stall_rows="${stall_rows}| \`$(label "$repo")#${num}\` | ${reason} | $(( age / 86400 ))d |"$'\n'
+                fi
+                continue
+              fi
+
+              if [ "$DRY_RUN" = "true" ]; then
+                rows="${rows}| \`$(label "$repo")#${num}\` | would-merge | ${branch} |"$'\n'
+                continue
+              fi
+
+              # --squash matches renovate-presets.json automergeStrategy. No
+              # --base flag: gh merges into the PR's own base, which is
+              # `develop` on git-flow repos and `main` on trunk repos. No
+              # --delete-branch either: delete_branch_on_merge is already set
+              # on these repos, and losing the race with it would be reported
+              # here as a merge failure that did not happen.
+              if gh pr merge "$num" --repo "${ORG}/${repo}" --squash; then
+                merged=$((merged + 1))
+                grep -qxF "$repo" public.txt || private_merged=$((private_merged + 1))
+                rows="${rows}| \`$(label "$repo")#${num}\` | merged | ${branch} |"$'\n'
+              else
+                failed=$((failed + 1))
+                rows="${rows}| \`$(label "$repo")#${num}\` | MERGE-FAILED | ${branch} |"$'\n'
+              fi
+            done <<< "$nums"
+          done < all.txt
+
+          [ "$DRY_RUN" = "true" ] && mode="dry-run" || mode="live"
+
+          {
+            echo "## Bot PR automerge sweep"
+            echo
+            echo "Mode: ${mode} | merged: ${merged} (of which private: ${private_merged}) | skipped: ${skipped} | merge failures: ${failed}"
+            echo
+            if [ -n "$rows" ]; then
+              echo "| PR | Outcome | Detail |"
+              echo "| --- | --- | --- |"
+              printf '%s' "$rows"
+            else
+              echo "No open ${BOT_AUTHOR} PRs found."
+            fi
+            if [ -n "$stall_rows" ]; then
+              echo
+              echo "### Stalled past ${STALL_DAYS}d — policy defect, fix the config"
+              echo
+              echo "| PR | Held by | Age |"
+              echo "| --- | --- | --- |"
+              printf '%s' "$stall_rows"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Fail on a merge that was attempted and rejected, or on a PR that has
+          # outlived the policy. Both mean the config no longer matches reality,
+          # and a green scheduled run would hide that.
+          [ "$failed" -eq 0 ] && [ "$stalled" -eq 0 ]
