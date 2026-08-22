@@ -176,6 +176,7 @@ jobs:
 
           merged=0; skipped=0; stalled=0; failed=0; examined=0
           rows=""; stall_rows=""
+          : > reasons.txt
 
           while read -r repo num; do
             examined=$(( examined + 1 ))
@@ -246,11 +247,22 @@ jobs:
             # the PR age checked above is the independent soak. Any other
             # failing or pending signal still blocks.
             if [ -z "$reason" ]; then
+              # Each blocking check is reported as name(verdict), never folded
+              # into a bare "failed". `cancelled` and `timed_out` mean the check
+              # NEVER CONCLUDED — a runner eviction, a superseded run, a job
+              # that hit its timeout — which is a different thing from a check
+              # that ran and said no. Both block here, deliberately: an
+              # unexamined check is not a passing one. But a chronic
+              # infrastructure timeout and a genuine test failure need
+              # different fixes, so the summary has to tell them apart.
+              # `neutral` and `skipped` count as satisfied, matching how GitHub
+              # itself treats them for required checks.
               bad=$(gh api "repos/${ORG}/${repo}/commits/${sha}/check-runs" --paginate \
                 --jq '[.check_runs[]
                        | select(.status != "completed"
                                 or (.conclusion | IN("success","neutral","skipped") | not))
-                       | .name] | join(",")' 2>/dev/null || echo "API_ERROR")
+                       | "\(.name)(\(if .status != "completed" then .status else .conclusion end))"]
+                      | join(",")' 2>/dev/null || echo "API_ERROR")
               [ "$bad" = "API_ERROR" ] && reason="checks-unreadable"
               [ -z "$reason" ] && [ -n "$bad" ] && reason="checks:${bad}"
             fi
@@ -266,6 +278,10 @@ jobs:
 
             if [ -n "$reason" ]; then
               skipped=$(( skipped + 1 ))
+              echo "skipped  ${repo}#${num}  ${reason}"
+              # Tallied so a reason holding several PRs can be surfaced once,
+              # loudly, at the end of the run.
+              echo "$reason" >> reasons.txt
               rows="${rows}| \`${repo}#${num}\` | skipped | ${reason} |"$'\n'
               # A PR this sweep will not merge, and that has outlived the
               # policy, is a defect in the config above — not a backlog item.
@@ -278,6 +294,7 @@ jobs:
             fi
 
             if [ "$DRY_RUN" = "true" ]; then
+              echo "would-merge  ${repo}#${num}  ${branch}"
               rows="${rows}| \`${repo}#${num}\` | would-merge | ${branch} |"$'\n'
               continue
             fi
@@ -291,14 +308,36 @@ jobs:
             # did not happen.
             if GH_TOKEN="$MERGE_TOKEN" gh pr merge "$num" --repo "${ORG}/${repo}" --squash; then
               merged=$(( merged + 1 ))
+              echo "merged  ${repo}#${num}  ${branch}"
               rows="${rows}| \`${repo}#${num}\` | merged | ${branch} |"$'\n'
             else
               failed=$(( failed + 1 ))
+              echo "::error::merge rejected for ${repo}#${num} (${branch})"
               rows="${rows}| \`${repo}#${num}\` | MERGE-FAILED | ${branch} |"$'\n'
             fi
           done < work.txt
 
           [ "$DRY_RUN" = "true" ] && mode="dry-run" || mode="live"
+
+          # A gate that holds the same PRs for the same reason on every run,
+          # and says nothing louder each time, is how a correct gate gets
+          # loosened by someone who cannot see why it was tight. A check that
+          # is broken on the BASE branch blocks every PR in that repo forever
+          # — the sweep is then not merely cautious there, it has zero
+          # throughput — and the hold reason is identical each time, so
+          # nothing distinguishes it from ordinary caution. Any reason holding
+          # more than one PR is called out once, as a warning annotation.
+          if [ -s reasons.txt ]; then
+            while read -r n why; do
+              [ "$n" -gt 1 ] && echo "::warning::${n} PRs are held on the same reason: ${why} — check whether this is broken on the base branch rather than in the PRs"
+            done < <(sort reasons.txt | uniq -c | sort -rn)
+          fi
+
+          # Repeated on stdout as well as in the summary. A step summary is
+          # readable in the web UI and essentially not readable from the API,
+          # so a run whose every decision lived only there could not be
+          # inspected by the next agent or by a script.
+          echo "mode=${mode} examined=${examined} merged=${merged} skipped=${skipped} failed=${failed} stalled=${stalled}"
 
           # "examined" is printed unconditionally so a quiet run carries a
           # number: a sweep that found nothing eligible and a sweep that
