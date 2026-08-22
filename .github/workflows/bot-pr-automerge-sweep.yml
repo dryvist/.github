@@ -60,18 +60,67 @@ jobs:
     # GITHUB_TOKEN is scoped to this repo, and a merge it performed would not
     # trigger the downstream release-please run on the target repo.
     environment: automation
+    env:
+      # Governance IaC inventory: the single source of truth for which repos
+      # the org manages. Job-level because the token scope and the read step
+      # both need it.
+      INVENTORY_REPO: tofu-github
+      INVENTORY_PATH: config/repos.yml
     steps:
-      - name: Mint org App token
-        id: token
+      # Token minting is deliberately two-phase. A single `owner:`-scoped mint
+      # would issue one token carrying every permission the App holds across
+      # every repo in the installation — far more than a squash merge needs,
+      # and flagged by zizmor's github-app audit. Instead: a read-only token
+      # scoped to the governance inventory repo, then a write token scoped to
+      # exactly the repos that inventory lists, carrying exactly two
+      # permissions. Both mints reuse the existing org release App rather than
+      # provisioning a second one; it is already installed org-wide. Swap the
+      # app-id/private-key pairs if a dedicated automation App is ever created.
+      - name: Mint inventory-read token
+        id: read_token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
-          # Reuses the existing org release App rather than provisioning a
-          # second one: it is already installed org-wide with the Contents +
-          # Pull requests write it needs. Swap both lines if a dedicated
-          # automation App is ever created.
           app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+          repositories: ${{ env.INVENTORY_REPO }}
+          permission-contents: read
+
+      - name: Read the governance inventory
+        id: inventory
+        env:
+          GH_TOKEN: ${{ steps.read_token.outputs.token }}
+          ORG: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # Single source of truth for which repos the org manages — the same
+          # inventory repo-conventions-sweep.yml reads, so this workflow never
+          # keeps a second copy of the repo list. A repo absent from it is
+          # already reported as UNREGISTERED by that sweep; it is not swept
+          # here, which is the correct blast radius for a workflow that merges.
+          gh api "repos/${ORG}/${INVENTORY_REPO}/contents/${INVENTORY_PATH}" \
+            --jq '.content' | base64 -d > inventory.yml
+          yq -r '.repos | keys | .[]' inventory.yml | sort -u > repos.txt
+          test -s repos.txt  # an empty inventory is a read failure, not "no repos"
+          {
+            echo "repos<<EOF"
+            cat repos.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Inventory lists $(wc -l < repos.txt) repos"
+
+      - name: Mint scoped merge token
+        id: token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          app-id: ${{ vars.GH_ACTION_RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.inventory.outputs.repos }}
+          # Exactly what a squash merge needs and nothing else: contents to
+          # write the merge commit, pull-requests to close the PR.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Merge eligible bot PRs
         env:
@@ -88,6 +137,7 @@ jobs:
           # item. The job fails so the failure notification surfaces it.
           STALL_DAYS: "7"
           BOT_AUTHOR: "app/renovate"
+          INVENTORY_REPOS: ${{ steps.inventory.outputs.repos }}
         run: |
           set -euo pipefail
 
@@ -95,11 +145,17 @@ jobs:
           min_age=$(( MIN_AGE_HOURS * 3600 ))
           stall_age=$(( STALL_DAYS * 86400 ))
 
-          gh repo list "$ORG" --no-archived --limit 300 \
-            --json name,visibility > repos.json
-          test -s repos.json  # an empty listing is an auth failure, not "no work"
-          jq -r '.[].name' repos.json | sort > all.txt
-          jq -r '.[] | select(.visibility == "PUBLIC") | .name' repos.json | sort > public.txt
+          # The repos this token is scoped to, from the inventory read above.
+          printf '%s\n' "$INVENTORY_REPOS" | sed '/^$/d' | sort -u > all.txt
+          test -s all.txt
+
+          # Visibility drives redaction only (see header). A repo whose
+          # visibility cannot be read is treated as private, never named.
+          : > public.txt
+          while read -r r; do
+            vis=$(gh api "repos/${ORG}/${r}" --jq '.visibility' 2>/dev/null || echo private)
+            [ "$vis" = "public" ] && echo "$r" >> public.txt
+          done < all.txt
 
           merged=0; skipped=0; stalled=0; failed=0; private_merged=0
           rows=""; stall_rows=""
