@@ -93,6 +93,14 @@ jobs:
           jq -r '[.[].repository.name] | unique | .[]' found.json > repos.txt
 
           echo "Discovered ${total} open ${BOT_AUTHOR} PRs across $(wc -l < repos.txt) repos"
+          # Written here, not in the merge step, so a run that discovers
+          # nothing still produces a summary with a number in it. A silent
+          # run and a run that examined nothing are otherwise identical.
+          {
+            echo "## Bot PR automerge sweep"
+            echo
+            echo "Discovered ${total} open \`${BOT_AUTHOR}\` PRs across $(wc -l < repos.txt) repos."
+          } >> "$GITHUB_STEP_SUMMARY"
           {
             echo "count=${total}"
             echo "repos<<EOF"
@@ -134,10 +142,10 @@ jobs:
           # workflow cannot start merging PRs before a dispatched dry run has
           # been read. Unsetting it disarms the sweep without reverting code.
           SWEEP_LIVE: ${{ vars.BOT_SWEEP_LIVE }}
-          # Minimum age of the PR, mirroring the 3-day stabilization in
-          # renovate-presets.json. Enforced here from the PR timestamp so it
-          # holds even when Renovate never refreshes its own
-          # renovate/stability-days status.
+          # Minimum age of the PR HEAD COMMIT, mirroring the 3-day
+          # stabilization in renovate-presets.json. Enforced here from the
+          # commit timestamp so it holds even when Renovate never refreshes
+          # its own renovate/stability-days status.
           MIN_AGE_HOURS: "72"
           # A bot PR still open past this is a policy defect, not a backlog
           # item. The job fails so the failure notification surfaces it.
@@ -182,7 +190,7 @@ jobs:
             pr='{}'
             for attempt in 1 2 3 4; do
               pr=$(gh pr view "$num" --repo "${ORG}/${repo}" \
-                --json number,labels,mergeable,mergeStateStatus,headRefName,headRefOid,createdAt \
+                --json number,labels,mergeable,mergeStateStatus,headRefName,headRefOid \
                 2>/dev/null || echo '{}')
               [ "$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr")" != "UNKNOWN" ] && break
               sleep $(( attempt * 3 ))
@@ -191,17 +199,31 @@ jobs:
             sha=$(jq -r '.headRefOid // ""' <<<"$pr")
             state=$(jq -r '.mergeStateStatus // "UNKNOWN"' <<<"$pr")
             mergeable=$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr")
-            created=$(jq -r '.createdAt // ""' <<<"$pr")
             branch=$(jq -r '.headRefName // "?"' <<<"$pr")
             is_major=$(jq -r 'any(.labels[]?; .name == "update:major")' <<<"$pr")
 
-            if [ -z "$sha" ] || [ -z "$created" ]; then
+            if [ -z "$sha" ]; then
               skipped=$(( skipped + 1 ))
               rows="${rows}| \`${repo}#${num}\` | skipped | pr-unreadable |"$'\n'
               continue
             fi
 
-            age=$(( now - $(date -u -d "$created" +%s) ))
+            # Anchor the soak on the HEAD COMMIT, never on the PR's createdAt.
+            # Renovate updates a PR in place: same PR, new commit carrying a
+            # newer digest or lock state, createdAt unchanged. Since this sweep
+            # deliberately exempts renovate/stability-days, commit age is the
+            # ONLY soak it enforces — reading createdAt would let a five-day-old
+            # PR carrying a one-hour-old dependency through, which is exactly
+            # the 3-day stabilization the presets promise.
+            committed=$(gh api "repos/${ORG}/${repo}/commits/${sha}" \
+              --jq '.commit.committer.date' 2>/dev/null || echo "")
+            if [ -z "$committed" ]; then
+              skipped=$(( skipped + 1 ))
+              rows="${rows}| \`${repo}#${num}\` | skipped | head-commit-unreadable |"$'\n'
+              continue
+            fi
+
+            age=$(( now - $(date -u -d "$committed" +%s) ))
             reason=""
 
             # Majors never auto-merge. The label is added deterministically by
@@ -282,7 +304,6 @@ jobs:
           # number: a sweep that found nothing eligible and a sweep that
           # examined nothing at all read identically otherwise.
           {
-            echo "## Bot PR automerge sweep"
             echo
             echo "Mode: ${mode} | PRs examined: ${examined} | merged: ${merged} | skipped: ${skipped} | merge failures: ${failed}"
             echo
