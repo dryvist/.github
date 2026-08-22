@@ -51,7 +51,7 @@
     "vulnerabilityFixStrategy": "highest"
   },
   "lockFileMaintenance": {
-    "description": "Bulk lock regeneration delegates version choice to the package manager, so Renovate cannot apply minimumReleaseAge and a stale renovate/stability-days status is expected rather than actionable. Disable that unsupported check only for lock maintenance. Renovate creates/updates lock-maintenance branches only in the Monday 05:00-08:59 or Thursday 13:00-16:59 America/New_York source windows, then directly automerges only during the Thursday 09:00-23:59 or Sunday 17:00-23:59 windows. Each window still begins more than 72 actual hours after the latest possible source-window update, including the spring DST transition, so the soak is unchanged. The windows were widened from four hours to full evenings because Renovate itself performs the merge (platformAutomerge stays false) and a hosted run has to land INSIDE the window: a four-hour target was missed often enough that lock PRs routinely sat open for days and were merged by hand. The windows are now best-effort - the bot-pr-automerge-sweep.yml backstop in this repo enforces the same 72-hour age gate on its own hourly schedule and is what actually guarantees the merge. updateNotScheduled:false prevents an intervening head refresh. With platformAutomerge:false, Renovate honors this automergeSchedule and still requires green CI.",
+    "description": "Bulk lock regeneration delegates version choice to the package manager, so Renovate cannot apply minimumReleaseAge and a stale renovate/stability-days status is expected rather than actionable. Disable that unsupported check only for lock maintenance. Renovate creates/updates lock-maintenance branches only in the Monday 05:00-08:59 or Thursday 13:00-16:59 America/New_York source windows, then directly automerges only during the Thursday 09:00-23:59 or Sunday 18:00-23:59 windows. Each window still begins more than 72 actual hours after the latest possible source-window update, including the spring DST transition, so the soak is unchanged. The Sunday window keeps its original 18:00 start for exactly that reason: the Thursday source window can end at 16:59 EST, and on the spring-forward Sunday 17:00 EDT is only 71h01m of real time later, which would shorten the soak. Thursday's window has no such constraint and starts at 09:00. The windows were widened from four hours to full evenings because Renovate itself performs the merge (platformAutomerge stays false) and a hosted run has to land INSIDE the window: a four-hour target was missed often enough that lock PRs routinely sat open for days and were merged by hand. The windows are now best-effort - the bot-pr-automerge-sweep.yml backstop in this repo enforces the same 72-hour age gate on its own hourly schedule and is what actually guarantees the merge. updateNotScheduled:false prevents an intervening head refresh. With platformAutomerge:false, Renovate honors this automergeSchedule and still requires green CI.",
     "enabled": true,
     "schedule": [
       "* 5-8 * * 1",
@@ -62,7 +62,7 @@
     "updateNotScheduled": false,
     "automergeSchedule": [
       "* 9-23 * * 4",
-      "* 17-23 * * 0"
+      "* 18-23 * * 0"
     ]
   },
   "nix": {

@@ -127,8 +127,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           MERGE_TOKEN: ${{ steps.token.outputs.token }}
           ORG: ${{ github.repository_owner }}
-          # Scheduled runs are always live; a manual run honours its input.
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_DRY_RUN: ${{ inputs.dry_run }}
+          # Kill switch and arming gate in one. A scheduled run is DRY until
+          # this repo variable is set to the literal "true", so merging this
+          # workflow cannot start merging PRs before a dispatched dry run has
+          # been read. Unsetting it disarms the sweep without reverting code.
+          SWEEP_LIVE: ${{ vars.BOT_SWEEP_LIVE }}
           # Minimum age of the PR, mirroring the 3-day stabilization in
           # renovate-presets.json. Enforced here from the PR timestamp so it
           # holds even when Renovate never refreshes its own
@@ -144,10 +149,22 @@ jobs:
           min_age=$(( MIN_AGE_HOURS * 3600 ))
           stall_age=$(( STALL_DAYS * 86400 ))
 
-          gh search prs --owner "$ORG" --author "$BOT_AUTHOR" --state open \
-            --limit "$SEARCH_LIMIT" --json repository,number \
-            --jq '.[] | "\(.repository.name) \(.number)"' | sort -u > work.txt
-          test -s work.txt
+          # A manual run honours its input. A scheduled run is dry unless armed.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            DRY_RUN="$DISPATCH_DRY_RUN"
+          elif [ "$SWEEP_LIVE" = "true" ]; then
+            DRY_RUN=false
+          else
+            DRY_RUN=true
+          fi
+
+          # Reuse the discovery output rather than searching again. A second
+          # search could return a different set than the one the merge token
+          # was scoped to — a PR appearing between the two would be attempted
+          # with a token that cannot reach its repo and reported as a merge
+          # failure, and a PR merged between them would empty the list and
+          # fail a non-empty assertion for no reason.
+          jq -r '.[] | "\(.repository.name) \(.number)"' found.json | sort -u > work.txt
 
           merged=0; skipped=0; stalled=0; failed=0; examined=0
           rows=""; stall_rows=""
