@@ -1,3 +1,5 @@
+# Repo-specific override: profile/README.md (~16KB org profile) exceeds the
+# 12KB org error default. Basename match also covers root README.md (~8KB).
 extended:
   limit: 16384
   files:

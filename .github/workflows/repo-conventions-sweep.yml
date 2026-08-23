@@ -118,6 +118,20 @@ jobs:
             reg=yes
             grep -qxF "$repo" registered.txt || { reg=no; note_gap UNREGISTERED; }
 
+            # .file-size.yml content lint: repos should only commit overrides,
+            # never restate org defaults or carry an empty placeholder file.
+            if case " $tree " in *" .file-size.yml "*) true;; *) false;; esac; then
+              fs_cfg=$(gh api "repos/${ORG}/${repo}/contents/.file-size.yml" \
+                --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+              if printf '%s' "$fs_cfg" | grep -Eq '^[[:space:]]*defaults:'; then
+                note_gap file-size-defaults
+              fi
+              fs_body=$(printf '%s' "$fs_cfg" | grep -Ev '^[[:space:]]*(#|$)')
+              if ! printf '%s' "$fs_body" | grep -Eq '^[[:space:]]*(extended|exempt|scan):'; then
+                note_gap file-size-redundant
+              fi
+            fi
+
             if [ -z "$gaps" ]; then
               ok=$((ok + 1))
             else

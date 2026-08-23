@@ -36,10 +36,20 @@ Python is not used for new dryvist work.
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
 | Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
 
-The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo at
-the root. Repos copy them at scaffold time; periodic sync is handled by
-Renovate's custom manager (or manual update for now — see the biome
-`customManagers` entry in `renovate-presets.json`).
+The canonical `biome.jsonc`, `.markdownlint-cli2.yaml`, and
+`configs/file-size-defaults.yml` live in this repo. Repos copy biome/markdownlint
+at scaffold time; periodic sync is handled by Renovate's custom manager (or
+manual update for now — see the biome `customManagers` entry in
+`renovate-presets.json`). File-size defaults are **not** copied — CI and
+pre-commit load them from this repo via the shared checker script.
+
+### File-size gate (org defaults + per-repo overrides)
+
+Org-wide byte limits live in `configs/file-size-defaults.yml` and are enforced
+by `scripts/check-file-sizes.sh` (called from `_file-size.yml`). **Do not add
+a repo-root `.file-size.yml` unless the repo needs `extended`, `exempt`, or
+`scan` overrides.** Never commit a `defaults:` block — that is global policy,
+not a per-repo knob. Split large files rather than widening org defaults.
 
 ## Release-please (org-native)
 
@@ -108,7 +118,9 @@ Work through this in order when creating a dryvist repo.
    `import` block — a plain create 422s.
 4. **Add the baseline files:** `LICENSE`, `AGENTS.md`, and a Nix dev-shell entry
    (`flake.nix` or a committed `.envrc`).
-5. **Record any legitimate opt-out.** If a convention genuinely does not apply
+5. **Do not scaffold `.file-size.yml`.** Only add one when the repo genuinely
+   needs `extended`, `exempt`, or `scan` overrides (see File-size gate above).
+6. **Record any legitimate opt-out.** If a convention genuinely does not apply
    (a template that should not release, a state-only repo), add the repo to
    `conventions_exempt:` in that same `config/repos.yml`, listing the specific
    check names to skip and why. Opt-outs are per check, never per repo — an

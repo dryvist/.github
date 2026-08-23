@@ -1,0 +1,12 @@
+# Org-wide file-size gate defaults (single source of truth).
+# Consumed by scripts/check-file-sizes.sh via _file-size.yml.
+# Per-repo overrides live in repo-root .file-size.yml (extended/exempt/scan only).
+defaults:
+  warn: 6144 # 6KB — recommended maximum
+  error: 12288 # 12KB — hard limit
+scan:
+  - .md
+  - .nix
+  - .tf
+exempt:
+  - CHANGELOG
