@@ -40,6 +40,13 @@ name: _release-please
 on:
   workflow_call:
     inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          self-hosted label to opt the calling repo into on-prem runners.
+        type: string
+        required: false
+        default: ubuntu-latest
       auto-merge:
         description: >-
           Enable eager auto-merge of the release PR once checks pass. Set to
@@ -82,7 +89,7 @@ permissions: {}
 
 jobs:
   release-please:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 10
     outputs:
       release_created: ${{ steps.release.outputs.releases_created }}
@@ -160,7 +167,7 @@ jobs:
   back-merge:
     needs: release-please
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 10
     # pull-requests: write is required — the back-merge now opens a PR and enables
     # auto-merge (develop's ruleset rejects a direct merge), not a direct merge.
