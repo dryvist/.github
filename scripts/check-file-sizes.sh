@@ -106,6 +106,7 @@ while IFS= read -r -d '' f; do
 done < <(
   find . -type f \( "${name_args[@]}" \) \
     -not -path "./.git/*" \
+    -not -path "./.worktrees/*" \
     -not -path "./node_modules/*" \
     -not -path "./result/*" \
     -not -name "*.lock" \
