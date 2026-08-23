@@ -1,17 +1,8 @@
 # Reusable: File Size Check
-# Checks file sizes with sensible defaults. Override per-repo via .file-size.yml.
-# yq is pre-installed on ubuntu-latest runners.
 #
-# Built-in defaults (no .file-size.yml needed):
-#   warn: 6144 (6KB), error: 12288 (12KB)
-#   scan: [.md, .nix, .tf]
-#   exempt: [CHANGELOG]
-#
-# .file-size.yml overrides (all fields optional):
-#   defaults: { warn: 6144, error: 12288 }  # bytes
-#   scan: [.md, .nix]                        # replaces default scan list
-#   extended: { limit: 32768, files: [AGENTS] }  # additive higher limit
-#   exempt: [RUNBOOK]                        # additive to default [CHANGELOG]
+# Org defaults live in configs/file-size-defaults.yml (single source of truth).
+# Per-repo overrides: repo-root .file-size.yml with extended/exempt/scan only.
+# Never commit defaults: in a repo — that block is org-wide policy.
 #
 # Token partition: when a .token-limits.yaml is present, Markdown (.md) docs are
 # token-gated (governed by _token-limits.yml) and dropped from this byte gate's
@@ -46,84 +37,21 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared file-size checker from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: main
+          path: .gh-shared
+          sparse-checkout: |
+            scripts/check-file-sizes.sh
+            configs/file-size-defaults.yml
+          sparse-checkout-cone-mode: false
 
       - name: Check file sizes
-        run: |
-          # Built-in defaults
-          WARN=6144
-          ERR=12288
-          EXT_LIMIT=0
-          DEFAULT_SCAN=".md .nix .tf"
-          EXTENDED=" "
-          EXEMPT=" CHANGELOG "
-
-          # Override from .file-size.yml if present
-          if [ -f ".file-size.yml" ]; then
-            WARN=$(yq ".defaults.warn // $WARN" .file-size.yml)
-            ERR=$(yq ".defaults.error // $ERR" .file-size.yml)
-            EXT_LIMIT=$(yq '.extended.limit // 0' .file-size.yml)
-
-            # scan: replaces defaults if specified
-            cfg_scan=$(yq '.scan // [] | .[]' .file-size.yml | tr '\n' ' ')
-            [ -n "$cfg_scan" ] && DEFAULT_SCAN="$cfg_scan"
-
-            # extended.files: additive to defaults
-            cfg_ext=$(yq '.extended.files // [] | .[]' .file-size.yml | tr '\n' ' ')
-            [ -n "$cfg_ext" ] && EXTENDED="$EXTENDED$cfg_ext "
-
-            # exempt: additive to defaults (CHANGELOG always exempt)
-            cfg_exempt=$(yq '.exempt // [] | .[]' .file-size.yml | tr '\n' ' ')
-            [ -n "$cfg_exempt" ] && EXEMPT="$EXEMPT$cfg_exempt "
-          fi
-
-          # When a token gate is active (.token-limits.yaml present), Markdown
-          # docs are governed by _token-limits.yml. Drop .md from this byte
-          # gate's scan so each file is checked by exactly one gate.
-          if [ -f ".token-limits.yaml" ]; then
-            new_scan=""
-            for ext in $DEFAULT_SCAN; do
-              [ "$ext" = ".md" ] && continue
-              new_scan="$new_scan $ext"
-            done
-            DEFAULT_SCAN="$new_scan"
-          fi
-
-          # Build find name arguments from scan extensions
-          name_args=(); first=true
-          for ext in $DEFAULT_SCAN; do
-            $first && first=false || name_args+=(-o)
-            name_args+=(-name "*${ext}")
-          done
-
-          errors=0 warnings=0
-          while IFS= read -r -d '' f; do
-            base="${f##*/}"; base="${base%.*}"
-            size=$(stat -c%s "$f")
-
-            # Skip exempt files
-            if [[ "$EXEMPT" == *" $base "* ]]; then continue; fi
-
-            # Determine limit: extended or standard
-            if [[ "$EXT_LIMIT" -gt 0 ]] && [[ "$EXTENDED" == *" $base "* ]]; then
-              limit=$EXT_LIMIT
-              warn_threshold=$limit
-            else
-              limit=$ERR
-              warn_threshold=$WARN
-            fi
-
-            if [ "$size" -gt "$limit" ]; then
-              echo "::error file=$f::$f is $((size/1024))KB (exceeds $((limit/1024))KB limit)"
-              errors=$((errors + 1))
-            elif [ "$size" -gt "$warn_threshold" ]; then
-              echo "::warning file=$f::$f is $((size/1024))KB (exceeds $((warn_threshold/1024))KB recommended)"
-              warnings=$((warnings + 1))
-            fi
-          done < <(find . -type f \( "${name_args[@]}" \) \
-            -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./result/*" \
-            -not -name "*.lock" -not -name "package-lock.json" -not -name "pnpm-lock.yaml" -print0)
-
-          echo "File size check: ${errors} error(s), ${warnings} warning(s)"
-          [ "$errors" -gt 0 ] && exit 1
-          exit 0
+        env:
+          FILE_SIZE_DEFAULTS_CONFIG: .gh-shared/configs/file-size-defaults.yml
+        run: bash .gh-shared/scripts/check-file-sizes.sh
