@@ -8,11 +8,15 @@ name: _osv-scan
 on:
   workflow_call:
     inputs:
+      # INERT — accepted but never forwarded. Both jobs below delegate to
+      # Google's reusable workflows, which expose no runner input, so there is
+      # nowhere to send the label: scans run on Google's own default no matter
+      # what a caller passes. Kept so existing callers keep instantiating.
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
-          RunsOn label (see runs-on.com/configuration/job-labels) to opt
-          the calling repo into self-hosted runners.
+          Ignored. Retained for caller compatibility only — this workflow
+          delegates to Google's reusable workflows, which accept no runner
+          input, so the scan's runner cannot be selected here.
         type: string
         required: false
         default: ubuntu-latest
