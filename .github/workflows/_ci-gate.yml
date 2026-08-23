@@ -141,7 +141,8 @@ on:
           Enable `Nix Build` (gated on `nix` filter). Builds the flake on
           macos-latest via `_nix-build.yml` (hardcoded macOS runner — that
           workflow has no `runner_label` input, so the fork-PR guard below
-          does not apply to it).
+          does not apply to it). On pull_request events the build runs only
+          when the PR targets `main` — see the job's own comment.
         type: boolean
         default: false
       nix_skip_deps_only:
@@ -343,10 +344,19 @@ jobs:
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
   # the fork-PR guard doesn't apply here.
+  #
+  # PR-base gate: on pull_request events the full build runs only when the PR
+  # targets `main`. This is the scope policy's end-to-end sweep placed at the
+  # one point it is guaranteed: a trunk repo's every PR targets main
+  # (unaffected), while a git-flow repo's develop PRs take the fast path
+  # (`nix-validate`) and the develop->main promotion PR runs the full build.
+  # The base-ref check lives in this `if:` rather than an input default
+  # because workflow_call input defaults must be static — they cannot read
+  # `github.base_ref`. Non-PR events (push, schedule, dispatch) keep building.
   nix-build:
     name: Nix Build
     needs: changes
-    if: ${{ inputs.nix_build && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
+    if: ${{ inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
