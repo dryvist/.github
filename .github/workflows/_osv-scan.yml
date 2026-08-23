@@ -1,29 +1,27 @@
 # Multi-ecosystem lockfile vulnerability scanning via Google OSV.
 #
-# Thin wrapper around Google's reusable workflows. Pull requests run Google's
-# differential PR scanner and fail only on vulnerabilities introduced by the PR;
-# push, schedule, and manual callers run a full scan and fail on any finding.
+# Invokes the pinned osv-scanner release binary directly, so the whole scan
+# runs on the runner the caller selects via `runner_label`. Pull requests run
+# a differential scan and fail only on vulnerabilities introduced by the PR —
+# the same occurrence-count gate osv-reporter applies to its --old/--new
+# diff; push, schedule, and manual callers run a full scan and fail on any
+# finding.
 name: _osv-scan
 
 on:
   workflow_call:
     inputs:
-      # INERT — accepted but never forwarded. Both jobs below delegate to
-      # Google's reusable workflows, which expose no runner input, so there is
-      # nowhere to send the label: scans run on Google's own default no matter
-      # what a caller passes. Kept so existing callers keep instantiating.
       runner_label:
         description: >-
-          Ignored. Retained for caller compatibility only — this workflow
-          delegates to Google's reusable workflows, which accept no runner
-          input, so the scan's runner cannot be selected here.
+          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          self-hosted label to opt the calling repo into on-prem runners.
         type: string
         required: false
         default: ubuntu-latest
       scan_args:
         description: >-
-          Extra OSV Scanner arguments. Do not set --format or --output; Google's
-          reusable workflows manage those internally.
+          Extra OSV Scanner arguments, one per line. Do not set --format or
+          --output; this workflow manages them internally.
         type: string
         required: false
         default: |-
@@ -32,8 +30,9 @@ on:
       config_file:
         description: >-
           Optional repo-local OSV config path, for example osv-scanner.toml.
-          When set, the wrapper passes --config=<path> so the config applies to
-          every scanned lockfile.
+          When set, the scanner runs with --config=<path> so the config
+          applies to every scanned lockfile. On pull requests the path must
+          exist on the base branch too — differential scans scan both sides.
         type: string
         required: false
         default: ""
@@ -42,30 +41,132 @@ concurrency:
   group: osv-scan-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The scan only reads the tree. Nothing uploads to code scanning — the
+# previous delegate ran with upload-sarif hardcoded false, and callers grant
+# contents: read only.
 permissions:
-  actions: read
   contents: read
-  security-events: write
 
 jobs:
-  pr-scan:
+  osv-scan:
     name: OSV Scanner
-    if: github.event_name == 'pull_request'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-    with:
-      fail-on-vuln: true
-      upload-sarif: false
-      scan-args: |-
-        ${{ inputs.config_file != '' && format('--config={0}', inputs.config_file) || '' }}
-        ${{ inputs.scan_args }}
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history so the differential scan can check out the PR base;
+          # no credentials needed — both checkouts below are local refs.
+          fetch-depth: 0
+          persist-credentials: false
 
-  full-scan:
-    name: OSV Scanner
-    if: github.event_name != 'pull_request'
-    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
-    with:
-      fail-on-vuln: true
-      upload-sarif: false
-      scan-args: |-
-        ${{ inputs.config_file != '' && format('--config={0}', inputs.config_file) || '' }}
-        ${{ inputs.scan_args }}
+      - name: Install osv-scanner
+        run: |
+          set -euo pipefail
+          # renovate: datasource=github-releases depName=google/osv-scanner
+          OSV_SCANNER_VERSION="v2.3.8"
+          case "$(uname -s)" in
+            Linux) os=linux ;;
+            Darwin) os=darwin ;;
+            *) echo "::error::unsupported OS: $(uname -s)"; exit 1 ;;
+          esac
+          case "$(uname -m)" in
+            x86_64 | amd64) arch=amd64 ;;
+            aarch64 | arm64) arch=arm64 ;;
+            *) echo "::error::unsupported arch: $(uname -m)"; exit 1 ;;
+          esac
+          asset="osv-scanner_${os}_${arch}"
+          base="https://github.com/google/osv-scanner/releases/download/${OSV_SCANNER_VERSION}"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/${asset}" "${base}/${asset}"
+          curl -fsSL --retry 3 -o "${RUNNER_TEMP}/osv-scanner_SHA256SUMS" \
+            "${base}/osv-scanner_SHA256SUMS"
+          cd "${RUNNER_TEMP}"
+          if command -v sha256sum >/dev/null; then
+            grep " ${asset}\$" osv-scanner_SHA256SUMS | sha256sum -c -
+          else
+            grep " ${asset}\$" osv-scanner_SHA256SUMS | shasum -a 256 -c -
+          fi
+          chmod +x "${asset}"
+          echo "OSV_BIN=${RUNNER_TEMP}/${asset}" >> "${GITHUB_ENV}"
+
+      - name: Scan
+        env:
+          SCAN_ARGS: ${{ inputs.scan_args }}
+          CONFIG_FILE: ${{ inputs.config_file }}
+        run: |
+          set -euo pipefail
+
+          args=()
+          if [ -n "${CONFIG_FILE}" ]; then
+            args+=("--config=${CONFIG_FILE}")
+          fi
+          while IFS= read -r line; do
+            if [ -n "${line}" ]; then args+=("${line}"); fi
+          done <<< "${SCAN_ARGS}"
+
+          # osv-scanner exit codes: 0 = no findings, 1 = findings,
+          # 128 = no packages found (pass — nothing to scan), else error.
+          # A crashed scan fails the job here; the previous delegate let it
+          # pass green behind continue-on-error.
+          scan() { # $1 = JSON output path, or "" for table output to the log
+            SCAN_RC=0
+            if [ -n "$1" ]; then
+              "${OSV_BIN}" --format=json --output="$1" "${args[@]}" || SCAN_RC=$?
+            else
+              "${OSV_BIN}" "${args[@]}" || SCAN_RC=$?
+            fi
+            case "${SCAN_RC}" in
+              0 | 1) ;;
+              128) echo "No packages found — treating as an empty scan." ;;
+              *)
+                echo "::error::osv-scanner failed with exit code ${SCAN_RC}"
+                exit "${SCAN_RC}"
+                ;;
+            esac
+          }
+
+          if [ "${GITHUB_EVENT_NAME}" != "pull_request" ]; then
+            # Full scan: any finding fails.
+            scan ""
+            if [ "${SCAN_RC}" = "1" ]; then
+              echo "::error::Vulnerabilities found — see the table above."
+              exit 1
+            fi
+            exit 0
+          fi
+
+          # Differential scan: scan the PR base and head, and fail only when
+          # a vulnerability ID occurs MORE times in the head than in the base
+          # — the occurrence-count gate osv-reporter applies to its
+          # --old/--new diff. Counting by ID rather than by source path keeps
+          # a moved-but-unchanged vulnerable lockfile from reading as a new
+          # finding.
+          git checkout -q "${GITHUB_BASE_REF}"
+          scan "${RUNNER_TEMP}/old.json"
+          git checkout -qf "${GITHUB_SHA}"
+          scan "${RUNNER_TEMP}/new.json"
+          for f in old new; do
+            if [ ! -s "${RUNNER_TEMP}/${f}.json" ]; then
+              echo '{"results":[]}' > "${RUNNER_TEMP}/${f}.json"
+            fi
+          done
+
+          new_ids=$(jq -r --slurpfile old "${RUNNER_TEMP}/old.json" '
+            def occ: [.results[]?.packages[]?.vulnerabilities[]?.id]
+              | reduce .[] as $id ({}; .[$id] += 1);
+            (($old[0] // {}) | occ) as $o
+            | occ as $n
+            | $n | to_entries[] | select(.value > ($o[.key] // 0)) | .key
+          ' "${RUNNER_TEMP}/new.json")
+
+          if [ -n "${new_ids}" ]; then
+            jq -r --arg ids "${new_ids}" '
+              ($ids | split("\n")) as $new
+              | .results[]? as $r | $r.packages[]? as $p | $p.vulnerabilities[]?
+              | select(.id as $i | $new | index($i))
+              | "::error::New vulnerability \(.id) in " +
+                "\($p.package.name)@\($p.package.version) (\($r.source.path))"
+            ' "${RUNNER_TEMP}/new.json" | sort -u
+            exit 1
+          fi
+          echo "No new vulnerabilities introduced by this PR."
