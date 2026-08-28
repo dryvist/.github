@@ -1,4 +1,4 @@
-# Deterministic backstop that merges eligible Renovate PRs org-wide.
+# Deterministic backstop that merges eligible bot dependency PRs org-wide.
 #
 # WHY THIS EXISTS. Renovate is configured to merge its own PRs
 # (renovate-presets.json: automerge:true, platformAutomerge:false), but in
@@ -66,7 +66,13 @@ jobs:
     timeout-minutes: 20
     environment: automation
     env:
-      BOT_AUTHOR: "app/renovate"
+      # Space-separated. Every author here produces MECHANICAL dependency PRs
+      # whose eligibility is fully decidable from API fields — never an author
+      # whose PRs carry human intent. app/dryvist-github-actions is the
+      # flake.lock updater: it normally merges its own PRs within the same
+      # minute, but when that self-merge fails nothing else was watching, so
+      # those PRs sat open indefinitely while this sweep could not see them.
+      BOT_AUTHORS: "app/renovate app/dryvist-github-actions"
       # Cap on the discovery search. Hitting it is reported, never silently
       # truncated.
       SEARCH_LIMIT: "200"
@@ -79,27 +85,41 @@ jobs:
         run: |
           set -euo pipefail
 
-          # No `|| true` here: a search that ERRORS must fail the job. An empty
-          # result and a broken query look identical in the output but not in
-          # the exit code, and a sweep that silently examines nothing is
-          # indistinguishable from a sweep that found nothing to do.
-          gh search prs --owner "$ORG" --author "$BOT_AUTHOR" --state open \
-            --limit "$SEARCH_LIMIT" --json repository,number > found.json
+          # No `|| true` anywhere here: a search that ERRORS must fail the job.
+          # An empty result and a broken query look identical in the output but
+          # not in the exit code, and a sweep that silently examines nothing is
+          # indistinguishable from a sweep that found nothing to do. The loop
+          # runs under `set -e`, so one failed author search fails the run
+          # rather than silently narrowing the sweep to the authors that did
+          # answer.
+          : > parts.json
+          for author in $BOT_AUTHORS; do
+            gh search prs --owner "$ORG" --author "$author" --state open \
+              --limit "$SEARCH_LIMIT" --json repository,number > part.json
+            # The cap is PER SEARCH, so it has to be checked per author: a
+            # combined total would hide one author truncating while another
+            # returned few.
+            n=$(jq 'length' part.json)
+            if [ "$n" -ge "$SEARCH_LIMIT" ]; then
+              echo "::warning::discovery for ${author} hit the ${SEARCH_LIMIT}-result cap; some bot PRs were not examined"
+            fi
+            cat part.json >> parts.json
+          done
+          # -s collects each author's array, `add` concatenates them. A PR has
+          # exactly one author, so this cannot duplicate an entry.
+          jq -s 'add' parts.json > found.json
 
           total=$(jq 'length' found.json)
-          if [ "$total" -ge "$SEARCH_LIMIT" ]; then
-            echo "::warning::discovery hit the ${SEARCH_LIMIT}-result cap; some bot PRs were not examined"
-          fi
           jq -r '[.[].repository.name] | unique | .[]' found.json > repos.txt
 
-          echo "Discovered ${total} open ${BOT_AUTHOR} PRs across $(wc -l < repos.txt) repos"
+          echo "Discovered ${total} open bot PRs (${BOT_AUTHORS}) across $(wc -l < repos.txt) repos"
           # Written here, not in the merge step, so a run that discovers
           # nothing still produces a summary with a number in it. A silent
           # run and a run that examined nothing are otherwise identical.
           {
             echo "## Bot PR automerge sweep"
             echo
-            echo "Discovered ${total} open \`${BOT_AUTHOR}\` PRs across $(wc -l < repos.txt) repos."
+            echo "Discovered ${total} open bot PRs across $(wc -l < repos.txt) repos (authors: \`${BOT_AUTHORS}\`)."
           } >> "$GITHUB_STEP_SUMMARY"
           {
             echo "count=${total}"
@@ -142,11 +162,21 @@ jobs:
           # workflow cannot start merging PRs before a dispatched dry run has
           # been read. Unsetting it disarms the sweep without reverting code.
           SWEEP_LIVE: ${{ vars.BOT_SWEEP_LIVE }}
-          # Minimum age of the PR HEAD COMMIT, mirroring the 3-day
-          # stabilization in renovate-presets.json. Enforced here from the
-          # commit timestamp so it holds even when Renovate never refreshes
-          # its own renovate/stability-days status.
-          MIN_AGE_HOURS: "72"
+          # Minimum age of the PR HEAD COMMIT. Enforced here from the commit
+          # timestamp so it holds even when Renovate never refreshes its own
+          # renovate/stability-days status.
+          #
+          # DELIBERATELY SHORTER than the 3-day minimumReleaseAge in
+          # renovate-presets.json, and the two are not meant to match. That
+          # preset gates when a PR may be CREATED; this gates when an already
+          # open PR may MERGE, and PR creation runs on two fixed weekly
+          # windows, so a bump has normally aged well past its own release
+          # before it is even proposed. Holding an open PR a further 72h past
+          # that added visible backlog without adding soak: the batch lands in
+          # one evening and then sits, so the org is never at zero open bot
+          # PRs. 48h keeps a real independent soak while letting a batch clear
+          # inside the same week it opened.
+          MIN_AGE_HOURS: "48"
           # A bot PR still open past this is a policy defect, not a backlog
           # item. The job fails so the failure notification surfaces it.
           STALL_DAYS: "7"
