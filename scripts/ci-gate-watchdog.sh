@@ -40,6 +40,12 @@ queued_siblings() {
 limit_seconds=$(awk "BEGIN{printf \"%d\", $QUEUE_TIMEOUT_MINUTES * 60}")
 poll_interval=15
 
+# One interval before the first check. This job no longer has `needs:`, so it
+# starts alongside its siblings rather than after them — an immediate check can
+# race ahead of the API listing them and read "nothing queued" from a run whose
+# jobs simply are not visible yet, exiting before it has watched anything.
+sleep "$poll_interval"
+
 # $SECONDS is a bash builtin tracking elapsed script time — no subshell per poll.
 # Exit the instant nothing is queued; otherwise keep watching until the deadline.
 while :; do

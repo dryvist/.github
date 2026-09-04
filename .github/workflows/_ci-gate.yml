@@ -106,6 +106,10 @@
 # longer repeat the guard on every job. Pattern reference:
 # runs-on.com/configuration/job-labels (Fork PRs).
 #
+# One deliberate exception: `watchdog` hardcodes `ubuntu-latest`. That is this
+# guard's own fallback, so the invariant still holds — see that job's comment
+# for why the watchdog must stay off the caller's runner pool entirely.
+#
 # Callers may include additional filters; this workflow ignores them. To add
 # a new conditional check, add: input toggle, conditional job, and entry in
 # the gate's `needs:` and `allowed-skips`.
@@ -457,8 +461,26 @@ jobs:
   # ============================================================================
   watchdog:
     name: Queue Watchdog
-    needs: changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    # No `needs:` and a hardcoded GitHub-hosted runner, both deliberate: a
+    # watchdog must not sit inside the failure domain it watches.
+    #
+    # It used to carry `needs: changes` and `runs-on: <runner_label>`. `changes`
+    # is the fan-out root every other job depends on, so when it was the job
+    # that never got placed, the watchdog was SKIPPED and never fired — the one
+    # job it could not rescue was the only one whose stall blocks the gate. The
+    # run then sat queued until GitHub's hard 24h ceiling cancelled it, and
+    # `Merge Gate` failed. (`timeout-minutes` does not help: it bounds execution
+    # time, not queue time.) Sharing `runner_label` had the same shape — the
+    # watchdog would queue behind the saturation it exists to break.
+    #
+    # `ubuntu-latest` is hardcoded rather than resolved through the fork-PR
+    # guard above: it is that guard's own fallback, so this is strictly stronger
+    # than the invariant and never places fork code on a self-hosted runner.
+    #
+    # The watchdog consumes no output from `changes`; the `needs:` was
+    # gratuitous. The script polls and exits within seconds once every sibling
+    # is scheduled, so running it unconditionally is near-free.
+    runs-on: ubuntu-latest
     permissions:
       actions: write   # required to cancel sibling jobs
       contents: read   # required for actions/checkout sparse-checkout
