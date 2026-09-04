@@ -1,0 +1,41 @@
+# Required-workflow gate for repositories that expose generated public docs.
+# The org ruleset targets the public docs repository. Control-plane PRs pass
+# without publisher identity; any projected output requires the dedicated App
+# and an immutable private-source revision in the PR body.
+name: Docs Publisher Provenance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: docs-publisher-provenance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provenance:
+    name: Generated source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DOCS_PUBLISHER_LOGIN: ${{ vars.DOCS_PUBLISHER_LOGIN }}
+      DOCS_PUBLISHER_SOURCE_REPOSITORY: ${{ vars.DOCS_PUBLISHER_SOURCE_REPOSITORY }}
+    steps:
+      - name: Checkout policy implementation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: ${{ github.repository_owner }}/.github
+          ref: main
+          sparse-checkout: .github/scripts/docs-publisher-provenance.js
+          sparse-checkout-cone-mode: false
+          path: .org-policy
+
+      - name: Verify generated-docs provenance
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const run = require('./.org-policy/.github/scripts/docs-publisher-provenance.js');
+            await run({ github, context, core });
