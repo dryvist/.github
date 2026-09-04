@@ -1,0 +1,104 @@
+# Reusable: publish a draft GitHub release so `release: published` FIRES
+#
+# WHY THIS EXISTS — the default GITHUB_TOKEN cannot start another workflow.
+#
+# A release that is created as a draft (so build assets can be attached before
+# anyone sees it) has to be flipped to published by a later step. Doing that
+# flip with `${{ github.token }}` publishes the release but emits NO
+# `release: published` event, because GitHub deliberately does not let a run's
+# own token trigger further runs. Every `on: release` workflow in the repo then
+# silently never runs, with a green publish step and no error anywhere.
+#
+# Measured on dryvist/nix-ai: releases from v5.0.0 (2026-09-02) through v5.3.2
+# (2026-09-04) each published cleanly from the workflow and dispatched nothing
+# to downstream consumers. The one release either side of that window that DID
+# dispatch, v4.76.0, was the one whose draft a GitHub App token published — its
+# release carries no build asset because the workflow step never published it.
+# Consumers pinning that repo went three releases without a lock update and
+# nothing reported a failure.
+#
+# Publishing with a GitHub App installation token instead makes the event fire
+# normally. Callers keep uploading assets with GITHUB_TOKEN — an upload emits no
+# event and needs no App — and call this workflow for the publish alone.
+#
+# Caller shape:
+#   jobs:
+#     build-and-upload:
+#       outputs:
+#         tag: ${{ steps.upload.outputs.tag }}
+#       ...                      # attach assets to the draft with github.token
+#     publish:
+#       needs: build-and-upload
+#       uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@main
+#       with:
+#         tag: ${{ needs.build-and-upload.outputs.tag }}
+#       secrets:
+#         GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
+name: _publish-draft-release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: >-
+          Tag of the draft release to publish. The caller resolves this — it
+          knows which draft its own run created.
+        type: string
+        required: true
+      latest:
+        description: >-
+          Mark the published release as the repository's latest. Leave false
+          for a back-published or out-of-order release.
+        type: boolean
+        required: false
+        default: false
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest; pass a
+          self-hosted label to match the rest of the calling workflow.
+        type: string
+        required: false
+        default: ubuntu-latest
+    secrets:
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  publish:
+    name: Publish draft release
+    runs-on: ${{ inputs.runner_label }}
+    environment: automation
+    timeout-minutes: 5
+    # No job-level permissions: the publish uses the minted App token, and
+    # GITHUB_TOKEN is exactly the credential that must NOT do it.
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          LATEST: ${{ inputs.latest }}
+        run: |
+          set -euo pipefail
+          # Publishing an already-published release is a no-op that still exits
+          # 0, which would report success while emitting no event. Fail instead:
+          # a caller pointing at the wrong tag is a bug worth seeing.
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+            echo "release $TAG is not a draft — nothing to publish, and no event will fire" >&2
+            exit 1
+          fi
+          if [ "$LATEST" = "true" ]; then
+            gh release edit "$TAG" --draft=false --latest
+          else
+            gh release edit "$TAG" --draft=false
+          fi
