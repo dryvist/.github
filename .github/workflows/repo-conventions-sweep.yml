@@ -34,18 +34,31 @@ jobs:
     name: Sweep
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # GH_PAT_WORKFLOW_DISPATCH is scoped to this environment. It is needed only
-    # to COUNT private repos; no private repo name leaves this job.
+    # This environment gates the App credentials used to mint the listing
+    # token. It is needed only to COUNT private repos; no private repo name
+    # leaves this job.
     environment: automation
     permissions:
       contents: read
       issues: write
     steps:
+      # Owner-wide by construction: the only use is counting the org's private
+      # repos, so no `repositories:` list can express it. The grant is narrowed
+      # the other way instead — `permission-metadata: read` and nothing else,
+      # so the token cannot write anywhere. zizmor's github-app audit keys on
+      # the absence of `repositories:` and cannot see that ceiling.
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
+          permission-metadata: read
       - name: Sweep public repos for conventions and registration drift
         env:
           # Broad listing token (private count only). Kept separate from
           # GH_TOKEN below so the issue write uses the repo-scoped token.
-          LIST_TOKEN: ${{ secrets.GH_PAT_WORKFLOW_DISPATCH }}
+          LIST_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_TOKEN: ${{ github.token }}
           ORG: ${{ github.repository_owner }}
           # Governance IaC inventory: single source of truth for which repos
