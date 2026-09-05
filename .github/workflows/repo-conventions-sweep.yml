@@ -8,9 +8,9 @@
 #
 # PUBLIC REPOS ONLY, deliberately. This repo is public, so its issue bodies,
 # job summaries, and Actions logs are world-readable — naming a private repo
-# here would publish the org's private topology. Private repos are reported as
-# an aggregate COUNT with no names; run the same checks locally for per-repo
-# private detail (see AGENTS.md > New repo checklist).
+# here would publish the org's private topology. Private repos are not read at
+# all, so this job needs no cross-repo credential; run the same checks locally
+# for private detail (see AGENTS.md > New repo checklist).
 #
 # Registration is read from the governance IaC's own inventory at run time, so
 # this workflow never keeps a second copy of the repo list.
@@ -34,31 +34,12 @@ jobs:
     name: Sweep
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # This environment gates the App credentials used to mint the listing
-    # token. It is needed only to COUNT private repos; no private repo name
-    # leaves this job.
-    environment: automation
     permissions:
       contents: read
       issues: write
     steps:
-      # Owner-wide by construction: the only use is counting the org's private
-      # repos, so no `repositories:` list can express it. The grant is narrowed
-      # the other way instead — `permission-metadata: read` and nothing else,
-      # so the token cannot write anywhere. zizmor's github-app audit keys on
-      # the absence of `repositories:` and cannot see that ceiling.
-      - id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app]
-          permission-metadata: read
       - name: Sweep public repos for conventions and registration drift
         env:
-          # Broad listing token (private count only). Kept separate from
-          # GH_TOKEN below so the issue write uses the repo-scoped token.
-          LIST_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_TOKEN: ${{ github.token }}
           ORG: ${{ github.repository_owner }}
           # Governance IaC inventory: single source of truth for which repos
@@ -153,16 +134,12 @@ jobs:
             fi
           done < public.txt
 
-          private_count=$(GH_TOKEN="$LIST_TOKEN" gh repo list "$ORG" \
-            --visibility private --no-archived --limit 200 --json name --jq 'length')
-
           # --- report -------------------------------------------------------
           {
             echo "## Repo conventions drift"
             echo
             echo "Public repos scanned: $((ok + drift)) | compliant: ${ok} | drifted: ${drift}"
             echo "Repos with a recorded per-check opt-out: ${exempted}"
-            echo "Private repos: ${private_count} (not named here — this repo is public)"
             echo
             if [ "$drift" -gt 0 ]; then
               echo "| Repo | Registered | Gaps |"
