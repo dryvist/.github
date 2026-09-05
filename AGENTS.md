@@ -1,3 +1,7 @@
+---
+skill-groups: [core, git]
+---
+
 # dryvist org standards (AI assistant policy)
 
 Canonical AI-assistant guidance for the **dryvist** GitHub org. Applies to
