@@ -59,6 +59,11 @@ jobs:
   dispatch:
     name: Notify ${{ matrix.repo }}
     strategy:
+      # Each consumer is an independent notification, so one unreachable target
+      # must not cancel delivery to the rest. It also keeps every target's
+      # verdict in the run: under fail-fast the siblings are cancelled at the
+      # same step, which looks identical to them failing for the same reason.
+      fail-fast: false
       matrix:
         repo: ${{ fromJSON(vars.DISPATCH_CONSUMERS) }}
     runs-on: ubuntu-latest
