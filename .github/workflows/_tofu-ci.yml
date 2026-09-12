@@ -1,0 +1,93 @@
+# Reusable: OpenTofu CI
+#
+# fmt -check, init -backend=false, validate, and tflint over each working
+# directory. This is the job every tofu-* repo used to carry inline; it is
+# wired into `_ci-gate.yml` as the `tofu_ci` toggle (gated on the
+# `terraform` filter) and can also be called directly.
+#
+# tflint config: the caller's `.tflint.hcl` when present, otherwise this
+# repo's `precommit/configs/tflint.hcl`. `tofu test` is not run here — the
+# one repo that needs it keeps that job local.
+name: _tofu-ci
+
+on:
+  workflow_call:
+    inputs:
+      working_directories:
+        description: JSON array of directories to init/validate/lint (fmt runs once, recursively, from the root)
+        type: string
+        required: false
+        default: '["."]'
+      tflint:
+        description: Run tflint after validate
+        type: boolean
+        required: false
+        default: true
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          RunsOn label (see runs-on.com/configuration/job-labels) to opt
+          the calling repo into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions: {}
+
+jobs:
+  tofu:
+    name: OpenTofu
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared tflint config from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: precommit/configs/tflint.hcl
+          sparse-checkout-cone-mode: false
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+
+      - name: OpenTofu Format
+        run: tofu fmt -check -recursive
+
+      - name: OpenTofu Init + Validate
+        env:
+          DIRS: ${{ inputs.working_directories }}
+        run: |
+          for dir in $(jq -r '.[]' <<<"$DIRS"); do
+            echo "::group::$dir"
+            (cd "$dir" && tofu init -backend=false -input=false && tofu validate -no-color)
+            echo "::endgroup::"
+          done
+
+      - name: Setup tflint
+        if: ${{ inputs.tflint }}
+        uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6
+        with:
+          # Pinned: an unpinned tflint release once turned every PR red with
+          # no change to any repo.
+          # renovate: datasource=github-releases depName=terraform-linters/tflint
+          tflint_version: v0.63.1
+
+      - name: tflint
+        if: ${{ inputs.tflint }}
+        env:
+          DIRS: ${{ inputs.working_directories }}
+        run: |
+          config=.tflint.hcl
+          [ -f "$config" ] || config="$GITHUB_WORKSPACE/.gh-shared/precommit/configs/tflint.hcl"
+          for dir in $(jq -r '.[]' <<<"$DIRS"); do
+            echo "::group::$dir"
+            (cd "$dir" && tflint --config "$config" --init && tflint --config "$config" -f compact)
+            echo "::endgroup::"
+          done

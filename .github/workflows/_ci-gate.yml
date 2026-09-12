@@ -33,13 +33,11 @@
 #                          # entire run at workflow-graph validation
 #                          # (startup_failure, 0s, no jobs, UI-only error).
 #       uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
-#       with:
-#         markdown_lint: true
-#         file_size: true
-#         filters: |
-#           markdown:
-#             - '**.md'
-#             - '.markdownlint*'
+#
+# That is the whole caller for a markdown-only repo: `markdown_lint` and
+# `file_size` default on, and `filters` defaults to the `markdown` block
+# below. Pass `with:` only for what differs (a `nix`/`python`/`ansible`/
+# `terraform` filter, a toggle, a runner label).
 #
 # Scope policy (canonical): a check runs in proportion to the change that
 # triggered it; the one guaranteed end-to-end sweep is promotion to a
@@ -54,6 +52,7 @@
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #   python         -> gates `python_security`
 #   ansible        -> gates `ansible_ci`
+#   terraform      -> gates `tofu_ci`
 #   extra          -> gates nothing here; exported as the `extra` output so a
 #                     caller can gate ONE repo-local job without a second
 #                     `changes` job of its own
@@ -81,14 +80,12 @@
 # child's child) declaring an elevated workflow-level `permissions:` block
 # poisons the whole graph the same way.
 #
-# OSV scanning is deliberately NOT a toggle in this gate: `_osv-scan.yml`
-# wraps Google's reusable workflows, which declare workflow-level
-# `security-events: write` unconditionally (github/codeql-action#2117) —
-# nesting that under this gate would force EVERY caller to carry that grant
-# just to keep graph validation alive, even with the toggle off. Repos that
-# want OSV keep the proven standalone pattern instead: a small osv-scan.yml
-# caller whose own job grants {actions: read, contents: read,
-# security-events: write} directly (see terraform-runs-on / nix-ai).
+# `osv_scan` (default false) runs `_osv-scan.yml` on every pull_request when
+# enabled — not filter-gated, same reasoning as `dependency_review`. It fits
+# under this gate because `_osv-scan.yml` runs the scanner binary itself with
+# `contents: read` only (no code-scanning upload), so it stays inside the
+# PERMISSIONS INVARIANT. Scheduled full scans are not part of the gate; a repo
+# that wants them keeps its own scheduled caller.
 #
 # `nix_skip_deps_only` (default false, opt-in): when enabled, `nix-validate`
 # and `nix-build` are skipped for dependency-only bot PRs — the authors live
@@ -123,7 +120,11 @@ on:
           YAML body for dorny/paths-filter. Use the convention names listed
           in this file's header to enable the matching conditional check.
         type: string
-        required: true
+        required: false
+        default: |
+          markdown:
+            - '**.md'
+            - '.markdownlint*'
 
       nix_validate:
         description: Enable `Nix Validate` (gated on `nix` filter)
@@ -158,11 +159,11 @@ on:
       markdown_lint:
         description: Enable `Markdown Lint` (gated on `markdown` filter)
         type: boolean
-        default: false
+        default: true
       file_size:
         description: Enable `File Size` (gated on `nix` OR `markdown` filter)
         type: boolean
-        default: false
+        default: true
       token_limits:
         description: >-
           Enable `Token Limits` (gated on `markdown` filter). Budgets AI-read
@@ -177,7 +178,7 @@ on:
       python_security_dirs:
         description: Space-separated dirs passed to _python-security.yml
         type: string
-        default: ''
+        default: '.'
       python_ci:
         description: Enable `Python CI` lint/format/type/test gate (gated on `python` filter)
         type: boolean
@@ -196,6 +197,23 @@ on:
           in their `filters` input, same convention as `python`. Called with
           `emit_gate: false` — this gate is the sole "Merge Gate" aggregator,
           so `_ansible-ci.yml`'s own nested gate job is suppressed.
+        type: boolean
+        default: false
+      tofu_ci:
+        description: >-
+          Enable `OpenTofu CI` (fmt/init/validate/tflint via `_tofu-ci.yml`,
+          gated on `terraform` filter). Callers define a `terraform:` key in
+          `filters` (e.g. `**.tf`, `**.tofu`, `.tflint.hcl`, `**/*.tfvars`).
+        type: boolean
+        default: false
+      tofu_working_directories:
+        description: JSON array of directories `_tofu-ci.yml` validates
+        type: string
+        default: '["."]'
+      osv_scan:
+        description: >-
+          Enable `OSV Scanner` on every pull_request (differential scan; not
+          filter-gated). Replaces a standalone osv-scan.yml caller.
         type: boolean
         default: false
       dependency_review:
@@ -302,6 +320,7 @@ jobs:
       markdown: ${{ steps.filter.outputs.markdown }}
       python: ${{ steps.filter.outputs.python }}
       ansible: ${{ steps.filter.outputs.ansible }}
+      terraform: ${{ steps.filter.outputs.terraform }}
       extra: ${{ steps.filter.outputs.extra }}
       is-deps-only: ${{ steps.detect-deps.outputs.is-deps-only }}
       is-flake-lock-change: ${{ steps.lockfilter.outputs.flake-lock }}
@@ -447,7 +466,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/dependency-review-action@v5
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
 
@@ -461,8 +480,6 @@ jobs:
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
-  # NOTE: no osv-scan job here, on purpose — see the header ("OSV scanning is
-  # deliberately NOT a toggle in this gate").
   ansible-ci:
     name: Ansible CI
     needs: changes
@@ -470,6 +487,24 @@ jobs:
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  tofu-ci:
+    name: OpenTofu CI
+    needs: changes
+    if: ${{ inputs.tofu_ci && needs.changes.outputs.terraform == 'true' }}
+    uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
+    with:
+      working_directories: ${{ inputs.tofu_working_directories }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  # osv-scan is NOT filter-gated — a vulnerability scan must run on every
+  # pull_request regardless of which paths a diff touches.
+  osv-scan:
+    name: OSV Scanner
+    if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
+    with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   # ============================================================================
@@ -511,7 +546,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -537,7 +572,7 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, dependency-review, zizmor, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
 
       # Retrospective run report (job durations + a runner-capacity queue-delay

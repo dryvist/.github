@@ -34,7 +34,7 @@ Python is not used for new dryvist work.
 | Runtime | Node.js (current LTS) | `actions/setup-node@v4` in CI |
 | Package manager | npm | Universal in CI; lockfile committed |
 | Test runner | Vitest | Native ESM/TS; no `ts-jest` dance |
-| Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 100` for JS/TS/JSON/CSS |
+| Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 120` for JS/TS/JSON/CSS |
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
@@ -130,9 +130,12 @@ Work through this in order when creating a dryvist repo.
    check names to skip and why. Opt-outs are per check, never per repo — an
    exemption from releasing does not excuse a missing LICENSE.
 
-Two checks watch this. `conventions-check.yml` here runs on PRs org-wide via a
-required-workflow ruleset and annotates missing conventions (warn-only unless
-the repo sets `CONVENTIONS_STRICT=true`). `repo-conventions-sweep.yml` runs
+Two checks watch this. `conventions-check.yml` here is written to run on PRs
+org-wide via a required-workflow ruleset and annotate missing conventions
+(warn-only unless the repo sets `CONVENTIONS_STRICT=true`) — but no dryvist
+ruleset carries a `workflows` rule today, so it (like `markdownlint.yml` and
+`docs-publisher-provenance.yml`) only runs where a repo calls it. Wiring the
+ruleset is a `tofu-github` change. `repo-conventions-sweep.yml` runs
 weekly, covers repos with no PR traffic, additionally reports repos missing
 from `config/repos.yml`, and upserts one tracking issue in this repo.
 
@@ -185,8 +188,9 @@ Future vendor packs (if any) get their own template repo — never `.github`.
 
 For every change in dryvist:
 
-1. Refresh the repo and create a worktree before making changes (per the
-   user's global workflow guidance).
+1. Refresh the repo and create a worktree before making changes: the root
+   checkout stays on `main`; every change lives in
+   `git worktree add "$PWD/.worktrees/<slug>" -b <type>/<slug>`.
 2. Edits go through PRs — no direct commits to `main`.
 3. CI must be green before merge. Use `gh pr checks --watch` to confirm.
 4. Don't tag versions yourself; the user controls release timing.

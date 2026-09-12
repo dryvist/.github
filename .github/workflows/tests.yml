@@ -1,0 +1,23 @@
+# Runs the unit tests for the scripts this repo ships. Repo-local; the
+# ubuntu-latest image's Node has `node --test` built in, so no setup step.
+name: Tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/scripts/**'
+      - 'tests/**'
+      - '.github/workflows/tests.yml'
+
+permissions: {}
+
+jobs:
+  node:
+    name: node --test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: node --test tests/

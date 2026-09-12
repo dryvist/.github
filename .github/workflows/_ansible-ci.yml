@@ -14,14 +14,15 @@
 #
 # Repo-specific data-contract tests (inventory schema/load, template render,
 # bespoke syntax) and self-hosted e2e are NOT centralized — they live in the
-# caller, which sets emit_gate:false and runs its own "Merge Gate" aggregating
-# this workflow's result plus the local jobs.
+# caller, which runs its own "Merge Gate" aggregating this workflow's result
+# plus the local jobs (emit_gate defaults to false for exactly that reason).
 #
-# Thin caller (no extra local jobs):
+# Thin caller (no extra local jobs) — pass emit_gate: true to get the gate:
 #   jobs:
 #     ci:
 #       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
+#       with: { emit_gate: true }
 # Scope policy (canonical): a check runs in proportion to the change that
 # triggered it; the one guaranteed end-to-end sweep is promotion to a
 # git-flow repo's production branch. Narrow at the consumer, never in a
@@ -73,8 +74,10 @@ on:
         description: >-
           Emit the required "Merge Gate". Set false when the CALLER runs its own
           "Merge Gate" aggregating repo-local jobs (avoids a duplicate check).
+          Default false: every caller so far runs its own gate (or is called
+          from `_ci-gate.yml`, which is the gate).
         type: boolean
-        default: true
+        default: false
       runner_label:
         description: >-
           Runner label for the quick jobs (changes, ansible-lint, gate). These

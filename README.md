@@ -65,6 +65,26 @@ printf '%s\n' '{ "$schema": "https://docs.renovatebot.com/renovate-schema.json",
 gh api repos/dryvist/.github/contents/configs/gitignore -H "Accept: application/vnd.github.raw" >> .gitignore
 ```
 
+Then add the CI gate — for a markdown-only repo this is the entire caller:
+
+```yaml
+# .github/workflows/ci-gate.yml
+name: CI Gate
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  gate:
+    permissions: { contents: read, pull-requests: read, actions: write }
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+```
+
+`markdown_lint` and `file_size` are on by default and `filters` defaults to
+the markdown block; pass `with:` only for a `nix`/`python`/`ansible`/
+`terraform` filter, a toggle (`nix_validate`, `python_ci`, `tofu_ci`,
+`osv_scan`, …), or a `runner_label`. The header of `_ci-gate.yml` lists
+every input.
+
 If the repo is a Cribl pack, scaffold from
 [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
 instead — the template already includes the canonical configs.
@@ -91,8 +111,8 @@ jobs:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
 
-The reusable workflow blocks automated major bumps and eager-auto-merges the
-release PR. Pass `with: { auto-merge: false }` to opt a repo out of auto-merge.
+The reusable workflow eager-auto-merges every release PR (patch, minor, or
+major). Pass `with: { auto-merge: false }` to opt a repo out of auto-merge.
 
 Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
@@ -109,11 +129,11 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
    and install on the **dryvist** org with access to "All repositories".
 4. Back in the App settings: copy the App ID; generate + download a private
    key `.pem` (cannot be re-downloaded).
-5. Set the dryvist org secrets:
+5. Set the dryvist org variable and secret the workflow reads:
 
    ```sh
-   gh secret set GH_APP_ID --org dryvist --visibility all
-   gh secret set GH_APP_PRIVATE_KEY --org dryvist --visibility all < /path/to/private-key.pem
+   gh variable set GH_ACTION_RELEASE_PLEASE_APP_ID --org dryvist --visibility all
+   gh secret set GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY --org dryvist --visibility all < /path/to/private-key.pem
    ```
 
    Or via UI at <https://github.com/organizations/dryvist/settings/secrets/actions>.

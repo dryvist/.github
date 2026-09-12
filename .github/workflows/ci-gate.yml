@@ -1,20 +1,8 @@
 # CI Gate — thin wrapper over our own org reusable, dogfooded on the hub
-# itself. Same shape as every other dryvist consumer's caller, stripped to
-# the minimum since this repo has no python/nix/ansible surface to gate:
-#
-#   markdown_lint, file_size, token_limits -> the org gate's own reusables.
-#   dependency_review, zizmor              -> ride their default-true.
-#
-# `nix` filter exists only so `file_size` also fires on flake.nix/flake.lock
-# edits (there's no `nix_validate`/`nix_build` toggle here — this repo has no
-# flake outputs worth checking beyond the flake-parts modules it exports).
-#
-# KNOWN OVERLAP: `markdown_lint: true` below duplicates `markdownlint.yml`
-# (job `Lint`) in this same repo, which is an org-wide Required Workflow
-# (injected into every dryvist/JacobPEvans repo's PRs via
-# dryvist/terraform-github's github_organization_ruleset) already enforcing
-# the identical canonical config. Left as-is intentionally — retiring the
-# duplicate is a follow-up once this gate has proven itself, not this PR.
+# itself. `markdown_lint`, `file_size`, `dependency_review` and `zizmor` ride
+# their defaults; `nix_validate` is opted in because this repo ships Nix
+# modules to consumer repos, and the `nix` filter also makes `file_size`
+# fire on flake edits.
 name: CI Gate
 
 on:
@@ -43,12 +31,6 @@ jobs:
       actions: write
     uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
     with:
-      markdown_lint: true
-      file_size: true
-      token_limits: true
-      # This repo ships Nix modules to consumer repos but never ran its own
-      # Nix jobs: the `nix` filter below existed while nix_validate defaulted
-      # to false, so every .nix change here merged unvalidated.
       nix_validate: true
       filters: |
         markdown:
