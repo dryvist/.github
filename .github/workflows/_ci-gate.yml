@@ -50,6 +50,7 @@
 #
 #   nix            -> gates `nix_validate` and `nix_build`
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
+#                     (`file_size` also fires on `nix` and `terraform`)
 #   python         -> gates `python_security`
 #   ansible        -> gates `ansible_ci`
 #   terraform      -> gates `tofu_ci`
@@ -161,7 +162,7 @@ on:
         type: boolean
         default: true
       file_size:
-        description: Enable `File Size` (gated on `nix` OR `markdown` filter)
+        description: Enable `File Size` (gated on `nix`, `markdown`, or `terraform` filter — the org byte limits scan .md, .nix and .tf)
         type: boolean
         default: true
       token_limits:
@@ -411,7 +412,7 @@ jobs:
   file-size:
     name: File Size
     needs: changes
-    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true') }}
+    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
