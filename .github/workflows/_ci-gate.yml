@@ -250,9 +250,9 @@ on:
       policy_gate:
         description: >-
           Enable Policy Gate (advisory rubric review, never in gate.needs).
-          The sticky-comment step needs pull-requests: write; a caller that
-          opts in must grant that in its OWN top-level permissions, since
-          this reusable's pull-requests: read stays unchanged.
+          The sticky comment step requires pull-requests: write on the
+          calling workflow; without it the job reports failure and posts
+          nothing.
         type: boolean
         default: false
       policy_gate_block:

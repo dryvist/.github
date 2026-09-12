@@ -6,13 +6,8 @@
 # (policy_gate_block false); wired into _ci-gate.yml needs-free (never in
 # gate.needs), same shape as _agent-pr-body.yml.
 #
-# PERMISSIONS: the called workflow's sticky-comment step needs
-# pull-requests: write. This file's own permissions stay at contents: read
-# (the PERMISSIONS INVARIANT in _ci-gate.yml is unchanged), so that step is
-# only writable when the caller's OWN top-level workflow also grants
-# pull-requests: write. Without it, the comment step 403s and this job shows
-# failed — harmless, since it is never in gate.needs — while the router-
-# scored verdict itself still ran.
+# The sticky comment step requires pull-requests: write on the calling
+# workflow; without it the job reports failure and posts nothing.
 name: _policy-gate
 
 on:
