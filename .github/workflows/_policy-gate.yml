@@ -1,0 +1,73 @@
+# Reusable: Policy Gate wrapper
+#
+# Thin pass-through to dryvist/ai-workflows/.github/workflows/policy-gate.yml
+# @main, so a dryvist/.github consumer opts in via one _ci-gate.yml input
+# instead of wiring the external reusable directly. Advisory by default
+# (policy_gate_block false); wired into _ci-gate.yml needs-free (never in
+# gate.needs), same shape as _agent-pr-body.yml.
+#
+# PERMISSIONS: the called workflow's sticky-comment step needs
+# pull-requests: write. This file's own permissions stay at contents: read
+# (the PERMISSIONS INVARIANT in _ci-gate.yml is unchanged), so that step is
+# only writable when the caller's OWN top-level workflow also grants
+# pull-requests: write. Without it, the comment step 403s and this job shows
+# failed — harmless, since it is never in gate.needs — while the router-
+# scored verdict itself still ran.
+name: _policy-gate
+
+on:
+  workflow_call:
+    inputs:
+      policy_gate_block:
+        description: Fail Policy Gate instead of only warning. Keep false during rollout.
+        type: boolean
+        default: false
+      runner_label:
+        description: Runner label. Must be a runner that can reach the model router.
+        type: string
+        default: self-hosted
+      model:
+        description: Router role alias to call.
+        type: string
+        default: cheap
+      max_diff_kb:
+        description: Truncate the pull request diff at this many KiB.
+        type: number
+        default: 150
+      max_tokens:
+        description: Completion token ceiling for the rubric call.
+        type: number
+        default: 1500
+      scripts_ref:
+        description: Commit or ref of dryvist/ai-workflows to take the scripts from.
+        type: string
+        default: ""
+    secrets:
+      LLM_ROUTER_BASE_URL:
+        description: The router's OpenAI-compatible base URL, ending in /v1.
+        required: true
+      LLM_ROUTER_API_KEY:
+        description: Scoped router virtual key (never the router master key).
+        required: true
+      NTFY_BASE_URL:
+        description: Base URL of the ntfy hub for the override audit line. Optional.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Policy Gate
+    uses: dryvist/ai-workflows/.github/workflows/policy-gate.yml@main
+    with:
+      runner_label: ${{ inputs.runner_label }}
+      scripts_ref: ${{ inputs.scripts_ref }}
+      model: ${{ inputs.model }}
+      max_diff_kb: ${{ inputs.max_diff_kb }}
+      max_tokens: ${{ inputs.max_tokens }}
+      blocking: ${{ inputs.policy_gate_block }}
+    secrets:
+      LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+      LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+      NTFY_BASE_URL: ${{ secrets.NTFY_BASE_URL }}

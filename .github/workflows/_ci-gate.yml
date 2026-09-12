@@ -247,6 +247,19 @@ on:
         type: boolean
         default: false
 
+      policy_gate:
+        description: >-
+          Enable Policy Gate (advisory rubric review, never in gate.needs).
+          The sticky-comment step needs pull-requests: write; a caller that
+          opts in must grant that in its OWN top-level permissions, since
+          this reusable's pull-requests: read stays unchanged.
+        type: boolean
+        default: false
+      policy_gate_block:
+        description: Fail Policy Gate instead of only warning
+        type: boolean
+        default: false
+
       zizmor:
         description: >-
           Enable `Workflow Security (zizmor)`. Runs on every `pull_request`
@@ -320,6 +333,17 @@ on:
       is-flake-lock-change:
         description: Whether the change touched flake.lock
         value: ${{ jobs.changes.outputs.is-flake-lock-change }}
+
+    secrets:
+      LLM_ROUTER_BASE_URL:
+        description: Router base URL for Policy Gate. Required only when policy_gate is true.
+        required: false
+      LLM_ROUTER_API_KEY:
+        description: Scoped router virtual key for Policy Gate. Required only when policy_gate is true.
+        required: false
+      NTFY_BASE_URL:
+        description: Optional ntfy hub URL for Policy Gate's override audit line.
+        required: false
 
 permissions:
   contents: read
@@ -508,6 +532,20 @@ jobs:
     with:
       block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  # Deliberately NOT in `gate.needs` — advisory rubric review, warns only
+  # (see _policy-gate.yml); not gated on `changes` (no path filter applies).
+  policy-gate:
+    name: Policy Gate
+    if: ${{ inputs.policy_gate && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_policy-gate.yml@main
+    with:
+      policy_gate_block: ${{ inputs.policy_gate_block }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    secrets:
+      LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+      LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+      NTFY_BASE_URL: ${{ secrets.NTFY_BASE_URL }}
 
   ansible-ci:
     name: Ansible CI
