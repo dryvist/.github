@@ -6,7 +6,8 @@
 #
 #   changes      -> dorny/paths-filter on ONE standardized filter (incl. *.j2)
 #   ansible-lint -> ansible/ansible-lint
-#   molecule     -> matrix from the caller's `molecule_scenarios`, optional
+#   molecule     -> matrix from the caller's `molecule_scenarios`, narrowed on
+#                   a pull request by `molecule_scenario_filters`, optional
 #                   Doppler secrets via dopplerhq/secrets-fetch-action
 #   token-limits -> _token-limits.yml, so a repo's .token-limits.yaml is
 #                   enforced; a no-op where that file is absent
@@ -52,6 +53,25 @@ on:
         description: JSON array of molecule scenario names to run as a matrix.
         type: string
         default: '["default"]'
+      molecule_scenario_filters:
+        description: >-
+          Optional YAML map of molecule scenario name -> paths, in
+          dorny/paths-filter syntax. When set, a pull request runs only the
+          scenarios whose paths changed instead of the whole
+          `molecule_scenarios` matrix; a push to the default branch always runs
+          the full matrix. Unset (the default) keeps the previous behaviour.
+        type: string
+        default: ""
+      full_matrix_base:
+        description: >-
+          Branch whose incoming pull requests always run the FULL molecule
+          matrix, regardless of `molecule_scenario_filters`. The scope policy
+          above names promotion into a git-flow repo's production branch as the
+          one guaranteed end-to-end sweep, and in a repo whose CI fires only on
+          `pull_request` that promotion PR is the only place the sweep can
+          happen.
+        type: string
+        default: main
       molecule_requirements:
         description: >-
           Pip requirements file with the molecule job's dependencies (each repo
@@ -109,6 +129,15 @@ on:
       molecule:
         description: Whether molecule-relevant files changed (the standardized filter).
         value: ${{ jobs.changes.outputs.molecule }}
+      molecule_scenarios:
+        description: >-
+          JSON array of the scenarios a pull request touched, or an empty
+          string meaning "run every scenario". A caller that owns molecule
+          locally (`molecule: false`) reads this to narrow its own matrix, so
+          every repo shares ONE change-detection definition. Empty is the only
+          widening signal a consumer has to handle; the rules that produce it
+          live in the changes job.
+        value: ${{ jobs.changes.outputs.molecule_scenarios }}
 
 permissions:
   contents: read
@@ -122,6 +151,14 @@ jobs:
     outputs:
       ansible: ${{ steps.filter.outputs.ansible }}
       molecule: ${{ steps.filter.outputs.molecule }}
+      # Normalized ONCE, here, so every consumer shares one contract: an empty
+      # string means "run every scenario". Widening happens for a push, for a
+      # pull request into the production branch, and when the map matched
+      # nothing — that last case means the map does not cover the change (an
+      # unmapped role, a new scenario, a requirements bump), and narrowing
+      # there would leave an empty matrix, a skipped job and a green gate
+      # having tested nothing.
+      molecule_scenarios: ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref != inputs.full_matrix_base && steps.scenarios.outputs.changes != '[]') && steps.scenarios.outputs.changes || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
@@ -159,6 +196,15 @@ jobs:
               # false, every molecule job is skipped, and the PR merges green
               # having never exercised the thing it changed.
               - 'tests/**'
+      # Per-scenario narrowing. `changes` is a JSON array of the filter names
+      # that matched, which feeds the molecule matrix directly — the same
+      # off-the-shelf action, no scripts. Skipped (and so empty) when the
+      # caller passes no map, which is what keeps this back-compatible.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
+        id: scenarios
+        if: ${{ inputs.molecule_scenario_filters != '' }}
+        with:
+          filters: ${{ inputs.molecule_scenario_filters }}
 
   ansible-lint:
     name: Ansible Lint
@@ -183,7 +229,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(inputs.molecule_scenarios) }}
+        # Empty means "run everything" — the changes job already applied every
+        # widening rule (see its output comment).
+        scenario: ${{ fromJSON(needs.changes.outputs.molecule_scenarios != '' && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
