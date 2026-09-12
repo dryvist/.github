@@ -36,7 +36,9 @@ jobs:
           # The commit this reusable was loaded from, so config and workflow
           # never drift; hardcoded owner so a caller outside dryvist still
           # gets the org default (its own owner has no `.github` repo).
-          REF: ${{ github.job_workflow_sha }}
+          # `job_workflow_sha` is empty when this workflow is called from
+          # another reusable (nested through _ci-gate), hence the fallback.
+          REF: ${{ github.job_workflow_sha || 'main' }}
         run: |
           curl -sSfL --retry 3 --retry-connrefused \
             "https://raw.githubusercontent.com/dryvist/.github/${REF}/.markdownlint-cli2.yaml" \

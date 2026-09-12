@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ github.job_workflow_sha || 'main' }}
           path: .central-config
           sparse-checkout: scripts/run-pip-audit.sh
           sparse-checkout-cone-mode: false
