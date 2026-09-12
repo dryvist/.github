@@ -54,6 +54,9 @@
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #   python         -> gates `python_security`
 #   ansible        -> gates `ansible_ci`
+#   extra          -> gates nothing here; exported as the `extra` output so a
+#                     caller can gate ONE repo-local job without a second
+#                     `changes` job of its own
 #
 # `dependency_review` runs on PUBLIC repos only: `actions/dependency-review-
 # action` needs GitHub Advanced Security to read the dependency graph, which
@@ -230,6 +233,18 @@ on:
         required: false
         default: ubuntu-latest
 
+      nix_validate_runner_label:
+        description: >-
+          Runner label for `Nix Validate` only. `nix flake check` on a large
+          flake needs more CPU and disk than the doc checks, and a consumer
+          should not have to move its whole gate onto a big runner (or keep a
+          repo-local copy of the job) to give one job a bigger machine. Empty
+          (default) means "same as runner_label". Subject to the same fork-PR
+          guard.
+        type: string
+        required: false
+        default: ''
+
       queue_timeout_minutes:
         description: >-
           Minutes the watchdog waits before cancelling sibling jobs still in
@@ -257,6 +272,12 @@ on:
       ansible:
         description: Whether the change touched Ansible paths
         value: ${{ jobs.changes.outputs.ansible }}
+      extra:
+        description: >-
+          Whether the change touched the caller's own `extra` filter key, for
+          gating one repo-local job this gate cannot host. Empty when the
+          caller defines no such key.
+        value: ${{ jobs.changes.outputs.extra }}
       is-deps-only:
         description: Whether the pull request is a dependency-only update
         value: ${{ jobs.changes.outputs.is-deps-only }}
@@ -281,6 +302,7 @@ jobs:
       markdown: ${{ steps.filter.outputs.markdown }}
       python: ${{ steps.filter.outputs.python }}
       ansible: ${{ steps.filter.outputs.ansible }}
+      extra: ${{ steps.filter.outputs.extra }}
       is-deps-only: ${{ steps.detect-deps.outputs.is-deps-only }}
       is-flake-lock-change: ${{ steps.lockfilter.outputs.flake-lock }}
     steps:
@@ -340,7 +362,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
   # the fork-PR guard doesn't apply here.
