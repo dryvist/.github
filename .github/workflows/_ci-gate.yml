@@ -238,6 +238,15 @@ on:
         type: boolean
         default: true
 
+      agent_pr_body:
+        description: Enable Agent PR Body (advisory pilot, never in gate.needs)
+        type: boolean
+        default: false
+      agent_pr_body_block:
+        description: Fail Agent PR Body instead of only warning
+        type: boolean
+        default: false
+
       zizmor:
         description: >-
           Enable `Workflow Security (zizmor)`. Runs on every `pull_request`
@@ -488,6 +497,16 @@ jobs:
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_zizmor.yml@main
     with:
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
+  # Deliberately NOT in `gate.needs` — advisory pilot, warns only (see
+  # _agent-pr-body.yml); not gated on `changes` (no path filter applies).
+  agent-pr-body:
+    name: Agent PR Body
+    if: ${{ inputs.agent_pr_body && github.event_name == 'pull_request' }}
+    uses: dryvist/.github/.github/workflows/_agent-pr-body.yml@main
+    with:
+      block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   ansible-ci:
