@@ -132,10 +132,12 @@ Work through this in order when creating a dryvist repo.
 
 Two checks watch this. `conventions-check.yml` here is written to run on PRs
 org-wide via a required-workflow ruleset and annotate missing conventions
-(warn-only unless the repo sets `CONVENTIONS_STRICT=true`) — but no dryvist
-ruleset carries a `workflows` rule today, so it (like `markdownlint.yml` and
-`docs-publisher-provenance.yml`) only runs where a repo calls it. Wiring the
-ruleset is a `tofu-github` change. `repo-conventions-sweep.yml` runs
+(warn-only unless the repo sets `CONVENTIONS_STRICT=true`) — but the only
+dryvist ruleset carrying a `workflows` rule today is `docs-publisher`, which
+requires `docs-publisher-provenance.yml` on the `docs` repo alone. So
+`conventions-check.yml` (like `markdownlint.yml`) only runs where a repo calls
+it; wiring an org-wide required workflow is a `tofu-github` change.
+`repo-conventions-sweep.yml` runs
 weekly, covers repos with no PR traffic, additionally reports repos missing
 from `config/repos.yml`, and upserts one tracking issue in this repo.
 
