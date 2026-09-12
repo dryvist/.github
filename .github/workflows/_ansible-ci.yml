@@ -62,6 +62,16 @@ on:
           the full matrix. Unset (the default) keeps the previous behaviour.
         type: string
         default: ""
+      full_matrix_base:
+        description: >-
+          Branch whose incoming pull requests always run the FULL molecule
+          matrix, regardless of `molecule_scenario_filters`. The scope policy
+          above names promotion into a git-flow repo's production branch as the
+          one guaranteed end-to-end sweep, and in a repo whose CI fires only on
+          `pull_request` that promotion PR is the only place the sweep can
+          happen.
+        type: string
+        default: main
       molecule_requirements:
         description: >-
           Pip requirements file with the molecule job's dependencies (each repo
@@ -125,7 +135,8 @@ on:
           an empty string when no map was passed. A caller that owns molecule
           locally (`molecule: false`) reads this to narrow its own matrix, so
           every repo shares ONE change-detection definition. Treat `''` and
-          `'[]'` alike: both mean "run everything".
+          `'[]'` alike: both mean "run everything", and widen the same way on a
+          pull request into the production branch.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
 
 permissions:
@@ -211,9 +222,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A pull request runs only the scenarios whose paths changed; a push
-        # to the default branch runs the full matrix, which is the guaranteed
-        # sweep the scope policy above names.
+        # A pull request runs only the scenarios whose paths changed. The full
+        # matrix runs on a push and on any pull request into
+        # `full_matrix_base`, which is the guaranteed sweep the scope policy
+        # above names — several callers fire CI only on `pull_request`, so the
+        # promotion PR is the only boundary where that sweep can happen.
         #
         # `'[]'` widens to the full matrix rather than narrowing to nothing.
         # The job already only runs when the coarse `molecule` filter is true,
@@ -222,7 +235,7 @@ jobs:
         # new scenario, a requirements bump. Narrowing there would leave an
         # empty matrix, a skipped job, and a green gate having tested nothing,
         # which is strictly worse than running everything.
-        scenario: ${{ fromJSON((github.event_name == 'pull_request' && needs.changes.outputs.molecule_scenarios != '' && needs.changes.outputs.molecule_scenarios != '[]') && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
+        scenario: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.base.ref != inputs.full_matrix_base && needs.changes.outputs.molecule_scenarios != '' && needs.changes.outputs.molecule_scenarios != '[]') && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
