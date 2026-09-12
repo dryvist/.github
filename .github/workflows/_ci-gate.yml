@@ -50,6 +50,7 @@
 #
 #   nix            -> gates `nix_validate` and `nix_build`
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
+#                     (`file_size` also fires on `nix` and `terraform`)
 #   python         -> gates `python_security`
 #   ansible        -> gates `ansible_ci`
 #   terraform      -> gates `tofu_ci`
@@ -161,7 +162,7 @@ on:
         type: boolean
         default: true
       file_size:
-        description: Enable `File Size` (gated on `nix` OR `markdown` filter)
+        description: Enable `File Size` (gated on `nix`, `markdown`, or `terraform` filter — the org byte limits scan .md, .nix and .tf)
         type: boolean
         default: true
       token_limits:
@@ -179,6 +180,10 @@ on:
         description: Space-separated dirs passed to _python-security.yml
         type: string
         default: '.'
+      python_security_ignore_vulns:
+        description: Space-separated vulnerability IDs passed to _python-security.yml `ignore-vulns`
+        type: string
+        default: ''
       python_ci:
         description: Enable `Python CI` lint/format/type/test gate (gated on `python` filter)
         type: boolean
@@ -216,6 +221,10 @@ on:
           filter-gated). Replaces a standalone osv-scan.yml caller.
         type: boolean
         default: false
+      osv_config_file:
+        description: Path to an osv-scanner.toml passed to _osv-scan.yml `config_file`
+        type: string
+        default: ''
       dependency_review:
         description: >-
           Enable `Dependency Review`. Runs on PUBLIC repos only —
@@ -411,7 +420,7 @@ jobs:
   file-size:
     name: File Size
     needs: changes
-    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true') }}
+    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -431,6 +440,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
+      ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     # No `secrets: inherit` — _python-security.yml declares and consumes no
     # secrets, and unconditional inheritance trips zizmor's secrets-inherit
@@ -505,6 +515,7 @@ jobs:
     if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
     with:
+      config_file: ${{ inputs.osv_config_file }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   # ============================================================================
