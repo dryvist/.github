@@ -131,12 +131,12 @@ on:
         value: ${{ jobs.changes.outputs.molecule }}
       molecule_scenarios:
         description: >-
-          JSON array of the `molecule_scenario_filters` entries that matched, or
-          an empty string when no map was passed. A caller that owns molecule
+          JSON array of the scenarios a pull request touched, or an empty
+          string meaning "run every scenario". A caller that owns molecule
           locally (`molecule: false`) reads this to narrow its own matrix, so
-          every repo shares ONE change-detection definition. Treat `''` and
-          `'[]'` alike: both mean "run everything", and widen the same way on a
-          pull request into the production branch.
+          every repo shares ONE change-detection definition. Empty is the only
+          widening signal a consumer has to handle; the rules that produce it
+          live in the changes job.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
 
 permissions:
@@ -151,7 +151,14 @@ jobs:
     outputs:
       ansible: ${{ steps.filter.outputs.ansible }}
       molecule: ${{ steps.filter.outputs.molecule }}
-      molecule_scenarios: ${{ steps.scenarios.outputs.changes }}
+      # Normalized ONCE, here, so every consumer shares one contract: an empty
+      # string means "run every scenario". Widening happens for a push, for a
+      # pull request into the production branch, and when the map matched
+      # nothing — that last case means the map does not cover the change (an
+      # unmapped role, a new scenario, a requirements bump), and narrowing
+      # there would leave an empty matrix, a skipped job and a green gate
+      # having tested nothing.
+      molecule_scenarios: ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref != inputs.full_matrix_base && steps.scenarios.outputs.changes != '[]') && steps.scenarios.outputs.changes || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
@@ -222,20 +229,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A pull request runs only the scenarios whose paths changed. The full
-        # matrix runs on a push and on any pull request into
-        # `full_matrix_base`, which is the guaranteed sweep the scope policy
-        # above names — several callers fire CI only on `pull_request`, so the
-        # promotion PR is the only boundary where that sweep can happen.
-        #
-        # `'[]'` widens to the full matrix rather than narrowing to nothing.
-        # The job already only runs when the coarse `molecule` filter is true,
-        # so "molecule-relevant files changed but the map matched none of them"
-        # means the map does not know about the change — an unmapped role, a
-        # new scenario, a requirements bump. Narrowing there would leave an
-        # empty matrix, a skipped job, and a green gate having tested nothing,
-        # which is strictly worse than running everything.
-        scenario: ${{ fromJSON((github.event_name == 'pull_request' && github.event.pull_request.base.ref != inputs.full_matrix_base && needs.changes.outputs.molecule_scenarios != '' && needs.changes.outputs.molecule_scenarios != '[]') && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
+        # Empty means "run everything" — the changes job already applied every
+        # widening rule (see its output comment).
+        scenario: ${{ fromJSON(needs.changes.outputs.molecule_scenarios != '' && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
