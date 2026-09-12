@@ -1,15 +1,14 @@
 # Reusable: Dispatch a repository_dispatch to downstream consumers
 #
-# Fans out a repository_dispatch (event_type=<event_type>,
+# Fans out a repository_dispatch (event_type=update-flake-input,
 # client_payload.input=<source_input>) to every repo in the caller's
 # DISPATCH_CONSUMERS variable. Each caller keeps its own trigger and its
 # own DISPATCH_CONSUMERS list; this workflow holds the shared token-mint
 # and cross-repo dispatch call so it lives in exactly one place.
 #
-# event_type defaults to update-flake-input (the flake consumers used by
-# nix-ai/nix-darwin). Pass a distinct type — e.g. upstream-released — for a
-# non-flake freshness trigger (terraform-proxmox -> ansible consumers re-run
-# inventory validation).
+# The event_type is always update-flake-input: every consumer's
+# deps-flake-lock.yml listens for exactly that name, and the payload is
+# informational (see below), so one type serves every publisher.
 #
 # WHAT THE FLAKE CONSUMER NOW DOES (changed 2026-08-05). The event_type name is
 # unchanged so no publisher needed editing, but the receiver no longer bumps the
@@ -40,15 +39,6 @@ on:
         type: string
         required: false
         default: ${{ github.event.repository.name }}
-      event_type:
-        description: >-
-          repository_dispatch event_type sent to each consumer. Defaults to
-          update-flake-input. Pass a distinct type (e.g. upstream-released)
-          for non-flake freshness triggers; the consumer's
-          `on.repository_dispatch.types` must list the same value.
-        type: string
-        required: false
-        default: update-flake-input
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true
