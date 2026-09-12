@@ -6,7 +6,8 @@
 #
 #   changes      -> dorny/paths-filter on ONE standardized filter (incl. *.j2)
 #   ansible-lint -> ansible/ansible-lint
-#   molecule     -> matrix from the caller's `molecule_scenarios`, optional
+#   molecule     -> matrix from the caller's `molecule_scenarios`, narrowed on
+#                   a pull request by `molecule_scenario_filters`, optional
 #                   Doppler secrets via dopplerhq/secrets-fetch-action
 #   token-limits -> _token-limits.yml, so a repo's .token-limits.yaml is
 #                   enforced; a no-op where that file is absent
@@ -52,6 +53,15 @@ on:
         description: JSON array of molecule scenario names to run as a matrix.
         type: string
         default: '["default"]'
+      molecule_scenario_filters:
+        description: >-
+          Optional YAML map of molecule scenario name -> paths, in
+          dorny/paths-filter syntax. When set, a pull request runs only the
+          scenarios whose paths changed instead of the whole
+          `molecule_scenarios` matrix; a push to the default branch always runs
+          the full matrix. Unset (the default) keeps the previous behaviour.
+        type: string
+        default: ""
       molecule_requirements:
         description: >-
           Pip requirements file with the molecule job's dependencies (each repo
@@ -122,6 +132,7 @@ jobs:
     outputs:
       ansible: ${{ steps.filter.outputs.ansible }}
       molecule: ${{ steps.filter.outputs.molecule }}
+      molecule_scenarios: ${{ steps.scenarios.outputs.changes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
@@ -159,6 +170,15 @@ jobs:
               # false, every molecule job is skipped, and the PR merges green
               # having never exercised the thing it changed.
               - 'tests/**'
+      # Per-scenario narrowing. `changes` is a JSON array of the filter names
+      # that matched, which feeds the molecule matrix directly — the same
+      # off-the-shelf action, no scripts. Skipped (and so empty) when the
+      # caller passes no map, which is what keeps this back-compatible.
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
+        id: scenarios
+        if: ${{ inputs.molecule_scenario_filters != '' }}
+        with:
+          filters: ${{ inputs.molecule_scenario_filters }}
 
   ansible-lint:
     name: Ansible Lint
@@ -183,7 +203,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: ${{ fromJSON(inputs.molecule_scenarios) }}
+        # A pull request runs only the scenarios whose paths changed; a push
+        # to the default branch runs the full matrix, which is the guaranteed
+        # sweep the scope policy above names.
+        scenario: ${{ fromJSON((github.event_name == 'pull_request' && needs.changes.outputs.molecule_scenarios != '') && needs.changes.outputs.molecule_scenarios || inputs.molecule_scenarios) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
