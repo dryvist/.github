@@ -25,11 +25,10 @@ on:
       filters:
         description: >-
           YAML body for dorny/paths-filter, same convention as _ci-gate.yml's
-          `filters` input. Only a target whose filter matched is entered
-          below (`if: needs.changes.outputs.<target> == 'true'`), so a push
-          touching none of the caller's declared paths opens no window at
-          all — the composite job list is `changes` -> `window-open` ->
-          `mint-token` -> `trigger` -> `report-and-close`, in that order.
+          `filters` input. The `changes` job renders it for a later gate to
+          consume; it does not yet gate anything in this file itself — the
+          composite job list is `changes` -> `window-open` -> `mint-token`
+          -> `trigger` -> `report-and-close`, in that order.
         type: string
         required: true
       target:
@@ -113,7 +112,6 @@ jobs:
     name: Detect Changes
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
-    outputs: ${{ toJSON(steps.filter.outputs) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
@@ -218,7 +216,7 @@ jobs:
     needs: [mint-token, changes]
     if: inputs.target == 'terrakube-apply'
     runs-on: ${{ inputs.runner_label }}
-    timeout-minutes: ${{ fromJSON(inputs.wait_minutes) }}
+    timeout-minutes: ${{ inputs.wait_minutes }}
     outputs:
       confirmation_url: ${{ steps.run.outputs.confirmation_url }}
     steps:
