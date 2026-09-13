@@ -40,10 +40,10 @@ on:
     secrets:
       LLM_ROUTER_BASE_URL:
         description: The router's OpenAI-compatible base URL, ending in /v1.
-        required: true
+        required: false
       LLM_ROUTER_API_KEY:
         description: Scoped router virtual key (never the router master key).
-        required: true
+        required: false
       NTFY_BASE_URL:
         description: Base URL of the ntfy hub for the override audit line. Optional.
         required: false
