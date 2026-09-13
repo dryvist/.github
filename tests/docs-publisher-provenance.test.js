@@ -23,7 +23,7 @@ test('extracts publisher source metadata without logging the body', () => {
   assert.equal(sourceLine('Summary only'), undefined);
 });
 
-function harness({ files, author = 'publisher[bot]', branch = 'docs-publisher/update', body = '' }) {
+function harness({ files, author = 'publisher[bot]', branch = 'chore/publisher/update', body = '' }) {
   const failures = [];
   const infos = [];
   return {

@@ -60,8 +60,8 @@ module.exports = async ({ github, context, core }) => {
     core.setFailed('Generated documentation changes must be opened by the documentation publisher.');
     return;
   }
-  if (!pullRequest.head.ref.startsWith('docs-publisher/')) {
-    core.setFailed('Generated documentation changes must use a docs-publisher branch.');
+  if (!pullRequest.head.ref.startsWith('chore/publisher/')) {
+    core.setFailed('Generated documentation changes must use a chore/publisher/* branch.');
     return;
   }
 
