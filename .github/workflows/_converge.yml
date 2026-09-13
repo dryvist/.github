@@ -4,7 +4,8 @@
 # label). Five steps: classify scope, open a Vikunja maintenance window,
 # trade GitHub OIDC for a scoped OpenBao token, trigger the target and wait
 # (bounded), then report and close the window. Each `target` value implies an
-# OpenBao JWT role of the same name (Vikunja 3148 provisions them).
+# OpenBao JWT role of the same name, provisioned by the repository named two
+# paragraphs down.
 #
 # Scope note (2026-09-13): the `target: terrakube-apply` path talks to the
 # Terrakube workspace API to CREATE a plan job only. Every workspace today
