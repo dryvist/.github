@@ -3,7 +3,8 @@
 # Fires on a push to a protected branch (the merge IS the gate; no separate
 # label). Five steps: classify scope, open a Vikunja maintenance window,
 # trade GitHub OIDC for a scoped OpenBao token, trigger the target and wait
-# (bounded), then report and close the window.
+# (bounded), then report and close the window. Each `target` value implies an
+# OpenBao JWT role of the same name (Vikunja 3148 provisions them).
 #
 # Scope note (2026-09-13): the `target: terrakube-apply` path talks to the
 # Terrakube workspace API to CREATE a plan job only. Every workspace today
@@ -84,10 +85,11 @@ on:
       VIKUNJA_URL:
         description: Base URL, no trailing slash (e.g. https://vikunja.<domain>).
         required: true
-      VIKUNJA_SVC_MCP_RW_PASSWORD:
-        description: >-
-          secret/apps/vikunja svc_mcp_rw_password. The api_token credential
-          cannot create tasks (401) — this is the only writer.
+      VIKUNJA_SERVICE_USER:
+        description: The write-capable Vikunja service account's username.
+        required: true
+      VIKUNJA_SERVICE_PASSWORD:
+        description: The write-capable Vikunja service account's password.
         required: true
       TERRAKUBE_API_ADDR:
         description: Terrakube API base URL. Required only for target terrakube-apply.
@@ -97,7 +99,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: converge-${{ github.repository }}-${{ inputs.target }}
@@ -144,8 +145,6 @@ jobs:
           esac
 
   # 2. Open the maintenance window. PUT, not POST — Vikunja's create route.
-  # Login as svc-mcp-rw (hyphens): the api_token credential 401s on this
-  # route, and the underscore-spelled account 403s.
   window-open:
     name: Open maintenance window
     needs: [changes, validate-target]
@@ -158,7 +157,8 @@ jobs:
         id: open
         env:
           VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
-          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SVC_MCP_RW_PASSWORD }}
+          VIKUNJA_USER: ${{ secrets.VIKUNJA_SERVICE_USER }}
+          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SERVICE_PASSWORD }}
           PROJECT_ID: ${{ inputs.vikunja_project_id }}
           LABEL_ID: ${{ inputs.vikunja_maintenance_label_id }}
           WINDOW_TITLE: ${{ inputs.window_title }}
@@ -167,10 +167,10 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          login_body="$(jq -n --arg user "$VIKUNJA_USER" --arg pass "$VIKUNJA_PASSWORD" \
+            '{username: $user, password: $pass}')"
           jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
-            -H 'Content-Type: application/json' \
-            -d "{\"username\":\"svc-mcp-rw\",\"password\":\"${VIKUNJA_PASSWORD}\"}" \
-            | jq -r '.token')"
+            -H 'Content-Type: application/json' -d "$login_body" | jq -r '.token')"
           [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
           due="$(date -u -d "+${MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
           desc="Opened by _converge.yml (target ${TARGET_INPUT}) for ${RUN_URL}"
@@ -186,12 +186,16 @@ jobs:
   # repository and ref (the docs-publisher pattern already in production —
   # see dryvist/docs docs-starlight publish-public-docs.yml). The role name
   # equals `inputs.target`; each target's own AppRole-free JWT role and its
-  # narrow policy are provisioned in ansible-proxmox-apps, not here.
+  # narrow policy are provisioned in ansible-proxmox-apps, not here. The
+  # minted token is used only within this job — no other job reads it.
   mint-token:
     name: Mint scoped OpenBao token
     needs: window-open
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 3
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Mint
         id: mint
@@ -221,7 +225,6 @@ jobs:
         id: run
         env:
           TERRAKUBE_API_ADDR: ${{ secrets.TERRAKUBE_API_ADDR }}
-          BAO_TOKEN: ${{ needs.mint-token.outputs.client_token }}
           WORKSPACE_REF: ${{ inputs.target_ref }}
         run: |
           set -euo pipefail
@@ -230,7 +233,9 @@ jobs:
           echo "confirmation_url=" >> "$GITHUB_OUTPUT"
 
   # 5. Report and close. Runs on `always()` so a failed trigger still closes
-  # the window rather than leaving it open indefinitely.
+  # the window rather than leaving it open indefinitely. Sets `done` FIRST:
+  # a transient failure of the best-effort comment must never leave the
+  # window open.
   report-and-close:
     name: Report and close window
     needs: [window-open, trigger]
@@ -260,19 +265,21 @@ jobs:
       - name: Close the Vikunja window
         env:
           VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
-          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SVC_MCP_RW_PASSWORD }}
+          VIKUNJA_USER: ${{ secrets.VIKUNJA_SERVICE_USER }}
+          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SERVICE_PASSWORD }}
           TASK_ID: ${{ needs.window-open.outputs.task_id }}
           TRIGGER_RESULT: ${{ needs.trigger.result }}
         run: |
           set -euo pipefail
+          login_body="$(jq -n --arg user "$VIKUNJA_USER" --arg pass "$VIKUNJA_PASSWORD" \
+            '{username: $user, password: $pass}')"
           jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
-            -H 'Content-Type: application/json' \
-            -d "{\"username\":\"svc-mcp-rw\",\"password\":\"${VIKUNJA_PASSWORD}\"}" \
-            | jq -r '.token')"
+            -H 'Content-Type: application/json' -d "$login_body" | jq -r '.token')"
           [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
-          curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}/comments" \
-            -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
-            -d "{\"comment\":\"converge result: ${TRIGGER_RESULT}\"}" >/dev/null
           curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}" \
             -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
             -d '{"done": true}' >/dev/null
+          comment_body="$(jq -n --arg comment "converge result: ${TRIGGER_RESULT}" '{comment: $comment}')"
+          curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}/comments" \
+            -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
+            -d "$comment_body" >/dev/null || true
