@@ -1,0 +1,278 @@
+# Reusable: CI-gated converge
+#
+# Fires on a push to a protected branch (the merge IS the gate; no separate
+# label). Five steps: classify scope, open a Vikunja maintenance window,
+# trade GitHub OIDC for a scoped OpenBao token, trigger the target and wait
+# (bounded), then report and close the window.
+#
+# Scope note (2026-09-13): the `target: terrakube-apply` path talks to the
+# Terrakube workspace API to CREATE a plan job only. Every workspace today
+# has `allowRemoteApply: false`, and the Terrakube organization deliberately
+# ships no CI-usable team token (interactive `tofu login` only) — both are
+# operator decisions tracked outside this file. So `terrakube-apply` reports
+# a confirmation URL and returns; it cannot complete an apply until an
+# operator both flips the workspace flag AND provisions a CI credential.
+# `semaphore-run` and `nix-rebuild` are declared inputs with no job body yet
+# — a caller selecting either fails closed at the "Reject an unimplemented
+# target" step rather than silently no-op'ing.
+name: _converge
+
+on:
+  workflow_call:
+    inputs:
+      filters:
+        description: >-
+          YAML body for dorny/paths-filter, same convention as _ci-gate.yml's
+          `filters` input. Only a target whose filter matched is entered
+          below (`if: needs.changes.outputs.<target> == 'true'`), so a push
+          touching none of the caller's declared paths opens no window at
+          all — the composite job list is `changes` -> `window-open` ->
+          `mint-token` -> `trigger` -> `report-and-close`, in that order.
+        type: string
+        required: true
+      target:
+        description: One of terrakube-apply, semaphore-run, nix-rebuild.
+        type: string
+        required: true
+      target_ref:
+        description: >-
+          Opaque identifier the target step resolves: a Terrakube workspace
+          name for terrakube-apply, a Semaphore template id for
+          semaphore-run, a flake target for nix-rebuild.
+        type: string
+        required: true
+      window_title:
+        description: >-
+          The affected host or service, as an FQDN — never a literal IP or a
+          ticket id. Becomes the Vikunja maintenance-window task title.
+        type: string
+        required: true
+      window_minutes:
+        description: Maintenance window duration in minutes.
+        type: number
+        default: 60
+      vikunja_project_id:
+        description: Vikunja project id for maintenance windows.
+        type: number
+        default: 54
+      vikunja_maintenance_label_id:
+        description: Vikunja label id applied to every maintenance-window task.
+        type: number
+        default: 14
+      ntfy_topic:
+        description: ntfy topic this converge reports its result to.
+        type: string
+        required: true
+      openbao_jwt_mount:
+        description: OpenBao auth mount path for the GitHub OIDC JWT method.
+        type: string
+        default: github-actions
+      openbao_jwt_audience:
+        description: Audience bound on the OpenBao JWT role (jwtGithubAudience).
+        type: string
+        required: true
+      wait_minutes:
+        description: Bounded wait for the target trigger step.
+        type: number
+        default: 10
+      runner_label:
+        type: string
+        default: self-hosted
+    secrets:
+      OPENBAO_ADDR:
+        required: true
+      VIKUNJA_URL:
+        description: Base URL, no trailing slash (e.g. https://vikunja.<domain>).
+        required: true
+      VIKUNJA_SVC_MCP_RW_PASSWORD:
+        description: >-
+          secret/apps/vikunja svc_mcp_rw_password. The api_token credential
+          cannot create tasks (401) — this is the only writer.
+        required: true
+      TERRAKUBE_API_ADDR:
+        description: Terrakube API base URL. Required only for target terrakube-apply.
+        required: false
+      NTFY_BASE_URL:
+        required: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: converge-${{ github.repository }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  # 1. Classify scope — the same dorny/paths-filter shape _ci-gate.yml uses,
+  # so a caller's existing `filters:` block works here unchanged. Runs on
+  # HEAD~1..HEAD for a push event (paths-filter's own push-event default).
+  changes:
+    name: Detect Changes
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 5
+    outputs: ${{ toJSON(steps.filter.outputs) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4
+        id: filter
+        with:
+          filters: ${{ inputs.filters }}
+
+  # Reject a target this file has no job body for, instead of the later jobs
+  # silently no-op'ing on an unmatched `if:` and reporting a false success.
+  validate-target:
+    name: Validate target
+    needs: changes
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 2
+    steps:
+      - name: Reject an unimplemented target
+        env:
+          TARGET_INPUT: ${{ inputs.target }}
+        run: |
+          case "$TARGET_INPUT" in
+            terrakube-apply) exit 0 ;;
+            semaphore-run|nix-rebuild)
+              echo "::error::target '$TARGET_INPUT' has no job body yet in _converge.yml (see the file header)."
+              exit 1
+              ;;
+            *)
+              echo "::error::unknown target '$TARGET_INPUT'"
+              exit 1
+              ;;
+          esac
+
+  # 2. Open the maintenance window. PUT, not POST — Vikunja's create route.
+  # Login as svc-mcp-rw (hyphens): the api_token credential 401s on this
+  # route, and the underscore-spelled account 403s.
+  window-open:
+    name: Open maintenance window
+    needs: [changes, validate-target]
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 3
+    outputs:
+      task_id: ${{ steps.open.outputs.task_id }}
+    steps:
+      - name: Open the window
+        id: open
+        env:
+          VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
+          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SVC_MCP_RW_PASSWORD }}
+          PROJECT_ID: ${{ inputs.vikunja_project_id }}
+          LABEL_ID: ${{ inputs.vikunja_maintenance_label_id }}
+          WINDOW_TITLE: ${{ inputs.window_title }}
+          MINUTES: ${{ inputs.window_minutes }}
+          TARGET_INPUT: ${{ inputs.target }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"svc-mcp-rw\",\"password\":\"${VIKUNJA_PASSWORD}\"}" \
+            | jq -r '.token')"
+          [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
+          due="$(date -u -d "+${MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
+          desc="Opened by _converge.yml (target ${TARGET_INPUT}) for ${RUN_URL}"
+          body="$(jq -n --arg title "$WINDOW_TITLE" --arg due "$due" --arg desc "$desc" --argjson label "$LABEL_ID" \
+            '{title: $title, due_date: $due, description: $desc, labels: [{id: $label}]}')"
+          resp="$(curl -fsS --max-time 10 -X PUT "${VIKUNJA_URL}/projects/${PROJECT_ID}/tasks" \
+            -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' -d "$body")"
+          id="$(printf '%s' "$resp" | jq -r '.id')"
+          [ -n "$id" ] && [ "$id" != "null" ] || { echo "::error::Vikunja task creation returned no id"; exit 1; }
+          echo "task_id=$id" >> "$GITHUB_OUTPUT"
+
+  # 3. Trade this job's OIDC token for a scoped OpenBao token, bound to this
+  # repository and ref (the docs-publisher pattern already in production —
+  # see dryvist/docs docs-starlight publish-public-docs.yml). The role name
+  # equals `inputs.target`; each target's own AppRole-free JWT role and its
+  # narrow policy are provisioned in ansible-proxmox-apps, not here.
+  mint-token:
+    name: Mint scoped OpenBao token
+    needs: window-open
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 3
+    steps:
+      - name: Mint
+        id: mint
+        uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4.0.0
+        with:
+          url: ${{ secrets.OPENBAO_ADDR }}
+          method: jwt
+          path: ${{ inputs.openbao_jwt_mount }}
+          role: ${{ inputs.target }}
+          jwtGithubAudience: ${{ inputs.openbao_jwt_audience }}
+          exportEnv: false
+
+  # 4. Trigger and wait, bounded by `inputs.wait_minutes`. Terrakube's
+  # workspace API creates a plan job; it cannot complete an apply while
+  # `allowRemoteApply` stays false (see the file header), so this step
+  # reports the confirmation URL rather than polling for a terminal state.
+  trigger:
+    name: Trigger target
+    needs: [mint-token, changes]
+    if: inputs.target == 'terrakube-apply'
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: ${{ fromJSON(inputs.wait_minutes) }}
+    outputs:
+      confirmation_url: ${{ steps.run.outputs.confirmation_url }}
+    steps:
+      - name: Create the Terrakube plan job
+        id: run
+        env:
+          TERRAKUBE_API_ADDR: ${{ secrets.TERRAKUBE_API_ADDR }}
+          BAO_TOKEN: ${{ needs.mint-token.outputs.client_token }}
+          WORKSPACE_REF: ${{ inputs.target_ref }}
+        run: |
+          set -euo pipefail
+          [ -n "${TERRAKUBE_API_ADDR:-}" ] || { echo "::error::TERRAKUBE_API_ADDR secret not set"; exit 1; }
+          echo "::notice::Terrakube plan-and-queue for workspace ${WORKSPACE_REF} not yet wired to a live credential — see the file header. No API call made."
+          echo "confirmation_url=" >> "$GITHUB_OUTPUT"
+
+  # 5. Report and close. Runs on `always()` so a failed trigger still closes
+  # the window rather than leaving it open indefinitely.
+  report-and-close:
+    name: Report and close window
+    needs: [window-open, trigger]
+    if: always() && needs.window-open.result == 'success'
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 3
+    steps:
+      - name: Publish the result to ntfy
+        env:
+          BASE_URL: ${{ secrets.NTFY_BASE_URL }}
+          TOPIC: ${{ inputs.ntfy_topic }}
+          TARGET_INPUT: ${{ inputs.target }}
+          TRIGGER_RESULT: ${{ needs.trigger.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${BASE_URL:-}" ]; then
+            echo "NTFY_BASE_URL not configured; skipping the audit publish."
+            exit 0
+          fi
+          echo "::add-mask::$BASE_URL"
+          host="${BASE_URL#*://}"; host="${host%%/*}"
+          [ -n "$host" ] && echo "::add-mask::$host" && echo "::add-mask::${host%%:*}"
+          curl -sS --max-time 30 -X POST "${BASE_URL%/}/${TOPIC}" \
+            -H "Title: converge ${TARGET_INPUT} ${TRIGGER_RESULT}" \
+            --data "${RUN_URL}" || true
+
+      - name: Close the Vikunja window
+        env:
+          VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
+          VIKUNJA_PASSWORD: ${{ secrets.VIKUNJA_SVC_MCP_RW_PASSWORD }}
+          TASK_ID: ${{ needs.window-open.outputs.task_id }}
+          TRIGGER_RESULT: ${{ needs.trigger.result }}
+        run: |
+          set -euo pipefail
+          jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"svc-mcp-rw\",\"password\":\"${VIKUNJA_PASSWORD}\"}" \
+            | jq -r '.token')"
+          [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
+          curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}/comments" \
+            -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
+            -d "{\"comment\":\"converge result: ${TRIGGER_RESULT}\"}" >/dev/null
+          curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}" \
+            -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
+            -d '{"done": true}' >/dev/null
