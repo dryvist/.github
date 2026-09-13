@@ -396,7 +396,7 @@ jobs:
     name: Nix Validate
     needs: changes
     if: ${{ inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
-    uses: ./.github/workflows/_nix-validate.yml
+    uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
@@ -416,13 +416,13 @@ jobs:
     name: Nix Build
     needs: changes
     if: ${{ inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
-    uses: ./.github/workflows/_nix-build.yml
+    uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
     name: Markdown Lint
     needs: changes
     if: ${{ inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
-    uses: ./.github/workflows/_markdown-lint.yml
+    uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
@@ -430,7 +430,7 @@ jobs:
     name: File Size
     needs: changes
     if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
-    uses: ./.github/workflows/_file-size.yml
+    uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
@@ -438,7 +438,7 @@ jobs:
     name: Token Limits
     needs: changes
     if: ${{ inputs.token_limits && needs.changes.outputs.markdown == 'true' }}
-    uses: ./.github/workflows/_token-limits.yml
+    uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
@@ -446,7 +446,7 @@ jobs:
     name: Python Security
     needs: changes
     if: ${{ inputs.python_security && needs.changes.outputs.python == 'true' }}
-    uses: ./.github/workflows/_python-security.yml
+    uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
       ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
@@ -459,7 +459,7 @@ jobs:
     name: Python CI
     needs: changes
     if: ${{ inputs.python_ci && needs.changes.outputs.python == 'true' }}
-    uses: ./.github/workflows/_python-ci.yml
+    uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -495,7 +495,7 @@ jobs:
   zizmor:
     name: Workflow Security (zizmor)
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_zizmor.yml
+    uses: dryvist/.github/.github/workflows/_zizmor.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
@@ -504,7 +504,7 @@ jobs:
   agent-pr-body:
     name: Agent PR Body
     if: ${{ inputs.agent_pr_body && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_agent-pr-body.yml
+    uses: dryvist/.github/.github/workflows/_agent-pr-body.yml@main
     with:
       block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -513,7 +513,7 @@ jobs:
     name: Ansible CI
     needs: changes
     if: ${{ inputs.ansible_ci && needs.changes.outputs.ansible == 'true' }}
-    uses: ./.github/workflows/_ansible-ci.yml
+    uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -522,7 +522,7 @@ jobs:
     name: OpenTofu CI
     needs: changes
     if: ${{ inputs.tofu_ci && needs.changes.outputs.terraform == 'true' }}
-    uses: ./.github/workflows/_tofu-ci.yml
+    uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -532,7 +532,7 @@ jobs:
   osv-scan:
     name: OSV Scanner
     if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_osv-scan.yml
+    uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
     with:
       config_file: ${{ inputs.osv_config_file }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
