@@ -214,6 +214,35 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # ansible-lint installs requirements.yml's collections itself (default,
+      # non-offline behavior) before it can resolve FQCN modules — this repo
+      # never passes the action's own `requirements_file` input, so that
+      # install happens silently inside the "Run ansible-lint" step. Uncached,
+      # every run re-installs the same fixed set from scratch, including the
+      # `type: git` entries ansible-galaxy fetches by full clone. That's a
+      # flat, avoidable network cost this job pays on every single invocation
+      # regardless of what changed, and it is what pushed several runs past
+      # the 15-minute timeout on 2026-09-15 (unrelated PRs on unrelated
+      # branches, all cancelled at ~15m during this step) — same failure mode
+      # as an ambient Galaxy/GitHub slowdown, but one this cache absorbs on a
+      # hit instead of paying again. Same key and paths as the molecule job's
+      # cache below, so a warm run of either job warms the other.
+      - name: Cache Ansible Galaxy content
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.ansible/collections
+            ~/.ansible/roles
+          key: ansible-galaxy-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+          # A branch that edits requirements.yml gets a new key and would
+          # otherwise pay the full uncached install — exactly the branches
+          # most likely to be waiting on this job. ansible-lint's internal
+          # install is unconditional, so a partial restore still helps: the
+          # unchanged collections are already present and only the edited
+          # entry is fetched. Safe because that install reconciles whatever
+          # it finds against requirements.yml rather than trusting the tree.
+          restore-keys: |
+            ansible-galaxy-${{ runner.os }}-
       - uses: ansible/ansible-lint@262624cd0ab22a4221293216856c59671ce7aa5e # v26
         with:
           args: ${{ inputs.lint_args }}
