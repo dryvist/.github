@@ -56,6 +56,16 @@ jobs:
 
       - name: Setup OpenTofu
         uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2
+        with:
+          # The wrapper is a Node-based shim around the real `tofu` binary
+          # that exists only to expose stdout/stderr/exitcode as step
+          # outputs — nothing below reads those. On a self-hosted runner
+          # whose `node` on PATH predates ESM auto-detection (< v22.7),
+          # the wrapper's bundled ESM script fails immediately with
+          # "SyntaxError: Cannot use import statement outside a module",
+          # taking `tofu fmt`/`init`/`validate` down with it even though
+          # the real binary works fine. Skip the shim; it isn't consumed.
+          tofu_wrapper: false
 
       - name: OpenTofu Format
         run: tofu fmt -check -recursive
