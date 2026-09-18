@@ -1,0 +1,41 @@
+# Org-wide AI review of every pull request, enforced via Required Workflows.
+#
+# Referenced by dryvist/tofu-github's github_organization_ruleset
+# (`org-ai-review`), which injects this workflow into the pull requests of
+# EVERY repo in the org — no per-repo `uses:` caller, so a repo cannot opt out
+# by omission. It mirrors markdownlint.yml (the proven required-workflow
+# pattern) and defers the actual review to dryvist/ai-workflows' reusable
+# PR-Agent workflow, which reads each repo's own `.pr_agent.toml` for its
+# checklist.
+#
+# The router secrets are org secrets (synced from the secret manager); the
+# review runs on the shared self-hosted pool because only it reaches the
+# router. A router outage makes the review WAIT and then FAIL on its timeout —
+# never a green check that reviewed nothing. Whether that failure blocks the
+# merge is the ruleset's enforcement mode (tofu-github), not this file's.
+#
+# No concurrency block here on purpose: the reusable workflow serialises per
+# repository, and a caller sharing that exact group causes an opaque 0-job
+# startup_failure.
+name: AI Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  pr-agent:
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: dryvist/ai-workflows/.github/workflows/pr-agent.yml@main
+    with:
+      review: true
+      improve: true
+    secrets:
+      LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+      LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
