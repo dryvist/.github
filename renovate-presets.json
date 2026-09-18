@@ -26,6 +26,10 @@
   "rebaseWhen": "conflicted",
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
+  "pre-commit": {
+    "enabled": true,
+    "description": "Renovate ships the pre-commit manager DISABLED by default, so every .pre-commit-config.yaml rev in the org was frozen - a manual pre-commit autoupdate was the only thing that ever moved one. Enabled here so hook revs ride the same publisher-agnostic minor/patch auto-merge tier as everything else."
+  },
   "ignorePaths": [
     ".github/workflows/*.lock.yml",
     ".github/workflows/agentics-maintenance.yml",
