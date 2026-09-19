@@ -28,7 +28,28 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Renovate and release-please pull requests are version bumps and
+  # changelog/lockfile edits by construction; a model review of them answers
+  # nothing. For those authors the workflow still runs — this job, on a
+  # GitHub-hosted runner, with no secret and no model — so the required
+  # workflow completes successfully in seconds instead of relying on how a
+  # skipped run is judged. Author, not actor: a reopen or a rebase is
+  # performed by whoever clicked, the author stays the bot.
+  dependency-bot:
+    if: >-
+      github.event.pull_request.user.login == 'renovate[bot]' ||
+      github.event.pull_request.user.login == 'jacobpevans-release-please[bot]'
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 2
+    steps:
+      - name: Dependency or release pull request
+        run: echo "Not reviewed by a model - the author is a dependency or release bot."
+
   pr-agent:
+    if: >-
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      github.event.pull_request.user.login != 'jacobpevans-release-please[bot]'
     permissions:
       contents: read
       pull-requests: write
