@@ -204,6 +204,15 @@ on:
           so `_ansible-ci.yml`'s own nested gate job is suppressed.
         type: boolean
         default: false
+      renovate_annotations:
+        description: >-
+          Enable `Renovate Annotations` (fails on an unannotated version pin
+          under a path the annotated-pin Renovate customManagers cover, via
+          `_renovate-annotations.yml`, gated on `ansible` filter — same
+          filter as `ansible_ci`, since every path it covers is one of
+          those).
+        type: boolean
+        default: false
       tofu_ci:
         description: >-
           Enable `OpenTofu CI` (fmt/init/validate/tflint via `_tofu-ci.yml`,
@@ -518,6 +527,14 @@ jobs:
       emit_gate: false
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
+  renovate-annotations:
+    name: Renovate Annotations
+    needs: changes
+    if: ${{ inputs.renovate_annotations && needs.changes.outputs.ansible == 'true' }}
+    uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
+    with:
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
   tofu-ci:
     name: OpenTofu CI
     needs: changes
@@ -576,7 +593,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -602,7 +619,7 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
 
       # Retrospective run report (job durations + a runner-capacity queue-delay
