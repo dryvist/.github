@@ -235,15 +235,23 @@ while badge_end < len(lines):
     if line.startswith("[![") or line.startswith("![") or line.startswith("<a href=") or line.startswith("<img") or line.startswith("[badge-") or line.startswith("[workflow-") or line.startswith("[release-url]"):
         badge_end += 1
     elif line == "":
-        # Check if next line is another badge or reference definition
+        # Check if next line is another badge, reference definition, or the tofu-proxmox blockquote
         if badge_end + 1 < len(lines):
             nxt = lines[badge_end + 1].strip()
             if nxt.startswith("[![") or nxt.startswith("![") or nxt.startswith("[badge-") or nxt.startswith("[workflow-") or nxt.startswith("[release-url]"):
                 badge_end += 1
                 continue
+            if nxt.startswith("> **Read the first two badges"):
+                badge_end += 1
+                while badge_end < len(lines) and (lines[badge_end].startswith(">") or lines[badge_end].strip() == ""):
+                    # check if still blockquote
+                    if lines[badge_end].startswith(">"):
+                        badge_end += 1
+                    else:
+                        break
+                break
         break
-    elif line.startswith("> **Read the first two badges"):
-        # Strip tofu-proxmox blockquote if present
+    elif line.startswith("> **Read the first two badges") or line.startswith(">"):
         while badge_end < len(lines) and lines[badge_end].startswith(">"):
             badge_end += 1
         break
