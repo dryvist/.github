@@ -199,6 +199,17 @@ For every change in dryvist:
 5. Conventional commits (`fix:`, `feat:`, `chore:`, etc.) — release-please
    uses these to compute bumps.
 
+### Adding a new reusable workflow
+
+A brand-new `_*.yml` lands in **its own PR first, with no wiring**. A
+`uses: .../_new-thing.yml@main` reference added in the *same* PR breaks CI
+on every head: this repo dogfoods its own gate (`ci-gate.yml` calls
+`./.github/workflows/_ci-gate.yml` locally), and `uses:` always resolves
+against `@main` regardless of branch — a file not yet on `main` fails
+workflow **graph validation** before any job runs ("workflow file issue",
+zero jobs, no `gate / Merge Gate` context at all — the PR looks stuck, not
+failed). Merge the new file first; wire it in a second PR after.
+
 ## When in doubt
 
 - `dryvist/.github` is the master for org policy (Renovate presets, reusable

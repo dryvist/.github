@@ -119,14 +119,27 @@
       "datasourceTemplate": "docker"
     },
     {
-      "description": "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for role defaults \u2014 binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed. Matches both the single `defaults/main.yml` and the split `defaults/main/*.yml` layouts \u2014 see the image manager above for why omitting the second pattern silently un-tracks a role.",
+      "description": [
+        "Renovate-annotated version pins in Ansible role defaults (YAML). Mirrors the .nix annotation manager but for role defaults \u2014 binary version vars (e.g. traefik_version, object_storage_rustfs_version) interpolated into download URLs that no built-in manager scans. Only lines carrying an explicit `# renovate:` annotation are matched. Release checksums are fetched at install time (no hash field to update here), so unlike the .nix manager no companion hash-fixer workflow is needed. Matches the single `defaults/main.yml` and split `defaults/main/*.yml` layouts, plus `vars/`, `tasks/`, `templates/`, `inventory/`, `group_vars/`, `host_vars/`, `playbooks/` and `scripts/` \u2014 an annotated pin is just as untracked in any of those as in `defaults/`, and confining the manager to `defaults/` left every one of them invisible.",
+        "Two matchStrings, unioned (default matchStringsStrategy `any`), BOTH tolerating any number of comment-only lines between the annotation and the pin (`(?:\\s*#[^\\n]*\\n)*`) \u2014 the first covers a scalar value (`key: value`), the second a YAML list item (`- \"pkg==version\"`), the shape a `_pip_packages:`-style list uses, which the earlier scalar-only pattern never matched. The scalar pattern originally tolerated only whitespace (`\\s+`) between the annotation and the key, not an intervening `#` comment line \u2014 `[^\\n]*` stops at the newline and `\\s+` cannot cross a comment line's leading `#`, so an annotation followed by even one explanatory comment before the pin silently produced NO match: the checker (which tracks annotation state across comment lines by design) accepted it, but Renovate itself never tracked it. That gap is exactly the failure mode this PR exists to close, so the scalar pattern now mirrors the list-item pattern's comment-skipping gap.",
+        "Neither matchString names the variable it expects, so both bind to whatever real (non-comment, non-blank) line comes first after the annotation \u2014 true before this change too. An annotation placed above the wrong line does not fail to match; it tracks the WRONG key's value under the annotated dep's name. Keep the annotation immediately (ignoring only blank/comment lines) above the pin it actually describes."
+      ],
       "customType": "regex",
       "managerFilePatterns": [
         "/roles/.+/defaults/main\\.ya?ml$/",
-        "/roles/.+/defaults/main/.+\\.ya?ml$/"
+        "/roles/.+/defaults/main/.+\\.ya?ml$/",
+        "/roles/.+/vars/.+\\.ya?ml$/",
+        "/roles/.+/tasks/.+\\.ya?ml$/",
+        "/roles/.+/templates/.+/",
+        "/inventory/.+\\.ya?ml$/",
+        "/group_vars/.+\\.ya?ml$/",
+        "/host_vars/.+\\.ya?ml$/",
+        "/playbooks/.+\\.ya?ml$/",
+        "/scripts/.+/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\s+[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\n(?:\\s*#[^\\n]*\\n)*\\s*[\\w]+:\\s*[\"']?(?<currentValue>[^\"'\\s]+)[\"']?",
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[^\\n]*\\n(?:\\s*#[^\\n]*\\n)*\\s*-\\s*[\"']?[A-Za-z0-9_.\\[\\]\\-]+==(?<currentValue>[^\"'\\s]+)[\"']?"
       ],
       "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver-coerced{{/if}}"
     },
@@ -141,6 +154,32 @@
       ],
       "depNameTemplate": "@biomejs/biome",
       "datasourceTemplate": "npm"
+    },
+    {
+      "description": "The `python-version:` field of actions/setup-python steps in GitHub Actions workflows. No built-in manager extracts this \u2014 pip_requirements/pep723/etc. all read dependency files, none read a workflow step input \u2014 so every repo's interpreter pin (3.9 through 3.14, inconsistent across repos) sat frozen. Matches `X.Y` or `X.Y.Z` \u2014 an earlier `X.Y`-only pattern captured just the PREFIX of a patch-pinned value (`3.12.4` -> currentValue `3.12`), so Renovate would have proposed `3.13.4`, a version that mixes a bumped minor with the original patch and was never actually released. A floating `\"3.x\"` pin has no discrete version to bump and is left alone. A `python-version: ${{ matrix.python }}` / matrix-list form (an array under a separate `python:` matrix key, not this field) is untracked, not mis-extracted \u2014 this manager only ever sees the literal field value.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "python-version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)[\"']?"
+      ],
+      "datasourceTemplate": "python-version",
+      "depNameTemplate": "python",
+      "versioningTemplate": "python"
+    },
+    {
+      "description": "`pip install 'pkg==X.Y.Z'` pins inside a workflow `run:` step. The built-in `pip_requirements` manager only scans `requirements*.txt`/`.pip` files, never a shell command, so an inline install pin (e.g. `pip install 'check-jsonschema==0.37.2'`) is invisible to it. `matchStringsStrategy: recursive` finds each `pip install` (or `pip3 install`) invocation on a single line first, then re-scans that matched text for every `pkg==version` token in it \u2014 the shape needed when a line installs several pinned packages at once, not just the first. Unpinned packages and range constraints (`pkg>=X`) on the same line are not dependencies with a single currentValue and are left alone. `currentValue` excludes `*` and requires a trailing quote/whitespace/end boundary, so a wildcard pin (`'ansible-lint==25.*'`) fails to match rather than being truncated to `25.` and handed to pypi as a real (and wrong) currentValue \u2014 an earlier version of this pattern did exactly that. `pkg[extra]==X` (the `[proxy]`/`[docker]` extras syntax) and a backslash-continued multi-line `pip install \\` block are both untracked, not mis-extracted: `depName`'s character class has no `[`/`]`, and the outer match is confined to a single line (`[^\\n]*`).",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStringsStrategy": "recursive",
+      "matchStrings": [
+        "pip3? install[^\\n]*",
+        "[\"']?(?<depName>[A-Za-z0-9_.\\-]+)==(?<currentValue>[0-9][^\"'\\s*]*)[\"']?(?:\\s|$)"
+      ],
+      "datasourceTemplate": "pypi"
     },
     {
       "description": [

@@ -1,0 +1,60 @@
+# Reusable: Renovate Annotation Check
+#
+# Fails when a version pin sits in a path the annotated-pin Renovate
+# customManagers cover (role defaults/vars/tasks/templates, inventory,
+# group_vars, host_vars, playbooks, scripts, requirements*.yml — see
+# renovate-presets.json) but carries no `# renovate: datasource=...
+# depName=...` comment above it. Such a pin is invisible to Renovate: it
+# never appears anywhere and never gets a bump PR. `_image:` keys are exempt
+# — the separate no-annotation docker-image customManager already tracks
+# those by pattern.
+#
+# A pin that is deliberately NOT a Renovate-trackable dependency (a PVE-host
+# expected-version guard, an ISO/template name with no public datasource)
+# satisfies this check with `# renovate: ignore — <reason>` above it — that
+# comment starts with `# renovate:` so the check passes, but carries no
+# `datasource=` so no customManager ever matches it or opens a PR for it.
+#
+# Exit codes: 0 clean, 1 unannotated pin(s) found, 2 zero files matched the
+# covered path set (instrument error — check the toggle/ROOT, not a pass).
+name: _renovate-annotations
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          RunsOn label to opt the calling repo into self-hosted runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions: {}
+
+concurrency:
+  group: renovate-annotations-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared annotation checker from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: scripts/check-renovate-annotations.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Check Renovate annotations
+        run: bash .gh-shared/scripts/check-renovate-annotations.sh

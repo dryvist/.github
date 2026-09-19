@@ -26,19 +26,39 @@ MUST_MATCH = [
     "roles/llm_router/defaults/main/30-openrouter.yaml",
 ]
 
-# Paths they must NOT see. `vars/` and `tasks/` are different file kinds, and a
-# sibling named `main-extra.yml` is not a defaults file — a lazy `main.*`
-# pattern would swallow all three.
+# Paths every role-defaults manager must NOT see: a sibling named
+# `main-extra.yml` is not a defaults file, and neither is a doc dropped next
+# to the split layout — a lazy `main.*` pattern would swallow both.
 MUST_NOT_MATCH = [
-    "roles/hermes_agent/vars/main.yml",
-    "roles/hermes_agent/tasks/main.yml",
     "roles/hermes_agent/defaults/main-extra.yml",
     "roles/hermes_agent/defaults/main/README.md",
+]
+
+# `vars/` and `tasks/` used to be universally out of scope for every
+# role-defaults manager. The annotated-pin manager (identified below by
+# WIDENED_ANNOTATION_MARKER) was deliberately widened to also cover them
+# (plus templates/inventory/group_vars/host_vars/playbooks/scripts) — an
+# explicit `# renovate:` annotation is just as untracked there as under
+# `defaults/`. The unannotated `_image:` manager was NOT widened: an
+# unannotated regex loose enough to scan task/var files risks matching
+# unrelated `foo_image: "..."` strings that were never meant as a pin, so it
+# stays confined to `defaults/`.
+UNWIDENED_MUST_NOT_MATCH = [
+    "roles/hermes_agent/vars/main.yml",
+    "roles/hermes_agent/tasks/main.yml",
+]
+WIDENED_MUST_MATCH = [
+    "roles/hermes_agent/vars/main.yml",
+    "roles/hermes_agent/tasks/main.yml",
+    "roles/hermes_agent/templates/config.yml.j2",
+    "playbooks/site.yml",
+    "group_vars/all.yml",
 ]
 
 # Identified by what they match on, not by list position — reordering the
 # managers in the preset must not silently skip the assertion.
 DEFAULTS_MANAGER_MARKER = "/defaults/main"
+WIDENED_ANNOTATION_MARKER = "/roles/.+/vars/"
 
 
 def patterns_of(manager: dict) -> list[re.Pattern[str]]:
@@ -75,12 +95,23 @@ def main() -> int:
         name = (desc[0] if isinstance(desc, list) else desc)[:60]
         pats = patterns_of(manager)
 
+        widened = any(WIDENED_ANNOTATION_MARKER in p for p in manager.get("managerFilePatterns", []))
+
         for path in MUST_MATCH:
             if not any(p.search(path) for p in pats):
                 failures.append(f"{name!r}: does NOT match {path} (it must)")
         for path in MUST_NOT_MATCH:
             if any(p.search(path) for p in pats):
                 failures.append(f"{name!r}: matches {path} (it must not)")
+
+        if widened:
+            for path in WIDENED_MUST_MATCH:
+                if not any(p.search(path) for p in pats):
+                    failures.append(f"{name!r}: does NOT match {path} (widened manager must)")
+        else:
+            for path in UNWIDENED_MUST_NOT_MATCH:
+                if any(p.search(path) for p in pats):
+                    failures.append(f"{name!r}: matches {path} (it must not)")
 
     failures.extend(check_requirements_managers(preset))
 
