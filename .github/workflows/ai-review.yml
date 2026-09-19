@@ -29,6 +29,14 @@ permissions:
 
 jobs:
   pr-agent:
+    # Renovate and release-please pull requests are version bumps and
+    # changelog/lockfile edits by construction; a model review of them
+    # answers nothing. The job is skipped (not the workflow), so the required
+    # check reports SKIPPED and is satisfied. Author, not actor: a reopen or a
+    # rebase is performed by whoever clicked, the author stays the bot.
+    if: >-
+      github.event.pull_request.user.login != 'renovate[bot]' &&
+      github.event.pull_request.user.login != 'jacobpevans-release-please[bot]'
     permissions:
       contents: read
       pull-requests: write
