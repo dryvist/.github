@@ -98,6 +98,17 @@ on:
           from `_ci-gate.yml`, which is the gate).
         type: boolean
         default: false
+      renovate_annotations:
+        description: >-
+          Enable `Renovate Annotations` (fails on an unannotated version pin
+          under a path the annotated-pin Renovate customManagers cover, via
+          `_renovate-annotations.yml`, gated on this workflow's own `ansible`
+          filter above). Every Ansible repo in the org calls THIS workflow
+          directly, not `_ci-gate.yml` (see its own `renovate_annotations`
+          input) — so this is the only place the check is actually reachable
+          for the Ansible fleet. Default false: opt in per repo.
+        type: boolean
+        default: false
       runner_label:
         description: >-
           Runner label for the quick jobs (changes, ansible-lint, gate). These
@@ -327,9 +338,24 @@ jobs:
     with:
       runner_label: ${{ inputs.runner_label }}
 
+  # Reachability: every Ansible repo in the org calls THIS workflow directly,
+  # not `_ci-gate.yml` — so `_renovate-annotations.yml` is otherwise
+  # unreachable for the whole fleet, the same gap token-limits had above.
+  # Opt-in (unlike token-limits, this is NOT a no-op-by-absence check, so it
+  # stays behind its own toggle rather than running unconditionally).
+  renovate-annotations:
+    name: Renovate Annotations
+    needs: changes
+    if: ${{ inputs.renovate_annotations && needs.changes.outputs.ansible == 'true' }}
+    permissions:
+      contents: read
+    uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
+    with:
+      runner_label: ${{ inputs.runner_label }}
+
   gate:
     name: Merge Gate
-    needs: [changes, ansible-lint, molecule, token-limits]
+    needs: [changes, ansible-lint, molecule, token-limits, renovate-annotations]
     if: ${{ inputs.emit_gate && always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
@@ -337,5 +363,5 @@ jobs:
       - name: Aggregate results
         uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
         with:
-          allowed-skips: ansible-lint, molecule, token-limits
+          allowed-skips: ansible-lint, molecule, token-limits, renovate-annotations
           jobs: ${{ toJSON(needs) }}

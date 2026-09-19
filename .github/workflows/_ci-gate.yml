@@ -204,6 +204,20 @@ on:
           so `_ansible-ci.yml`'s own nested gate job is suppressed.
         type: boolean
         default: false
+      renovate_annotations:
+        description: >-
+          Enable `Renovate Annotations` (fails on an unannotated version pin
+          under a path the annotated-pin Renovate customManagers cover, via
+          `_renovate-annotations.yml`). NOT filter-gated — unlike most
+          toggles here it runs on every PR once enabled, because a caller
+          whose `filters` input lacks an `ansible:` key would otherwise skip
+          it forever with no error (see the job's own comment). The check
+          itself is a fast file scan, so running it unconditionally is cheap.
+          Ansible repos should prefer enabling it via `_ansible-ci.yml`'s own
+          `renovate_annotations` input instead — none of them call this
+          `_ci-gate.yml` directly.
+        type: boolean
+        default: false
       tofu_ci:
         description: >-
           Enable `OpenTofu CI` (fmt/init/validate/tflint via `_tofu-ci.yml`,
@@ -518,6 +532,21 @@ jobs:
       emit_gate: false
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
+  # NOT filter-gated (same convention as osv-scan/dependency-review below): a
+  # caller's `filters` input may not define an `ansible:` key at all, in
+  # which case `needs.changes.outputs.ansible` is an empty string forever —
+  # neither 'true' nor 'false' — and gating this job on it would silently
+  # SKIP a toggled-on check on every such caller, going green having never
+  # run. A toggled-on job must never skip for that reason, so this runs
+  # unconditionally once `inputs.renovate_annotations` is true.
+  renovate-annotations:
+    name: Renovate Annotations
+    needs: changes
+    if: ${{ inputs.renovate_annotations }}
+    uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
+    with:
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+
   tofu-ci:
     name: OpenTofu CI
     needs: changes
@@ -576,7 +605,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor]
+    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -602,7 +631,7 @@ jobs:
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
+          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
           jobs: ${{ toJSON(needs) }}
 
       # Retrospective run report (job durations + a runner-capacity queue-delay
