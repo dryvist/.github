@@ -12,11 +12,15 @@
 # Escape hatch: a pin that is deliberately NOT a Renovate-trackable
 # dependency (a PVE-host expected-version guard, an ISO/template name with
 # no public datasource) satisfies this checker with a bare
-# `# renovate: ignore — <reason>` comment. The checker only requires a line
-# starting `# renovate:` above the pin, it never requires `datasource=`; the
-# preset's own matchStrings DO require `datasource=`, so an `ignore` comment
-# is annotated enough to pass here while never matching a real customManager
-# and never producing a Renovate PR.
+# `# renovate: ignore — <reason>` comment. The checker requires the FULL
+# `datasource=... depName=...[ versioning=...]` shape or a bare `ignore`
+# (not just a `# renovate:` prefix — a typo like `datasorce=` or a double
+# space after the colon used to still pass a prefix-only check while
+# matching no real renovate-presets.json matchString, so the pin stayed
+# silently untracked despite green CI); the preset's own matchStrings
+# additionally require the literal `datasource=` token, so an `ignore`
+# comment is annotated enough to pass here while never matching a real
+# customManager and never producing a Renovate PR.
 #
 # Exit codes:
 #   0 — every pin in a covered path is annotated
@@ -55,7 +59,13 @@ PATH_ARGS=(
 version_re="^[[:space:]]*[A-Za-z0-9_]+_version:[[:space:]]*[\"']?[0-9vV]"
 list_pin_re="^[[:space:]]*-[[:space:]]*[\"']?[^\"'[:space:]]+==[0-9]"
 git_sha_re="^[[:space:]]*version:[[:space:]]*[\"']?[0-9a-fA-F]{40}"
-annotation_re="^[[:space:]]*# renovate:"
+# The FULL line shape, not just the `# renovate:` prefix — a typo
+# (`datasorce=`) or a double space after the colon used to still satisfy a
+# prefix-only check, passing this gate while matching no real
+# renovate-presets.json matchString (those require the exact `datasource=`
+# token), so the pin stayed silently untracked despite a "passing" CI run.
+# bash's =~ uses POSIX ERE (no `(?:...)`), so groups here are plain `(...)`.
+annotation_re="^[[:space:]]*# renovate: (datasource=[^[:space:]]+ depName=[^[:space:]]+( versioning=[^[:space:]]+)?( .*)?|ignore([[:space:]].*)?)\$"
 comment_re="^[[:space:]]*#"
 
 files_scanned=0

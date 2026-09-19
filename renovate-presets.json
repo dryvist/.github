@@ -157,20 +157,20 @@
       "datasourceTemplate": "npm"
     },
     {
-      "description": "The `python-version:` field of actions/setup-python steps in GitHub Actions workflows. No built-in manager extracts this \u2014 pip_requirements/pep723/etc. all read dependency files, none read a workflow step input \u2014 so every repo's interpreter pin (3.9 through 3.14, inconsistent across repos) sat frozen. Only a bare `X.Y` value is matched; a floating `\"3.x\"` pin has no discrete version to bump and is left alone.",
+      "description": "The `python-version:` field of actions/setup-python steps in GitHub Actions workflows. No built-in manager extracts this \u2014 pip_requirements/pep723/etc. all read dependency files, none read a workflow step input \u2014 so every repo's interpreter pin (3.9 through 3.14, inconsistent across repos) sat frozen. Matches `X.Y` or `X.Y.Z` \u2014 an earlier `X.Y`-only pattern captured just the PREFIX of a patch-pinned value (`3.12.4` -> currentValue `3.12`), so Renovate would have proposed `3.13.4`, a version that mixes a bumped minor with the original patch and was never actually released. A floating `\"3.x\"` pin has no discrete version to bump and is left alone. A `python-version: ${{ matrix.python }}` / matrix-list form (an array under a separate `python:` matrix key, not this field) is untracked, not mis-extracted \u2014 this manager only ever sees the literal field value.",
       "customType": "regex",
       "managerFilePatterns": [
         "/\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [
-        "python-version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+)[\"']?"
+        "python-version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+(?:\\.\\d+)?)[\"']?"
       ],
       "datasourceTemplate": "python-version",
       "depNameTemplate": "python",
       "versioningTemplate": "python"
     },
     {
-      "description": "`pip install 'pkg==X.Y.Z'` pins inside a workflow `run:` step. The built-in `pip_requirements` manager only scans `requirements*.txt`/`.pip` files, never a shell command, so an inline install pin (e.g. `pip install 'check-jsonschema==0.37.2'`) is invisible to it. `matchStringsStrategy: recursive` finds each `pip install` (or `pip3 install`) invocation on a single line first, then re-scans that matched text for every `pkg==version` token in it \u2014 the shape needed when a line installs several pinned packages at once, not just the first. Unpinned packages and range constraints (`pkg>=X`) on the same line are not dependencies with a single currentValue and are left alone.",
+      "description": "`pip install 'pkg==X.Y.Z'` pins inside a workflow `run:` step. The built-in `pip_requirements` manager only scans `requirements*.txt`/`.pip` files, never a shell command, so an inline install pin (e.g. `pip install 'check-jsonschema==0.37.2'`) is invisible to it. `matchStringsStrategy: recursive` finds each `pip install` (or `pip3 install`) invocation on a single line first, then re-scans that matched text for every `pkg==version` token in it \u2014 the shape needed when a line installs several pinned packages at once, not just the first. Unpinned packages and range constraints (`pkg>=X`) on the same line are not dependencies with a single currentValue and are left alone. `currentValue` excludes `*` and requires a trailing quote/whitespace/end boundary, so a wildcard pin (`'ansible-lint==25.*'`) fails to match rather than being truncated to `25.` and handed to pypi as a real (and wrong) currentValue \u2014 an earlier version of this pattern did exactly that. `pkg[extra]==X` (the `[proxy]`/`[docker]` extras syntax) and a backslash-continued multi-line `pip install \\` block are both untracked, not mis-extracted: `depName`'s character class has no `[`/`]`, and the outer match is confined to a single line (`[^\\n]*`).",
       "customType": "regex",
       "managerFilePatterns": [
         "/\\.github/workflows/.+\\.ya?ml$/"
@@ -178,7 +178,7 @@
       "matchStringsStrategy": "recursive",
       "matchStrings": [
         "pip3? install[^\\n]*",
-        "[\"']?(?<depName>[A-Za-z0-9_.\\-]+)==(?<currentValue>[0-9][^\"'\\s]*)[\"']?"
+        "[\"']?(?<depName>[A-Za-z0-9_.\\-]+)==(?<currentValue>[0-9][^\"'\\s*]*)[\"']?(?:\\s|$)"
       ],
       "datasourceTemplate": "pypi"
     },
