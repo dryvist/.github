@@ -78,6 +78,7 @@ jobs:
     # Deferring only on a definitive scope success saying "no" - a scope
     # failure or any other answer still runs the review.
     if: >-
+      !cancelled() &&
       github.event.pull_request.user.login != 'renovate[bot]' &&
       github.event.pull_request.user.login != 'jacobpevans-release-please[bot]' &&
       (needs.scope.result != 'success' || needs.scope.outputs.ai_review != 'no')

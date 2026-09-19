@@ -479,7 +479,7 @@ jobs:
     # further when `scope` definitively succeeded and said "none" - a
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
-    if: ${{ inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
@@ -503,13 +503,13 @@ jobs:
     # something other than "full" (lint-only or none skip it); a scope
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
-    if: ${{ inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
     name: Markdown Lint
     needs: [changes, scope]
-    if: ${{ inputs.markdown_lint && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -517,7 +517,7 @@ jobs:
   file-size:
     name: File Size
     needs: [changes, scope]
-    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -525,7 +525,7 @@ jobs:
   token-limits:
     name: Token Limits
     needs: [changes, scope]
-    if: ${{ inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
@@ -533,7 +533,7 @@ jobs:
   python-security:
     name: Python Security
     needs: [changes, scope]
-    if: ${{ inputs.python_security && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.python_security && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
@@ -549,7 +549,7 @@ jobs:
     # Full-tier: this runs the full lint/format/type/test matrix, not just
     # a fast validate - only narrows when scope succeeded and said
     # something other than full.
-    if: ${{ inputs.python_ci && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && inputs.python_ci && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
@@ -606,7 +606,7 @@ jobs:
   ansible-ci:
     name: Ansible CI
     needs: [changes, scope]
-    if: ${{ inputs.ansible_ci && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.ansible_ci && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
@@ -634,7 +634,7 @@ jobs:
   tofu-ci:
     name: OpenTofu CI
     needs: [changes, scope]
-    if: ${{ inputs.tofu_ci && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.tofu_ci && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
