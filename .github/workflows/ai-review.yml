@@ -8,15 +8,25 @@
 # PR-Agent workflow, which reads each repo's own `.pr_agent.toml` for its
 # checklist.
 #
-# The router secrets are org secrets (synced from the secret manager); the
-# review runs on the shared self-hosted pool because only it reaches the
-# router. A router outage makes the review WAIT and then FAIL on its timeout —
+# Every review runs on the shared self-hosted pool against the org's model
+# router — the only runners that reach it. Repository visibility picks the
+# router key, as data on the one call below, never a second job: a private
+# repo reviews with LLM_ROUTER_API_KEY, a public repo with
+# LLM_PUBLIC_REVIEW_API_KEY, a second router key scoped to the public role.
+# The reusable workflow picks the matching role (`model` / `public_model`)
+# from the same expression, and each role carries its own fallback ladder on
+# the router — local models first — so where a diff may travel is decided by
+# the role and the key that may call it, never here. All three secrets are
+# org secrets synced from the secret manager; the reusable workflow never
+# reads the public key on a private repo.
+#
+# A router that is down or at capacity fails the review within seconds —
 # never a green check that reviewed nothing. Whether that failure blocks the
 # merge is the ruleset's enforcement mode (tofu-github), not this file's.
 #
-# No concurrency block here on purpose: the reusable workflow serialises per
-# repository, and a caller sharing that exact group causes an opaque 0-job
-# startup_failure.
+# No concurrency block here on purpose: the reusable workflow already scopes
+# its group per pull request, and a caller sharing that exact group causes an
+# opaque 0-job startup_failure.
 name: AI Review
 
 on:
@@ -63,3 +73,4 @@ jobs:
     secrets:
       LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
       LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+      LLM_PUBLIC_REVIEW_API_KEY: ${{ secrets.LLM_PUBLIC_REVIEW_API_KEY }}
