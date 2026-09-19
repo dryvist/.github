@@ -84,12 +84,33 @@ find_repo_dir() {
   )
   for sroot in "${search_roots[@]}"; do
     if [[ -d "$sroot" ]]; then
-      local found
-      found=$(find "$sroot" -maxdepth 3 -type d -name "$repo" 2>/dev/null | head -n 1 || true)
-      if [[ -n "$found" && -d "$found" ]]; then
-        echo "$found"
-        return 0
-      fi
+      local candidates=()
+      while IFS= read -r match; do
+        candidates+=("$match")
+      done < <(find "$sroot" -maxdepth 4 -type d -name "$repo" 2>/dev/null)
+
+      for c in "${candidates[@]}"; do
+        if [[ -f "${c}/README.md" ]]; then
+          echo "$c"
+          return 0
+        fi
+        if [[ -f "${c}/main/README.md" ]]; then
+          echo "${c}/main"
+          return 0
+        fi
+        if [[ -f "${c}/develop/README.md" ]]; then
+          echo "${c}/develop"
+          return 0
+        fi
+        if [[ -f "${c}/.worktrees/develop/README.md" ]]; then
+          echo "${c}/.worktrees/develop"
+          return 0
+        fi
+        if [[ -f "${c}/.worktrees/main/README.md" ]]; then
+          echo "${c}/.worktrees/main"
+          return 0
+        fi
+      done
     fi
   done
   echo ""
