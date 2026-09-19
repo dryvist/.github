@@ -5,12 +5,35 @@
 #
 # What this workflow does:
 #
+#   scope    -> content-aware classifier (dryvist/ai-workflows'
+#               scope-classify.yml, "Jev"); a SECOND, additional layer on
+#               top of `changes` below, narrowing further, never replacing
+#               it - see "Content-aware scope classifier" below
 #   changes  -> dorny/paths-filter on caller-supplied filters
 #   <check jobs> -> per-check reusable workflows, gated on (input toggle && filter)
 #   watchdog -> sleeps queue_timeout_minutes, cancels any sibling job still
 #               in `queued` state so the gate is never blocked indefinitely
 #   gate     -> name MUST stay "Merge Gate" (matches branch protection rulesets);
 #               aggregates results via re-actors/alls-green
+#
+# Content-aware scope classifier (`scope` job):
+#
+# Runs unconditionally, in parallel with `changes`. Every conditional check
+# job below carries its ORIGINAL filter-based `if:`, ANDed with one more
+# clause reading `needs.scope.outputs.ci` (or `.molecule`) - narrowing
+# further when the classifier is confident nothing more is needed, never
+# widening past what the filter already allows. A lint/format/security-scan
+# tier job runs when `ci` is `full` OR `lint-only` (only skips on `none`); a
+# full-suite tier job (Nix Build, Python CI) requires `ci == 'full'`. Every
+# such clause reads `needs.scope.result != 'success' || ...`: a scope job
+# that fails, or has no TYPESAFE_API_KEY plumbed through this file's own
+# caller yet, defers ENTIRELY to the pre-existing filter - "the classifier
+# is unreachable" behaves exactly like "this feature doesn't exist yet",
+# never like "skip everything". `dependency-review`, `zizmor`, `osv-scan`,
+# and `renovate-annotations` are deliberately NOT gated on `scope` - each
+# has its own documented reason a supply-chain/workflow-security scan must
+# never be skippable by ANY signal, deterministic or classified.
+# https://github.com/dryvist/ai-workflows/blob/main/.github/scope-rubric.md
 #
 # Why the watchdog exists:
 #
@@ -334,12 +357,55 @@ on:
       is-flake-lock-change:
         description: Whether the change touched flake.lock
         value: ${{ jobs.changes.outputs.is-flake-lock-change }}
+      scope_ci:
+        description: >-
+          Content-aware scope classifier's ci output (full | lint-only |
+          none), for a caller that wants to gate a job of its own the same
+          way this file's own jobs are gated. Empty when `scope` failed -
+          treat empty the same as "full" (defer to your own filters), never
+          as "none".
+        value: ${{ jobs.scope.outputs.ci }}
+      scope_molecule:
+        description: Scope classifier's molecule output (full | changed-roles | none)
+        value: ${{ jobs.scope.outputs.molecule }}
+      scope_source:
+        description: jev | fallback - whether the scope outputs came from the classifier or a fail-safe default
+        value: ${{ jobs.scope.outputs.source }}
+
+    secrets:
+      TYPESAFE_API_KEY:
+        description: >-
+          Bearer token for the scope classifier's typesafe.ai API call.
+          Not required: a caller that hasn't plumbed this secret through
+          yet gets an empty key, which the classifier's own fail-safe
+          already turns into source=fallback, full/yes - never a startup
+          error.
+        required: false
 
 permissions:
   contents: read
   pull-requests: read
 
 jobs:
+  # ============================================================================
+  # CONTENT-AWARE SCOPE CLASSIFIER
+  # Always runs (no `if:`), independent of `changes` below. Its outputs are
+  # a SECOND, additional layer on top of the deterministic path filters
+  # `changes` already computes - narrowing further, never replacing them
+  # (each conditional job below still carries its original filter-based
+  # `if:`). `allowed-failures: scope` in the gate's alls-green step means a
+  # classifier infra failure is visible as a red job but never blocks the
+  # Merge Gate; every job below only narrows when `needs.scope.result ==
+  # 'success'` AND the output says so, so a scope failure or an empty
+  # secret defers entirely to the pre-existing filter logic (the classifier
+  # is unreachable = everything the filters already decided still runs).
+  # https://github.com/dryvist/ai-workflows/blob/main/.github/scope-rubric.md
+  scope:
+    name: Classify CI scope (Jev)
+    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@main
+    secrets:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+
   # ============================================================================
   # CHANGE DETECTION
   # ============================================================================
@@ -408,8 +474,12 @@ jobs:
   # ============================================================================
   nix-validate:
     name: Nix Validate
-    needs: changes
-    if: ${{ inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
+    needs: [changes, scope]
+    # Second layer on top of the filter-based condition: only narrows
+    # further when `scope` definitively succeeded and said "none" - a
+    # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
+    # defers entirely to the filter, exactly as before this job existed.
+    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
@@ -428,38 +498,42 @@ jobs:
   # `github.base_ref`. Non-PR events (push, schedule, dispatch) keep building.
   nix-build:
     name: Nix Build
-    needs: changes
-    if: ${{ inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') }}
+    needs: [changes, scope]
+    # Full-suite tier: only narrows when `scope` succeeded AND said
+    # something other than "full" (lint-only or none skip it); a scope
+    # failure defers to the filter/base-ref condition alone, same as
+    # before this job existed.
+    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
     name: Markdown Lint
-    needs: changes
-    if: ${{ inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   file-size:
     name: File Size
-    needs: changes
-    if: ${{ inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   token-limits:
     name: Token Limits
-    needs: changes
-    if: ${{ inputs.token_limits && needs.changes.outputs.markdown == 'true' }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   python-security:
     name: Python Security
-    needs: changes
-    if: ${{ inputs.python_security && needs.changes.outputs.python == 'true' }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.python_security && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
@@ -471,8 +545,11 @@ jobs:
 
   python-ci:
     name: Python CI
-    needs: changes
-    if: ${{ inputs.python_ci && needs.changes.outputs.python == 'true' }}
+    needs: [changes, scope]
+    # Full-tier: this runs the full lint/format/type/test matrix, not just
+    # a fast validate - only narrows when scope succeeded and said
+    # something other than full.
+    if: ${{ !cancelled() && inputs.python_ci && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
@@ -523,13 +600,20 @@ jobs:
       block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
+  # No caller currently sets `ansible_ci: true` here (ansible repos call
+  # `_ansible-ci.yml` directly, with their own local molecule handling) -
+  # this wiring is inert today, kept correct for whenever one does.
   ansible-ci:
     name: Ansible CI
-    needs: changes
-    if: ${{ inputs.ansible_ci && needs.changes.outputs.ansible == 'true' }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.ansible_ci && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
+      # scope's `molecule` output is a second layer on `_ansible-ci.yml`'s
+      # own molecule toggle - only turns it off when scope definitively
+      # said "none"; any other answer, or a scope failure, leaves it on.
+      molecule: ${{ needs.scope.result != 'success' || needs.scope.outputs.molecule != 'none' }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
 
   # NOT filter-gated (same convention as osv-scan/dependency-review below): a
@@ -549,8 +633,8 @@ jobs:
 
   tofu-ci:
     name: OpenTofu CI
-    needs: changes
-    if: ${{ inputs.tofu_ci && needs.changes.outputs.terraform == 'true' }}
+    needs: [changes, scope]
+    if: ${{ !cancelled() && inputs.tofu_ci && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
@@ -605,7 +689,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor]
+    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
@@ -632,6 +716,14 @@ jobs:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
           allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, watchdog
+          # `scope` never skips (it has no `if:`), so it needs
+          # allowed-FAILURES, not allowed-skips: a classifier infra failure
+          # (bad secret, dead vendor, a real script bug) shows up red in
+          # the job list - visible, per the PR #402 review - but every job
+          # above already defers to its own filter whenever
+          # `needs.scope.result != 'success'`, so the failure has no unsafe
+          # effect and must not block the org's Merge Gate on its own.
+          allowed-failures: scope
           jobs: ${{ toJSON(needs) }}
 
       # Retrospective run report (job durations + a runner-capacity queue-delay

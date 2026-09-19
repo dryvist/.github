@@ -27,6 +27,14 @@
 # No concurrency block here on purpose: the reusable workflow already scopes
 # its group per pull request, and a caller sharing that exact group causes an
 # opaque 0-job startup_failure.
+#
+# `scope` (dryvist/ai-workflows' content-aware scope-classify.yml, "Jev")
+# runs unconditionally and gates `pr-agent` on its `ai_review` output. The
+# required workflow itself always completes (`dependency-bot` or `pr-agent`
+# always runs); only whether `pr-agent`'s review job runs is narrowed. A
+# scope failure, or `ai_review` answering anything but `no`, still runs the
+# review - "the classifier is unreachable" behaves like "review everything",
+# never like "skip the review".
 name: AI Review
 
 on:
@@ -38,6 +46,15 @@ permissions:
   pull-requests: write
 
 jobs:
+  scope:
+    name: Classify CI scope (Jev)
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@main
+    secrets:
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+
   # Renovate and release-please pull requests are version bumps and
   # changelog/lockfile edits by construction; a model review of them answers
   # nothing. For those authors the workflow still runs — this job, on a
@@ -57,9 +74,14 @@ jobs:
         run: echo "Not reviewed by a model - the author is a dependency or release bot."
 
   pr-agent:
+    needs: scope
+    # Deferring only on a definitive scope success saying "no" - a scope
+    # failure or any other answer still runs the review.
     if: >-
+      !cancelled() &&
       github.event.pull_request.user.login != 'renovate[bot]' &&
-      github.event.pull_request.user.login != 'jacobpevans-release-please[bot]'
+      github.event.pull_request.user.login != 'jacobpevans-release-please[bot]' &&
+      (needs.scope.result != 'success' || needs.scope.outputs.ai_review != 'no')
     permissions:
       contents: read
       pull-requests: write
