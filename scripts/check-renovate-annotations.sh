@@ -82,6 +82,10 @@ while IFS= read -r -d '' f; do
   lineno=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     lineno=$((lineno + 1))
+    # CRLF files: strip the trailing \r `read -r` leaves in place, otherwise
+    # the new `$`-anchored annotation_re never matches (the \r sits before
+    # the anchor) and a stray \r leaks into the ::error text below.
+    line=${line%$'\r'}
 
     # Blank line: annotation state carries through to the next line.
     [[ -z "${line//[[:space:]]/}" ]] && continue
