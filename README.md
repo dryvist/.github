@@ -1,5 +1,14 @@
 # dryvist/.github
 
+[![CI Gate][badge-ci]][workflow-ci]
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-2F7E78?style=flat-square)](LICENSE)
+[![Built with Nix](https://img.shields.io/badge/built%20with-Nix-5277C3?style=flat-square&logo=nixos&logoColor=white)](flake.nix)
+[![Renovate](https://img.shields.io/badge/renovate-enabled-2F7E78?style=flat-square&logo=renovatebot&logoColor=white)](https://github.com/dryvist/.github)
+[![Docs](https://img.shields.io/badge/docs-jacobpevans.com-4FB3A9?style=flat-square)](https://docs.jacobpevans.com)
+
+[badge-ci]: https://github.com/dryvist/.github/actions/workflows/ci-gate.yml/badge.svg?branch=main
+[workflow-ci]: https://github.com/dryvist/.github/actions/workflows/ci-gate.yml?query=branch%3Amain
+
 Org-wide standards and inheritance hub for the [dryvist](https://github.com/dryvist)
 GitHub organization. Contains AI assistant policy, lint/format config,
 dependency-management config, security policy, and the org profile page.
