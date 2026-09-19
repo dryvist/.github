@@ -8,26 +8,19 @@
 # PR-Agent workflow, which reads each repo's own `.pr_agent.toml` for its
 # checklist.
 #
-# Where the review runs is decided by repository visibility, as data on the
-# one call below — never by a second job:
+# Every review runs on the shared self-hosted pool against the org's model
+# router — the only runners that reach it. Repository visibility picks the
+# router key, as data on the one call below, never a second job: a private
+# repo reviews with LLM_ROUTER_API_KEY, a public repo with
+# LLM_PUBLIC_REVIEW_API_KEY, a second router key scoped to the public role.
+# The reusable workflow picks the matching role (`model` / `public_model`)
+# from the same expression, and each role carries its own fallback ladder on
+# the router — local models first — so where a diff may travel is decided by
+# the role and the key that may call it, never here. All three secrets are
+# org secrets synced from the secret manager; the reusable workflow never
+# reads the public key on a private repo.
 #
-#   private repo -> the shared self-hosted pool and the internal model router,
-#                   because only that pool reaches the router. The diff never
-#                   leaves the estate.
-#   public repo  -> a GitHub-hosted runner and an external OpenAI-compatible
-#                   model endpoint. The diff is already public, GitHub-hosted
-#                   minutes cost nothing on a public repo, and the self-hosted
-#                   pool keeps its slots for the private work.
-#
-# Both endpoint pairs are org secrets synced from the secret manager, and
-# this file is the only place a private repo's review could reference the
-# public pair: the expressions below hand a private repo the router pair, and
-# the only fall-through is public -> router, which a GitHub-hosted runner
-# cannot reach and therefore fails at once. The public model ids are literals
-# here on purpose: with no router in that path there is no alias to resolve,
-# and this file is the one place they are set.
-#
-# An endpoint that is down or at capacity fails the review within seconds —
+# A router that is down or at capacity fails the review within seconds —
 # never a green check that reviewed nothing. Whether that failure blocks the
 # merge is the ruleset's enforcement mode (tofu-github), not this file's.
 #
@@ -77,9 +70,7 @@ jobs:
       # median 62 s of model time per pull request — more than the review
       # itself — and produced "No code suggestions" three times out of four.
       # A repository that wants suggestions opts in through its own caller.
-      runner_label: ${{ github.event.repository.private && 'self-hosted' || 'ubuntu-latest' }}
-      model: ${{ github.event.repository.private && 'cheap' || 'glm-5.3-flash' }}
-      fallback_model: ${{ github.event.repository.private && 'subagent' || 'glm-5.3-flash' }}
     secrets:
-      LLM_ROUTER_BASE_URL: ${{ !github.event.repository.private && secrets.LLM_PUBLIC_REVIEW_BASE_URL || secrets.LLM_ROUTER_BASE_URL }}
-      LLM_ROUTER_API_KEY: ${{ !github.event.repository.private && secrets.LLM_PUBLIC_REVIEW_API_KEY || secrets.LLM_ROUTER_API_KEY }}
+      LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+      LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+      LLM_PUBLIC_REVIEW_API_KEY: ${{ secrets.LLM_PUBLIC_REVIEW_API_KEY }}
