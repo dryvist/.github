@@ -15,8 +15,7 @@
   ],
   "automergeType": "pr",
   "automergeStrategy": "squash",
-  "dependencyDashboard": true,
-  "dependencyDashboardAutoclose": true,
+  "dependencyDashboard": false,
   "dependencyDashboardLabels": [
     "dependencies"
   ],
