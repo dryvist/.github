@@ -8,6 +8,15 @@
 # never appears anywhere and never gets a bump PR. `_image:` keys are exempt
 # — the separate no-annotation docker-image customManager already tracks
 # those by pattern.
+#
+# A pin that is deliberately NOT a Renovate-trackable dependency (a PVE-host
+# expected-version guard, an ISO/template name with no public datasource)
+# satisfies this check with `# renovate: ignore — <reason>` above it — that
+# comment starts with `# renovate:` so the check passes, but carries no
+# `datasource=` so no customManager ever matches it or opens a PR for it.
+#
+# Exit codes: 0 clean, 1 unannotated pin(s) found, 2 zero files matched the
+# covered path set (instrument error — check the toggle/ROOT, not a pass).
 name: _renovate-annotations
 
 on:

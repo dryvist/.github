@@ -9,9 +9,24 @@
 # `_image:` keys are exempt: the separate no-annotation docker-image
 # customManager already tracks those by pattern, no annotation needed.
 #
+# Escape hatch: a pin that is deliberately NOT a Renovate-trackable
+# dependency (a PVE-host expected-version guard, an ISO/template name with
+# no public datasource) satisfies this checker with a bare
+# `# renovate: ignore — <reason>` comment. The checker only requires a line
+# starting `# renovate:` above the pin, it never requires `datasource=`; the
+# preset's own matchStrings DO require `datasource=`, so an `ignore` comment
+# is annotated enough to pass here while never matching a real customManager
+# and never producing a Renovate PR.
+#
 # Exit codes:
 #   0 — every pin in a covered path is annotated
 #   1 — one or more unannotated pins found (see stderr for file:line)
+#   2 — instrument error: zero files matched the covered path set. A repo
+#       that opts into this check but has no covered files is misconfigured
+#       (wrong ROOT, or none of roles/*/defaults|vars|tasks|templates,
+#       inventory/, group_vars/, host_vars/, playbooks/, scripts/,
+#       requirements*.yml exist here) — NOT evidence of a clean repo. A
+#       "0 files, 0 unannotated" run must never look identical to "OK".
 #
 # Usage: check-renovate-annotations.sh [ROOT]   (ROOT defaults to .)
 
@@ -43,9 +58,13 @@ git_sha_re="^[[:space:]]*version:[[:space:]]*[\"']?[0-9a-fA-F]{40}"
 annotation_re="^[[:space:]]*# renovate:"
 comment_re="^[[:space:]]*#"
 
-fail=0
+files_scanned=0
+pins_seen=0
+unannotated=0
 
 while IFS= read -r -d '' f; do
+  files_scanned=$((files_scanned + 1))
+
   # Tracks whether an annotation was seen above, surviving blank lines and
   # any number of plain comment lines in between (mirrors the customManager
   # regex's `(?:\s*#[^\n]*\n)*` gap) — reset only by real content.
@@ -72,16 +91,28 @@ while IFS= read -r -d '' f; do
       is_pin=1
     fi
 
-    if [[ "$is_pin" -eq 1 && "$annotated" -eq 0 ]]; then
-      echo "::error file=${f#./},line=${lineno}::unannotated version pin — add a '# renovate: datasource=... depName=...' comment on the line above (blank lines OK): ${line}" >&2
-      fail=1
+    if [[ "$is_pin" -eq 1 ]]; then
+      pins_seen=$((pins_seen + 1))
+      if [[ "$annotated" -eq 0 ]]; then
+        unannotated=$((unannotated + 1))
+        echo "::error file=${f#./},line=${lineno}::unannotated version pin — add a '# renovate: datasource=... depName=...' comment on the line above (blank lines OK), or '# renovate: ignore — <reason>' if this is deliberately not a Renovate-trackable dependency: ${line}" >&2
+      fi
     fi
 
     annotated=0
   done <"$f"
 done < <(find "$ROOT" -type f \( "${PATH_ARGS[@]}" \) -not -path '*/.git/*' -not -path '*/.worktrees/*' -print0)
 
-if [[ "$fail" -ne 0 ]]; then
+echo "scanned ${files_scanned} files, ${pins_seen} pins, ${unannotated} unannotated" >&2
+
+if [[ "$files_scanned" -eq 0 ]]; then
+  echo "Renovate annotation check ERROR: zero files matched the covered path set under '${ROOT}'." >&2
+  echo "Covered paths: roles/*/defaults|vars|tasks|templates, inventory/, group_vars/, host_vars/, playbooks/, scripts/, requirements*.yml." >&2
+  echo "A repo that opts into this check but has none of those paths is misconfigured (wrong ROOT, or the toggle shouldn't be enabled here) — this is not evidence of a clean repo." >&2
+  exit 2
+fi
+
+if [[ "$unannotated" -ne 0 ]]; then
   echo "Renovate annotation check FAILED — see file:line entries above." >&2
   exit 1
 fi
