@@ -33,10 +33,6 @@ on:
         description: Completion token ceiling for the rubric call.
         type: number
         default: 1500
-      scripts_ref:
-        description: Commit or ref of dryvist/ai-workflows to take the scripts from.
-        type: string
-        default: ""
     secrets:
       LLM_ROUTER_BASE_URL:
         description: The router's OpenAI-compatible base URL, ending in /v1.
@@ -57,7 +53,6 @@ jobs:
     uses: dryvist/ai-workflows/.github/workflows/policy-gate.yml@main
     with:
       runner_label: ${{ inputs.runner_label }}
-      scripts_ref: ${{ inputs.scripts_ref }}
       model: ${{ inputs.model }}
       max_diff_kb: ${{ inputs.max_diff_kb }}
       max_tokens: ${{ inputs.max_tokens }}
