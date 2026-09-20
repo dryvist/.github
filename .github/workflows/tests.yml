@@ -35,4 +35,4 @@ jobs:
         with:
           python-version: '3.x'
       - run: pip install --quiet tiktoken pyyaml
-      - run: python3 -m unittest discover -s tests -p '*.test.py' -v
+      - run: python3 -m unittest discover -s tests -v
