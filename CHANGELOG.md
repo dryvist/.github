@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/dryvist/.github/compare/v1.1.0...v1.1.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **workflows:** pin shared-script checkout to job.workflow_sha, no main fallback ([#192](https://github.com/dryvist/.github/issues/192)) ([b2cddaf](https://github.com/dryvist/.github/commit/b2cddaf6a2b00a285769c16690dc75531a3c93b6))
+
 ## [1.1.0](https://github.com/dryvist/.github/compare/v1.0.0...v1.1.0) (2026-09-20)
 
 
