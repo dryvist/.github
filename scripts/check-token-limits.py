@@ -7,6 +7,7 @@ Pairs with the byte file-size gate, which drops .md when this config is present.
 """
 import fnmatch
 import os
+import subprocess
 import sys
 
 import tiktoken
@@ -29,11 +30,34 @@ def hit(path, name, pat):
     return fnmatch.fnmatch(path, pat) or fnmatch.fnmatch(name, pat)
 
 
+def pr_diff_paths():
+    """Files the PR actually changed, or None when HEAD isn't a PR merge commit.
+
+    On a `pull_request` checkout, `github.sha` is the merge commit
+    (`HEAD^1` = base, `HEAD^2` = PR head), so a two-parent HEAD means this is
+    a merge-ref checkout and `HEAD^1...HEAD` is exactly what the PR would add
+    to the base branch. A push checkout has one parent, so this returns None
+    and callers fall back to scanning the whole tree as before.
+    """
+    if subprocess.run(
+        ["git", "rev-parse", "-q", "--verify", "HEAD^2"], capture_output=True
+    ).returncode != 0:
+        return None
+    diff = subprocess.run(
+        ["git", "diff", "--name-only", "HEAD^1...HEAD"], capture_output=True, text=True
+    )
+    return set(diff.stdout.splitlines()) if diff.returncode == 0 else None
+
+
+changed = pr_diff_paths()
+
 errors = 0
 for root, dirs, files in os.walk("."):
     dirs[:] = [d for d in dirs if d not in SKIP]
     for name in files:
         path = os.path.relpath(os.path.join(root, name), ".")
+        if changed is not None and path not in changed:
+            continue
         if any(hit(path, name, e) for e in exclude):
             continue
         lim = next((v for p, v in limits.items() if isinstance(v, int) and hit(path, name, p)), None)
