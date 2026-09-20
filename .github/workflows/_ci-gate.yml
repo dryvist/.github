@@ -449,8 +449,12 @@ jobs:
           # self-check below ran main's copy, which has no --self-check flag,
           # so it ignored the argument, did its normal work and exited 0 —
           # green, having verified nothing. The same mismatch pairs a changed
-          # workflow with an incompatible script in ordinary use.
-          ref: ${{ github.job_workflow_sha }}
+          # workflow with an incompatible script in ordinary use. Must be
+          # `job.workflow_sha`, not `github.job_workflow_sha`: the latter is
+          # empty whenever this workflow runs nested two levels deep (a
+          # caller invokes this workflow, which invokes another), and an
+          # empty `ref` silently checks out the default branch instead.
+          ref: ${{ job.workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-detect-deps-only.sh
           sparse-checkout-cone-mode: false
@@ -671,7 +675,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ job.workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-watchdog.sh
           sparse-checkout-cone-mode: false
@@ -736,7 +740,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: ${{ github.job_workflow_sha }}
+          ref: ${{ job.workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-run-report.sh
           sparse-checkout-cone-mode: false
