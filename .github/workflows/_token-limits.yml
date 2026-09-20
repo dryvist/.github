@@ -37,6 +37,11 @@ jobs:
     steps:
       - name: Checkout caller repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # depth 2 so a PR's merge-commit HEAD keeps both parents locally —
+          # the script diffs HEAD^1...HEAD to scope the scan to the PR's own
+          # changes instead of the whole tree (see check-token-limits.py).
+          fetch-depth: 2
 
       - name: Sparse-checkout the shared token-counter from this repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
