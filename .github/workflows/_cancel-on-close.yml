@@ -1,0 +1,38 @@
+# Reusable: Cancel On Close
+#
+# Problem: a workflow run still QUEUED (waiting for a self-hosted runner) when
+# its PR is merged or closed keeps occupying the runner queue indefinitely.
+# The existing `concurrency: cancel-in-progress: true` pattern every workflow
+# already carries does NOT cover this — it only cancels a group's prior run
+# when a NEW run starts in that group (e.g. a push), and closing a PR starts
+# no new run. GitHub Actions has no native setting that cancels queued runs on
+# PR close (confirmed against the concurrency docs: cancel-in-progress affects
+# only the currently-executing run in the same group, not queued runs, and
+# there is no closed-PR-triggered cancellation feature).
+#
+# This reusable is the caller-side fix: run it from `pull_request: types:
+# [closed]` to sweep every workflow run on that PR's head branch, queued or
+# in-progress, via styfle/cancel-workflow-action. `ignore_sha: true` is
+# required because a `closed` event carries the same head SHA as the run(s)
+# it needs to cancel; `workflow_id: all` targets every workflow file, not
+# just the one this job runs in.
+name: _cancel-on-close
+
+on:
+  workflow_call: {}
+
+permissions: {}
+
+jobs:
+  cancel:
+    name: Cancel queued/in-progress runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel runs on this PR's branch
+        uses: styfle/cancel-workflow-action@d07a454dad7609a92316b57b23c9ccfd4f59af66 # 0.13.1
+        with:
+          ignore_sha: true
+          workflow_id: all
