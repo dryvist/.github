@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.2](https://github.com/dryvist/.github/compare/v1.1.1...v1.1.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **ansible-ci:** make the molecule runner selection visibility-aware ([#195](https://github.com/dryvist/.github/issues/195)) ([c12402c](https://github.com/dryvist/.github/commit/c12402ca3faa2ee9d3ec81a17b5249b6eaf42061))
+
 ## [1.1.1](https://github.com/dryvist/.github/compare/v1.1.0...v1.1.1) (2026-09-20)
 
 
