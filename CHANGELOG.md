@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/dryvist/.github/compare/v1.1.2...v1.2.0) (2026-09-21)
+
+
+### Features
+
+* **workflows:** add reusable to cancel queued/in-progress runs on PR close ([4cc0bd0](https://github.com/dryvist/.github/commit/4cc0bd0e76a3cdf8b6b298be21f63b1468778396))
+* **workflows:** add reusable to cancel queued/in-progress runs on PR close ([443eebf](https://github.com/dryvist/.github/commit/443eebf0219003a6a4fc91237cab026483d3497b))
+
 ## [1.1.2](https://github.com/dryvist/.github/compare/v1.1.1...v1.1.2) (2026-09-21)
 
 
