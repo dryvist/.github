@@ -121,9 +121,9 @@ on:
         description: >-
           Runner label for the molecule job only. Default ubuntu-latest keeps it
           hosted; a caller whose repo has the self-hosted fleet passes a fleet
-          label (e.g. `proxmox`) to run molecule on a pre-baked runner. Fork PRs
-          always fall back to ubuntu-latest so fork-author code never runs on the
-          fleet (guard idiom matches _ci-gate.yml).
+          label (e.g. `proxmox`) to run molecule on a pre-baked runner. Only
+          takes effect for a private repo's own (non-fork) PRs; a public repo
+          and every fork PR always fall back to ubuntu-latest.
         type: string
         default: ubuntu-latest
     secrets:
@@ -263,8 +263,13 @@ jobs:
     needs: changes
     if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
     # Molecule gets its own label so it can run on the self-hosted fleet while
-    # the quick jobs stay hosted. Fork PRs fall back to ubuntu-latest.
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.molecule_runner_label || 'ubuntu-latest' }}
+    # the quick jobs stay hosted. Hosted for a public repo and for fork PRs;
+    # self-hosted (molecule_runner_label) only for a private repo's own PRs.
+    runs-on: >-
+      ${{ (github.event.repository.private == true &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)) &&
+      inputs.molecule_runner_label || 'ubuntu-latest' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
