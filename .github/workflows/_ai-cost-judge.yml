@@ -18,10 +18,14 @@ on:
         required: false
         default: self-hosted
       model:
-        description: Router role alias to call.
+        description: >-
+          Router role alias to call. Defaults to the existing `judge` role
+          (verified live against the router's /models list — no dedicated
+          cost-judge alias exists, and this is the cheapest existing role
+          that fits an advisory verdict task).
         type: string
         required: false
-        default: cost-judge
+        default: judge
       paths:
         description: >-
           Only run when the diff touches one of these path globs (comma

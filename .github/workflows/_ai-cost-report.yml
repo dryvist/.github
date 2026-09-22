@@ -1,0 +1,62 @@
+# Reusable: Weekly Cost Report (plan section J4)
+#
+# Runs on the self-hosted pool, reads the observability endpoint from the
+# `AI_METRICS_URL` repo/org Actions VARIABLE (not a secret — it's a URL, no
+# credential) and fails loudly if it's unset rather than skipping quietly.
+# Posts a Vikunja task (project 45) only on a threshold breach; a clean run
+# is job-summary-only, per agent-notifications.md's "log only" tier. Queries
+# and thresholds live in ai-cost-report.yaml.
+name: _ai-cost-report
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        type: string
+        required: false
+        default: self-hosted
+    secrets:
+      VIKUNJA_URL:
+        required: true
+      VIKUNJA_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-cost-report-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Weekly cost report
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared report script + default config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: |
+            scripts/ai-cost-report.py
+            ai-cost-report.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Use the shared default config when the caller has none
+        run: |
+          [ -f ai-cost-report.yaml ] || cp .gh-shared/ai-cost-report.yaml .
+
+      - name: Run the weekly cost report
+        env:
+          AI_METRICS_URL: ${{ vars.AI_METRICS_URL }}
+          VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
+          VIKUNJA_API_TOKEN: ${{ secrets.VIKUNJA_API_TOKEN }}
+        run: python3 .gh-shared/scripts/ai-cost-report.py

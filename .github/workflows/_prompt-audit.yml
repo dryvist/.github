@@ -17,10 +17,14 @@ on:
         required: false
         default: self-hosted
       model:
-        description: Router role alias to call.
+        description: >-
+          Router role alias to call. Defaults to the existing `cheap` role
+          (verified live against the router's /models list — no dedicated
+          prompt-audit alias exists, and this is a bulk classification sweep,
+          exactly what `cheap` is for).
         type: string
         required: false
-        default: prompt-audit
+        default: cheap
     secrets:
       LLM_ROUTER_BASE_URL:
         required: true

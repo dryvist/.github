@@ -1,0 +1,37 @@
+# Queries + thresholds for _ai-cost-report.yml (J4, plan section J4).
+# Metric names follow the vocabulary Token Meter's own stats schema uses
+# (cache_read_tokens, context_peak, tool_result_tokens, cost_usd, ...) since
+# that's the naming this estate's cost tooling already standardized on. NOT
+# yet verified against the observability guest's actual VictoriaMetrics
+# series names — the Vikunja task this workflow's README points to covers
+# confirming/renaming these. A query that returns no series is reported as
+# "no data for <metric>", never silently skipped as zero.
+queries:
+  cache_read_share:
+    promql: >-
+      sum(ai_agent_cache_read_tokens_total) /
+      sum(ai_agent_input_tokens_total)
+    threshold: { min: 0.80 }
+    unit: ratio
+  write_5m_share:
+    promql: >-
+      sum(ai_agent_cache_write_5m_tokens_total) /
+      sum(ai_agent_cache_write_tokens_total)
+    threshold: null  # informational (re-validates H1) — never posts alone
+    unit: ratio
+  context_peak:
+    promql: max(ai_agent_context_peak_tokens)
+    threshold: { max: 180000 }
+    unit: tokens
+  top_tool_result_tokens:
+    promql: topk(5, sum by (tool_name) (ai_agent_tool_result_tokens_total))
+    threshold: null  # informational
+    unit: tokens
+  subagents_per_session:
+    promql: avg(ai_agent_subagent_count)
+    threshold: null  # informational
+    unit: count
+  cost_per_session_usd:
+    promql: sum(ai_agent_cost_usd_total) / count(count by (session_id) (ai_agent_cost_usd_total))
+    threshold: { max: 2.00 }
+    unit: usd
