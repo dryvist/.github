@@ -1,0 +1,98 @@
+# Reusable: Cost-Review Judge (plan section J2)
+#
+# Runs on the shared self-hosted pool against the org's model router — the
+# only runners that reach it — same pattern as ai-workflows' pr-agent.yml.
+# `model` is always a router ROLE ALIAS the router resolves to its cheapest
+# capable backend (local models first on that role's fallback ladder), never
+# a hardcoded vendor model id.
+#
+# Advisory only: the job never fails the check run on a finding. It costs no
+# premium tokens and keeps that model class out of routine review.
+name: _ai-cost-judge
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        type: string
+        required: false
+        default: self-hosted
+      model:
+        description: Router role alias to call.
+        type: string
+        required: false
+        default: cost-judge
+      paths:
+        description: >-
+          Only run when the diff touches one of these path globs (comma
+          separated). Empty means always run.
+        type: string
+        required: false
+        default: 'skills/**,agentsmd/**,agents/**,.claude/**,hooks/**'
+    secrets:
+      LLM_ROUTER_BASE_URL:
+        required: true
+      LLM_ROUTER_API_KEY:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ai-cost-judge-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  judge:
+    name: Cost-review judge
+    runs-on: ${{ inputs.runner_label }}
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout caller repo (full history for the diff)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Check whether the diff touches a governed path
+        id: scope
+        env:
+          PATTERNS: ${{ inputs.paths }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          hit=false
+          IFS=',' read -ra pats <<< "$PATTERNS"
+          for f in $changed; do
+            for p in "${pats[@]}"; do
+              case "$f" in $p) hit=true ;; esac
+            done
+          done
+          echo "run=$hit" >> "$GITHUB_OUTPUT"
+
+      - name: Sparse-checkout the shared judge script from this repo
+        if: steps.scope.outputs.run == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: scripts/ai-cost-judge.py
+          sparse-checkout-cone-mode: false
+
+      - name: Run the cost-review judge
+        if: steps.scope.outputs.run == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+          ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+          ROUTER_MODEL: ${{ inputs.model }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .gh-shared/scripts/ai-cost-judge.py

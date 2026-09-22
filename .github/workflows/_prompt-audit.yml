@@ -1,0 +1,69 @@
+# Reusable: Scheduled Prompt Audit (plan section J3)
+#
+# Monthly stale-pattern sweep over every skill/rule file, run by the org
+# model router's cheapest capable role (self-hosted pool, same pattern as
+# pr-agent.yml / _ai-cost-judge.yml). Findings are filed to Vikunja project
+# 48 — never a GitHub issue, per rule-tiers.md's task-tracking routing.
+#
+# Also call this on_workflow_call from the caller repo's own model-default
+# change trigger (e.g. nix-ai), not just on the schedule here.
+name: _prompt-audit
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        type: string
+        required: false
+        default: self-hosted
+      model:
+        description: Router role alias to call.
+        type: string
+        required: false
+        default: prompt-audit
+    secrets:
+      LLM_ROUTER_BASE_URL:
+        required: true
+      LLM_ROUTER_API_KEY:
+        required: true
+      VIKUNJA_URL:
+        required: true
+      VIKUNJA_API_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prompt-audit-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Prompt audit
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared audit script from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: scripts/prompt-audit.py
+          sparse-checkout-cone-mode: false
+
+      - name: Run the prompt audit
+        env:
+          ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+          ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
+          ROUTER_MODEL: ${{ inputs.model }}
+          VIKUNJA_URL: ${{ secrets.VIKUNJA_URL }}
+          VIKUNJA_API_TOKEN: ${{ secrets.VIKUNJA_API_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+        run: python3 .gh-shared/scripts/prompt-audit.py

@@ -1,0 +1,40 @@
+# Thresholds for _ai-config-budget.yml (J1, plan section J1). One versioned
+# file so a threshold change is a reviewable diff, never a hardcoded number
+# buried in the check script.
+skill_description:
+  warn_chars: 250
+  fail_bytes: 1024
+skill_md_body:
+  fail_bytes: 6144
+  # A SKILL.md this size is exempt only if it has a references/ sibling dir.
+  references_dir: references
+always_on_rules:
+  fail_bytes: 12288
+  # Files counted as "always-on": no `paths:` frontmatter gate. Configurable
+  # per consumer repo — each AI-config repo overrides this list to match its
+  # own rule tree.
+  paths:
+    - AGENTS.md
+    - agentsmd/rules/soul.md
+    - agentsmd/rules/operating-core.md
+    - agentsmd/rules/public-disclosure.md
+hook_output:
+  fail_bytes: 1024
+  # Regexes that mark dynamic (non-deterministic) hook output — timestamps,
+  # dates, anything that would break prompt-cache reuse turn to turn.
+  dynamic_patterns:
+    - '\b\d{4}-\d{2}-\d{2}\b'
+    - '\b\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM|am|pm)?\b'
+    - '\b\d{10,13}\b'  # unix timestamp (s or ms)
+  # Hooks to probe, with the sample stdin JSON each expects.
+  hooks: []
+gh_cli:
+  # `gh (pr|issue|run) (list|view)` must carry --json and --limit.
+  require_flags: ['--json', '--limit']
+agent_frontmatter:
+  # agents/*.md missing `model:` or `effort:` warns.
+  require_keys: ['model', 'effort']
+mcp_servers:
+  # New always-on MCP servers must match this glob (the mcp-available
+  # opt-in pattern) or the gate fails.
+  allowed_glob: 'mcp-available/*.json'

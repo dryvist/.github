@@ -1,0 +1,59 @@
+# Reusable: AI Config Budget Gate (plan section J1)
+#
+# Deterministic checks only — no model call, so it never needs the router or
+# a self-hosted runner. Thresholds live in the calling repo's
+# ai-config-budget.yaml (falls back to this repo's default if the caller has
+# none). See scripts/check-ai-config-budget.py for what each gate checks.
+name: _ai-config-budget
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        description: GitHub Actions runner label.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions: {}
+
+concurrency:
+  group: ai-config-budget-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Sparse-checkout the shared check script from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: |
+            scripts/check-ai-config-budget.py
+            ai-config-budget.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Fall back to the default config when the caller has none
+        run: |
+          [ -f ai-config-budget.yaml ] || cp .gh-shared/ai-config-budget.yaml .
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: pip install --quiet pyyaml
+
+      - name: Check AI config budgets
+        run: python3 .gh-shared/scripts/check-ai-config-budget.py
