@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/dryvist/.github/compare/v1.2.0...v1.2.1) (2026-09-23)
+
+
+### Bug Fixes
+
+* **renovate:** keep a v-prefixed pin's own prefix on write-back ([#200](https://github.com/dryvist/.github/issues/200)) ([ee555ec](https://github.com/dryvist/.github/commit/ee555ec5bae93ab0478eb60b9b5ec9e39c67f352))
+
 ## [1.2.0](https://github.com/dryvist/.github/compare/v1.1.2...v1.2.0) (2026-09-21)
 
 
