@@ -372,6 +372,17 @@
       "extractVersion": "^v(?<version>.+)$"
     },
     {
+      "description": "The rule above strips the leading \"v\" from every github-releases tag it matches so a bare-pinned file (no \"v\" in currentValue) compares correctly. It has no way to tell that a v-prefixed pin (currentValue itself starts with \"v\", e.g. \"v0.8.6\") needs the opposite: extractVersion overwrites the datasource's release.version unconditionally, and the default versioning's getNewValue only restores a stripped prefix for the reverse case (bare currentValue, prefixed currentVersion), so a v-prefixed pin's write loses its own \"v\" every bump. A full-string capture is a no-op extraction — release.version is reassigned to itself — so the raw, still-prefixed tag reaches the write untouched.",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchCurrentValue": "/^v/",
+      "extractVersion": "^(?<version>.*)$"
+    },
+    {
       "description": "Fri ~15:00 / Mon ~05:00 America/New_York schedule for all custom regex managers",
       "matchManagers": [
         "custom.regex"
