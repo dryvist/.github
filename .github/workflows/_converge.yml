@@ -233,12 +233,15 @@ jobs:
 
   # 4. Trigger and wait, bounded by `inputs.wait_minutes`. Terrakube verifies
   # this job's own GitHub OIDC token directly (org Security -> Federated
-  # Credentials); `needs: mint-token` stays for job ordering only — a
-  # skipped mint-token (see its own `if:` above) does not skip this job,
-  # since this job's `if:` does not itself check mint-token's result.
+  # Credentials). mint-token is deliberately NOT in this job's `needs`: a
+  # job whose `needs` names a SKIPPED job is itself skipped unless its
+  # `if:` uses a status function, and mint-token is skipped for this
+  # target. `window-open` stays in `needs` so the window is open before
+  # this job can start, which mint-token's own `needs: window-open` used
+  # to guarantee transitively.
   trigger:
     name: Trigger target
-    needs: [mint-token, changes]
+    needs: [window-open, changes]
     if: inputs.target == 'terrakube-apply'
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: ${{ inputs.wait_minutes }}
