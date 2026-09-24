@@ -2,18 +2,16 @@
 #
 # Fires on a push to a protected branch (the merge IS the gate; no separate
 # label). Five steps: classify scope, open a Vikunja maintenance window,
-# trade GitHub OIDC for a scoped OpenBao token, trigger the target and wait
-# (bounded), then report and close the window. Each `target` value implies an
-# OpenBao JWT role of the same name, provisioned by the repository named two
-# paragraphs down.
+# mint a scoped OpenBao token, trigger the target and wait (bounded), then
+# report and close the window.
 #
-# Scope note (2026-09-13): the `target: terrakube-apply` path talks to the
-# Terrakube workspace API to CREATE a plan job only. Every workspace today
-# has `allowRemoteApply: false`, and the Terrakube organization deliberately
-# ships no CI-usable team token (interactive `tofu login` only) — both are
-# operator decisions tracked outside this file. So `terrakube-apply` reports
-# a confirmation URL and returns; it cannot complete an apply until an
-# operator both flips the workspace flag AND provisions a CI credential.
+# `target: terrakube-apply` verifies this job's own GitHub OIDC token
+# directly against Terrakube's Federated OIDC Authentication (org Security
+# -> Federated Credentials) rather than using the OpenBao token from step 3
+# — Terrakube has no OpenBao integration to mint a credential against. It
+# plans, creates a plan-and-apply job pinned to that plan, approves it only
+# when the plan shows zero destroys, and waits for a terminal state; a
+# nonzero destroy count leaves the job `waitingApproval` for a human.
 # `semaphore-run` and `nix-rebuild` are declared inputs with no job body yet
 # — a caller selecting either fails closed at the "Reject an unimplemented
 # target" step rather than silently no-op'ing.
@@ -38,10 +36,29 @@ on:
       target_ref:
         description: >-
           Opaque identifier the target step resolves: a Terrakube workspace
-          name for terrakube-apply, a Semaphore template id for
+          UUID for terrakube-apply, a Semaphore template id for
           semaphore-run, a flake target for nix-rebuild.
         type: string
         required: true
+      terrakube_org_id:
+        description: Terrakube organization UUID. Required only for target terrakube-apply.
+        type: string
+        default: ""
+      terrakube_template_id:
+        description: >-
+          UUID of the plan -> approval -> apply job template. Required only
+          for target terrakube-apply.
+        type: string
+        default: ""
+      infra_repo:
+        description: >-
+          owner/repo of the infrastructure root terrakube-apply checks out
+          and plans (e.g. dryvist/tofu-proxmox). Pinned to the ref named by
+          this (the desired-state) repository's own `.infra-ref` file, so a
+          version bump is a normal PR to that file. Required only for
+          target terrakube-apply.
+        type: string
+        default: ""
       window_title:
         description: >-
           The affected host or service, as an FQDN — never a literal IP or a
@@ -207,29 +224,60 @@ jobs:
           jwtGithubAudience: ${{ inputs.openbao_jwt_audience }}
           exportEnv: false
 
-  # 4. Trigger and wait, bounded by `inputs.wait_minutes`. Terrakube's
-  # workspace API creates a plan job; it cannot complete an apply while
-  # `allowRemoteApply` stays false (see the file header), so this step
-  # reports the confirmation URL rather than polling for a terminal state.
+  # 4. Trigger and wait, bounded by `inputs.wait_minutes`. Terrakube verifies
+  # this job's own GitHub OIDC token directly (org Security -> Federated
+  # Credentials), so `terrakube-apply` never uses `mint-token`'s OpenBao
+  # token — Terrakube has no OpenBao integration to mint a credential
+  # against. `needs: mint-token` stays for job ordering only.
   trigger:
     name: Trigger target
     needs: [mint-token, changes]
     if: inputs.target == 'terrakube-apply'
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: ${{ inputs.wait_minutes }}
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       confirmation_url: ${{ steps.run.outputs.confirmation_url }}
     steps:
-      - name: Create the Terrakube plan job
+      - name: Checkout the desired-state repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Sparse-checkout the gated-apply script from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: scripts/terrakube-gated-apply.sh
+          sparse-checkout-cone-mode: false
+      - name: Read the pinned infrastructure-repo ref
+        id: infra_ref
+        run: echo "ref=$(cat .infra-ref)" >> "$GITHUB_OUTPUT"
+      - name: Get a Terrakube-audience GitHub OIDC token
+        id: oidc
+        run: |
+          set -euo pipefail
+          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=terrakube")
+          token=$(echo "$resp" | jq -r '.value')
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+      - name: Create, gate, and wait for the Terrakube job
         id: run
         env:
           TERRAKUBE_API_ADDR: ${{ secrets.TERRAKUBE_API_ADDR }}
-          WORKSPACE_REF: ${{ inputs.target_ref }}
+          TERRAKUBE_TOKEN: ${{ steps.oidc.outputs.token }}
+          TERRAKUBE_ORG_ID: ${{ inputs.terrakube_org_id }}
+          TERRAKUBE_WORKSPACE_ID: ${{ inputs.target_ref }}
+          TERRAKUBE_TEMPLATE_ID: ${{ inputs.terrakube_template_id }}
+          INFRA_REPO: ${{ inputs.infra_repo }}
+          INFRA_REF: ${{ steps.infra_ref.outputs.ref }}
+          WAIT_MINUTES: ${{ inputs.wait_minutes }}
         run: |
           set -euo pipefail
           [ -n "${TERRAKUBE_API_ADDR:-}" ] || { echo "::error::TERRAKUBE_API_ADDR secret not set"; exit 1; }
-          echo "::notice::Terrakube plan-and-queue for workspace ${WORKSPACE_REF} not yet wired to a live credential — see the file header. No API call made."
-          echo "confirmation_url=" >> "$GITHUB_OUTPUT"
+          bash .gh-shared/scripts/terrakube-gated-apply.sh
 
   # 5. Report and close. Runs on `always()` so a failed trigger still closes
   # the window rather than leaving it open indefinitely. Sets `done` FIRST:
