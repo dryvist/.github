@@ -5,13 +5,15 @@
 # mint a scoped OpenBao token, trigger the target and wait (bounded), then
 # report and close the window.
 #
-# `target: terrakube-apply` verifies this job's own GitHub OIDC token
+# `target: terrakube-apply` exchanges this job's own GitHub OIDC token
 # directly against Terrakube's Federated OIDC Authentication (org Security
-# -> Federated Credentials) rather than using the OpenBao token from step 3
-# — Terrakube has no OpenBao integration to mint a credential against. It
-# plans, creates a plan-and-apply job pinned to that plan, approves it only
-# when the plan shows zero destroys, and waits for a terminal state; a
-# nonzero destroy count leaves the job `waitingApproval` for a human.
+# -> Federated Credentials) — step 3's `mint-token` is skipped for this
+# target, since Terrakube has no OpenBao integration to mint a credential
+# against. It plans, creates a plan-and-apply job pinned to that plan,
+# approves it only when the plan shows zero destroys, and waits for a
+# terminal state; a nonzero destroy count leaves the job `waitingApproval`
+# in Terrakube for a human, and fails this run (not a green skip) so the
+# park is actually noticed.
 # `semaphore-run` and `nix-rebuild` are declared inputs with no job body yet
 # — a caller selecting either fails closed at the "Reject an unimplemented
 # target" step rather than silently no-op'ing.
@@ -204,9 +206,14 @@ jobs:
   # equals `inputs.target`; each target's own AppRole-free JWT role and its
   # narrow policy are provisioned in ansible-proxmox-apps, not here. The
   # minted token is used only within this job — no other job reads it.
+  # Skipped for terrakube-apply: that target authenticates with its own
+  # GitHub OIDC token directly against Terrakube, never OpenBao, so running
+  # this step would require an unused `terrakube-apply` OpenBao JWT role to
+  # exist — a hidden failure point for a credential nothing consumes.
   mint-token:
     name: Mint scoped OpenBao token
     needs: window-open
+    if: inputs.target != 'terrakube-apply'
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 3
     permissions:
@@ -226,9 +233,9 @@ jobs:
 
   # 4. Trigger and wait, bounded by `inputs.wait_minutes`. Terrakube verifies
   # this job's own GitHub OIDC token directly (org Security -> Federated
-  # Credentials), so `terrakube-apply` never uses `mint-token`'s OpenBao
-  # token — Terrakube has no OpenBao integration to mint a credential
-  # against. `needs: mint-token` stays for job ordering only.
+  # Credentials); `needs: mint-token` stays for job ordering only — a
+  # skipped mint-token (see its own `if:` above) does not skip this job,
+  # since this job's `if:` does not itself check mint-token's result.
   trigger:
     name: Trigger target
     needs: [mint-token, changes]
@@ -255,28 +262,17 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Verify the gated-apply script still classifies
         run: bash .gh-shared/scripts/terrakube-gated-apply.sh --self-check
-      - name: Read the pinned infrastructure-repo ref
-        id: infra_ref
-        run: echo "ref=$(cat .infra-ref)" >> "$GITHUB_OUTPUT"
-      - name: Get a Terrakube-audience GitHub OIDC token
-        id: oidc
-        run: |
-          set -euo pipefail
-          resp=$(curl -fsS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=terrakube")
-          token=$(echo "$resp" | jq -r '.value')
-          echo "::add-mask::$token"
-          echo "token=$token" >> "$GITHUB_OUTPUT"
+      # The OIDC token exchange and the .infra-ref read both live in the
+      # script now (no inline logic in YAML) — this step only sets what
+      # the script cannot know about itself.
       - name: Create, gate, and wait for the Terrakube job
         id: run
         env:
           TERRAKUBE_API_ADDR: ${{ secrets.TERRAKUBE_API_ADDR }}
-          TERRAKUBE_TOKEN: ${{ steps.oidc.outputs.token }}
           TERRAKUBE_ORG_ID: ${{ inputs.terrakube_org_id }}
           TERRAKUBE_WORKSPACE_ID: ${{ inputs.target_ref }}
           TERRAKUBE_TEMPLATE_ID: ${{ inputs.terrakube_template_id }}
           INFRA_REPO: ${{ inputs.infra_repo }}
-          INFRA_REF: ${{ steps.infra_ref.outputs.ref }}
           WAIT_MINUTES: ${{ inputs.wait_minutes }}
         run: |
           set -euo pipefail

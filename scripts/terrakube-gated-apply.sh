@@ -2,30 +2,32 @@
 # terrakube-gated-apply.sh — invoked by the `trigger` job in _converge.yml
 # for target: terrakube-apply.
 #
-# Cancels any already-queued job for the workspace, plans from the working
+# Exchanges this job's own GitHub OIDC token for a Terrakube bearer token
+# (Federated OIDC Authentication, org Security -> Federated Credentials —
+# never OpenBao, which Terrakube has no integration to mint against),
+# cancels any already-queued job for the workspace, plans from the working
 # directory, creates a plan-and-apply job pinned to that plan's own upload,
 # approves it only when the plan's own summary shows zero destroys, and
 # waits for a terminal state. Terrakube has no native FIFO cancel for queued
 # jobs (issues terrakube-io/terrakube#1957, #2850), so step 1 does it.
 #
 # Required env:
-#   TERRAKUBE_API_ADDR   — e.g. https://terrakube-api.example.com
-#   TERRAKUBE_TOKEN       — bearer token, GitHub OIDC exchanged directly via
-#                           Terrakube's own Federated OIDC Authentication
-#                           (org Security -> Federated Credentials), never an
-#                           OpenBao-minted credential — Terrakube has no
-#                           OpenBao integration to mint against.
-#   TERRAKUBE_ORG_ID      — organization UUID
-#   TERRAKUBE_WORKSPACE_ID — workspace UUID
-#   INFRA_REPO            — owner/repo of the infrastructure root, e.g.
-#                           dryvist/tofu-proxmox
-#   INFRA_REF             — release tag pinning that repo
-#   WAIT_MINUTES          — bounded poll budget for the terminal-state wait
+#   TERRAKUBE_API_ADDR             — e.g. https://terrakube-api.example.com
+#   TERRAKUBE_ORG_ID                — organization UUID
+#   TERRAKUBE_WORKSPACE_ID          — workspace UUID
+#   TERRAKUBE_TEMPLATE_ID           — plan -> approval -> apply job template UUID
+#   INFRA_REPO                      — owner/repo of the infrastructure root, e.g.
+#                                      dryvist/tofu-proxmox
+#   ACTIONS_ID_TOKEN_REQUEST_TOKEN,
+#   ACTIONS_ID_TOKEN_REQUEST_URL    — auto-injected by the runner when the job
+#                                      has `permissions: id-token: write`; no
+#                                      `env:` declaration needed in the caller
+#   WAIT_MINUTES                    — bounded poll budget (default 10)
 #
 # Run from a checkout of the desired-state repository (the one carrying
-# deployment.json at its root) — this script clones INFRA_REPO@INFRA_REF
-# into a scratch directory, copies deployment.json into it, and plans
-# from there.
+# deployment.json and .infra-ref at its root) — this script reads
+# .infra-ref, clones that ref of INFRA_REPO into a scratch directory,
+# copies deployment.json into it, and plans from there.
 set -euo pipefail
 
 api() {
@@ -37,6 +39,49 @@ api() {
     -H "Content-Type: application/vnd.api+json" \
     -H "Accept: application/vnd.api+json" \
     "${TERRAKUBE_API_ADDR%/}${path}" "$@"
+}
+
+# Exchanges this job's own GitHub OIDC token (audience "terrakube", matching
+# the claim condition on the org's Federated Credential) for a Terrakube
+# bearer token. Sets the global TERRAKUBE_TOKEN and masks it — masking must
+# happen on the script's own real stdout, so this is called directly
+# (never through command substitution, which would swallow the directive
+# into the captured value instead of reaching the runner's log parser).
+get_oidc_token() {
+  local resp
+  resp=$(curl -fsS --max-time 30 -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+    "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=terrakube")
+  TERRAKUBE_TOKEN=$(printf '%s' "$resp" | jq -r '.value')
+  [[ -n $TERRAKUBE_TOKEN && $TERRAKUBE_TOKEN != null ]] || {
+    echo "::error::failed to obtain a GitHub OIDC token for Terrakube"
+    exit 1
+  }
+  echo "::add-mask::${TERRAKUBE_TOKEN}"
+}
+
+# Exports what `tofu`'s cloud-block CLI-driven workflow needs to run
+# non-interactively, without a `tofu login`. tofu-proxmox's cloud block
+# carries no hostname/organization/workspace by design (main.tf) — all
+# three, plus the per-host credential, come from the environment:
+#   - TF_WORKSPACE must be set explicitly: the stored default is a
+#     DIFFERENT workspace and fails as a fake 403/401, not a wrong-
+#     workspace error.
+#   - TF_TOKEN_<host> follows Terraform's own convention: dots -> "_",
+#     hyphens -> "__".
+configure_tofu_cli_auth() {
+  local org_name workspace_name tf_host tf_host_env
+  org_name=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}" | jq -r '.data.attributes.name')
+  workspace_name=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}/workspace/${TERRAKUBE_WORKSPACE_ID}" | jq -r '.data.attributes.name')
+  [[ -n $org_name && $org_name != null ]] || { echo "::error::could not resolve organization ${TERRAKUBE_ORG_ID}'s name"; exit 1; }
+  [[ -n $workspace_name && $workspace_name != null ]] || { echo "::error::could not resolve workspace ${TERRAKUBE_WORKSPACE_ID}'s name"; exit 1; }
+
+  tf_host=$(printf '%s' "$TERRAKUBE_API_ADDR" | sed -E 's#^[a-zA-Z]+://##; s#/.*##')
+  tf_host_env=$(printf '%s' "$tf_host" | sed -E 's/\./_/g; s/-/__/g')
+
+  export TF_CLOUD_HOSTNAME="$tf_host"
+  export TF_CLOUD_ORGANIZATION="$org_name"
+  export TF_WORKSPACE="$workspace_name"
+  export "TF_TOKEN_${tf_host_env}=${TERRAKUBE_TOKEN}"
 }
 
 # Cancels any job still `pending` or `waitingApproval` for the workspace, so
@@ -67,19 +112,38 @@ create_job() {
   )" | jq -r '.data.id'
 }
 
-# Reads job $1's Plan step output and decides approve vs. park. Prints
-# "approve" or "park: <summary line>".
+# Polls job $1 until its Plan step has finished — status "waitingApproval"
+# — or the job reaches a terminal state on its own (a plan failure never
+# reaches approval). Prints whichever status it settles on, or "timeout".
+# Reading the Plan step's log before this returns is the race the log-read
+# used to have: right after create_job, the plan has not necessarily run
+# yet, so the log request could hit an empty or stale output.
+wait_for_plan() {
+  local job_id=$1 elapsed=0 status
+  while (( elapsed < WAIT_SECONDS )); do
+    status=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}" | jq -r '.data.attributes.status')
+    case "$status" in
+      waitingApproval|completed|failed|cancelled|rejected|denied) echo "$status"; return ;;
+    esac
+    sleep 10
+    elapsed=$((elapsed + 10))
+  done
+  echo "timeout"
+}
+
+# Reads job $1's Plan step output — call only once wait_for_plan reports
+# waitingApproval, so the step has actually finished — and decides approve
+# vs. park. Prints "approve" or "park: <summary line>". Strips ANSI colour
+# codes before matching: the plan log is colourised.
 gate_plan() {
   local job_id=$1
-  local plan_step_id output
+  local plan_step_id output log summary destroy
   # The job's `step` relationship lists step ids; the Plan step is
   # stepNumber 100 (fixed by the plan-and-apply template's tcl).
   plan_step_id=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}/step" |
     jq -r '.data[] | select(.attributes.stepNumber == 100) | .id')
   output=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}/step/${plan_step_id}" | jq -r '.data.attributes.output')
-  local log
-  log=$(curl -fsS --max-time 30 -H "Authorization: Bearer ${TERRAKUBE_TOKEN}" "$output")
-  local summary
+  log=$(curl -fsS --max-time 30 -H "Authorization: Bearer ${TERRAKUBE_TOKEN}" "$output" | sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g')
   summary=$(printf '%s\n' "$log" | grep -Eo 'Plan: [0-9]+ to add, [0-9]+ to change, [0-9]+ to destroy\.' | tail -1)
   if [[ -z $summary ]]; then
     # No changes at all reads as a clean, approvable no-op.
@@ -90,7 +154,6 @@ gate_plan() {
     echo "park: could not find a plan summary line"
     return
   fi
-  local destroy
   destroy=$(printf '%s\n' "$summary" | grep -Eo '[0-9]+ to destroy' | grep -Eo '^[0-9]+')
   if [[ $destroy -eq 0 ]]; then
     echo "approve"
@@ -99,13 +162,14 @@ gate_plan() {
   fi
 }
 
-# Clones INFRA_REPO@INFRA_REF into $1 (a fresh directory) and copies this
-# checkout's deployment.json into its root. Asserts the copy matches the
-# source byte-for-byte — that directory becomes the tarball `tofu plan`
-# uploads, so this is checking the tarball's content, not a proxy for it.
+# Clones INFRA_REPO@$1 (a release ref) into $2 (a fresh directory) and
+# copies this checkout's deployment.json into its root. Asserts the copy
+# matches the source byte-for-byte — that directory becomes the tarball
+# `tofu plan` uploads, so this is checking the tarball's content, not a
+# proxy for it.
 assemble_tree() {
-  local tree_dir=$1
-  git clone --quiet --depth 1 --branch "$INFRA_REF" \
+  local infra_ref=$1 tree_dir=$2
+  git clone --quiet --depth 1 --branch "$infra_ref" \
     "https://github.com/${INFRA_REPO}.git" "$tree_dir"
   cp deployment.json "${tree_dir}/deployment.json"
   cmp -s deployment.json "${tree_dir}/deployment.json" || {
@@ -136,29 +200,32 @@ wait_for_terminal() {
 
 main() {
   : "${TERRAKUBE_API_ADDR:?required}"
-  : "${TERRAKUBE_TOKEN:?required}"
   : "${TERRAKUBE_ORG_ID:?required}"
   : "${TERRAKUBE_WORKSPACE_ID:?required}"
   : "${TERRAKUBE_TEMPLATE_ID:?required}"
   : "${INFRA_REPO:?required}"
-  : "${INFRA_REF:?required}"
+  : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?required — the job needs permissions: id-token: write}"
+  : "${ACTIONS_ID_TOKEN_REQUEST_URL:?required — the job needs permissions: id-token: write}"
   : "${WAIT_MINUTES:=10}"
-  local WAIT_SECONDS=$((WAIT_MINUTES * 60))
+  WAIT_SECONDS=$((WAIT_MINUTES * 60))
 
+  [[ -f .infra-ref ]] || { echo "::error::.infra-ref not found in the desired-state repository root"; exit 1; }
+  local infra_ref
+  infra_ref=$(cat .infra-ref)
+
+  get_oidc_token
+  configure_tofu_cli_auth
   cancel_queued_jobs
 
   local tree_dir
   tree_dir=$(mktemp -d)
-  assemble_tree "$tree_dir"
+  assemble_tree "$infra_ref" "$tree_dir"
 
-  # UNRESOLVED, flagged rather than guessed: a plain `tofu plan` run from
-  # this tree uploads a configuration version and prints a run URL whose
-  # last path segment is the job id (per the confirmed job-1026 precedent —
-  # its id equals its run number). This still needs one live confirmation:
-  # does that CLI-created job's own `overrideSource` already carry the
-  # tarball URL this script can reuse for create_job, or does the
-  # configuration version live under a different field/endpoint on that
-  # job? Placeholder until confirmed:
+  # A plain `tofu plan` CLI run also creates a job, whose id is the run
+  # number printed in its own URL; that job's own overrideSource already
+  # carries the configuration-version tarball this script reuses below —
+  # confirmed live (run 1025 -> job 1026: POSTing a new job with that
+  # overrideSource worked).
   local plan_run_output
   plan_run_output=$(cd "$tree_dir" && tofu init -no-color && tofu plan -no-color 2>&1) || { echo "$plan_run_output"; exit 1; }
   local plan_job_id
@@ -167,7 +234,7 @@ main() {
   local override_source
   override_source=$(api GET "/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${plan_job_id}" | jq -r '.data.attributes.overrideSource')
   [[ -n $override_source && $override_source != null ]] || {
-    echo "::error::job ${plan_job_id} has no overrideSource — the plain-plan-to-configuration-version lookup needs re-checking, see the comment above this line"
+    echo "::error::job ${plan_job_id} has no overrideSource"
     exit 1
   }
 
@@ -175,28 +242,37 @@ main() {
   job_id=$(create_job "$override_source" "$TERRAKUBE_TEMPLATE_ID")
   echo "created job ${job_id}"
 
+  local plan_status
+  plan_status=$(wait_for_plan "$job_id")
+  case "$plan_status" in
+    waitingApproval) : ;;
+    timeout) echo "::error::job ${job_id} did not reach waitingApproval within ${WAIT_MINUTES}m"; exit 1 ;;
+    *) echo "::error::job ${job_id} ended in ${plan_status} before reaching approval"; exit 1 ;;
+  esac
+
   local decision
   decision=$(gate_plan "$job_id")
+  local confirmation_url="${TERRAKUBE_API_ADDR}/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}"
   if [[ $decision == approve ]]; then
     approve_job "$job_id"
   else
-    echo "::notice::parking job ${job_id}: ${decision#park: }"
-    echo "confirmation_url=${TERRAKUBE_API_ADDR}/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}" >>"${GITHUB_OUTPUT:-/dev/null}"
-    exit 0
+    echo "confirmation_url=${confirmation_url}" >>"${GITHUB_OUTPUT:-/dev/null}"
+    # A parked job must not exit 0: nobody hears about a green run. The red
+    # run IS the notification; report-and-close still closes the window
+    # (its own `if:` runs on always()).
+    echo "::error::parked: ${decision#park: } — ${confirmation_url}"
+    exit 1
   fi
 
   local final_status
   final_status=$(wait_for_terminal "$job_id")
-  echo "confirmation_url=${TERRAKUBE_API_ADDR}/api/v1/organization/${TERRAKUBE_ORG_ID}/job/${job_id}" >>"${GITHUB_OUTPUT:-/dev/null}"
+  echo "confirmation_url=${confirmation_url}" >>"${GITHUB_OUTPUT:-/dev/null}"
   [[ $final_status == completed ]] || { echo "::error::job ${job_id} ended in ${final_status}"; exit 1; }
   echo "job ${job_id} completed"
 }
 
-# --self-check: exercises gate_plan's parsing against fixture logs, without
-# a runner or a real Terrakube. The part self-check cannot cover — the
-# plain-plan-to-configuration-version lookup above — is exactly the part
-# flagged UNRESOLVED in main(); this cannot self-check a fact not yet
-# confirmed against a live system.
+# --self-check: exercises gate_plan's and wait_for_plan's logic against
+# fixtures, without a runner or a real Terrakube.
 if [[ ${1:-} == --self-check ]]; then
   fail=0
   export TERRAKUBE_ORG_ID=org1 TERRAKUBE_TOKEN=fake-token
@@ -219,8 +295,44 @@ if [[ ${1:-} == --self-check ]]; then
   check_gate $'Plan: 1 to add, 0 to change, 1 to destroy.' "park"
   check_gate $'No changes. Your infrastructure matches the configuration.' "approve"
   check_gate $'garbage, no plan summary here' "park"
+  # A colourised log (the real 1026 log was) must strip before matching.
+  check_gate $'\x1b[32mPlan: 2 to add, 0 to change, 0 to destroy.\x1b[0m' "approve"
+  check_gate $'\x1b[1;31mPlan: 0 to add, 0 to change, 1 to destroy.\x1b[0m' "park"
 
-  [[ $fail == 0 ]] && echo "self-check OK: 4 cases"
+  check_wait_for_plan() {
+    local want=$1
+    shift
+    local -a seq=("$@")
+    # A plain shell counter would not work here: wait_for_plan reads
+    # status via `status=$(api ... | jq ...)`, a command substitution that
+    # forks a subshell — any plain variable api() increments is a copy
+    # discarded when that subshell exits. A file survives the fork.
+    local counter_file
+    counter_file=$(mktemp)
+    echo 0 >"$counter_file"
+    api() {
+      local i s
+      i=$(<"$counter_file")
+      s=${seq[$i]}
+      echo $((i + 1)) >"$counter_file"
+      echo "{\"data\":{\"attributes\":{\"status\":\"$s\"}}}"
+    }
+    sleep() { :; } # no real waiting in a self-check
+    # Exactly enough budget for one api() call per seq entry: the last
+    # entry either returns a terminal status or the loop exhausts the
+    # budget right after consuming it (the "timeout" case).
+    WAIT_SECONDS=$((${#seq[@]} * 10))
+    local got
+    got=$(wait_for_plan job1)
+    rm -f "$counter_file"
+    [[ $got == "$want" ]] || { echo "FAIL: seq=${seq[*]} -> got '$got', want '$want'" >&2; fail=1; }
+  }
+
+  check_wait_for_plan waitingApproval pending waitingApproval
+  check_wait_for_plan failed pending failed
+  check_wait_for_plan timeout pending pending pending
+
+  [[ $fail == 0 ]] && echo "self-check OK: 9 cases"
   exit $fail
 fi
 
