@@ -247,10 +247,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: ${{ job.workflow_sha }}
+          # The commit this reusable workflow was loaded from, NOT main —
+          # same reasoning as _ci-gate.yml's identical checkout step.
+          ref: ${{ github.job_workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/terrakube-gated-apply.sh
           sparse-checkout-cone-mode: false
+      - name: Verify the gated-apply script still classifies
+        run: bash .gh-shared/scripts/terrakube-gated-apply.sh --self-check
       - name: Read the pinned infrastructure-repo ref
         id: infra_ref
         run: echo "ref=$(cat .infra-ref)" >> "$GITHUB_OUTPUT"
