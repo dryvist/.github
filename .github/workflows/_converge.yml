@@ -254,9 +254,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          # The commit this reusable workflow was loaded from, NOT main —
-          # same reasoning as _ci-gate.yml's identical checkout step.
-          ref: ${{ github.job_workflow_sha }}
+          # Must be `job.workflow_sha`, not `github.job_workflow_sha`: the
+          # latter is empty whenever this workflow runs nested two levels
+          # deep (a caller invokes this workflow, which invokes another),
+          # and an empty `ref` silently checks out the default branch
+          # instead — same reasoning as _ci-gate.yml's identical checkout
+          # step.
+          ref: ${{ job.workflow_sha }}
           path: .gh-shared
           sparse-checkout: scripts/terrakube-gated-apply.sh
           sparse-checkout-cone-mode: false
