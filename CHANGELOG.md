@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/dryvist/.github/compare/v1.2.1...v1.3.0) (2026-09-24)
+
+
+### Features
+
+* **converge:** gate terrakube-apply on GitHub OIDC and a zero-destroy plan ([#202](https://github.com/dryvist/.github/issues/202)) ([d199840](https://github.com/dryvist/.github/commit/d1998407cf3adfd0acbf1d123d3f005a915fb92a))
+
 ## [1.2.1](https://github.com/dryvist/.github/compare/v1.2.0...v1.2.1) (2026-09-23)
 
 
