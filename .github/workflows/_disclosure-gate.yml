@@ -1,0 +1,120 @@
+# Reusable: Disclosure Gate
+#
+# Two independent checks that keep sensitive values out of a public repo:
+#
+#   - "gitleaks (redacted)" — same pattern as JacobPEvans/docs' secret-scan.yml:
+#     gitleaks-action with the org GITLEAKS_PRIVATE_CONFIG materialized to a
+#     runner-local file at run time. PR comments, the SARIF artifact and the
+#     job summary are all disabled, and the action runs gitleaks with
+#     --redact — a catch never echoes the matched secret.
+#   - "disclosure-denylist" — a fixed-string scan against the org
+#     DISCLOSURE_DENYLIST secret (one term per line), run by
+#     scripts/disclosure-denylist-scan.sh over the PR diff plus the PR title
+#     and body. A hit prints only `path:line`, never the matched term or
+#     line content — the denylist itself is sensitive, so a verbose catch
+#     would re-leak exactly what it caught.
+#
+# Kept separate from _ci-gate.yml so the two secrets these jobs need stay
+# scoped to this workflow, not the whole gate surface.
+name: _disclosure-gate
+
+on:
+  workflow_call:
+    inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to ubuntu-latest; pass a
+          self-hosted label to opt the calling repo into on-prem runners.
+        type: string
+        required: false
+        default: ubuntu-latest
+    secrets:
+      GITLEAKS_PRIVATE_CONFIG:
+        description: Org gitleaks ruleset (dryvist org secret). Required.
+        required: true
+      GITLEAKS_LICENSE_KEY:
+        description: Org gitleaks-action license key. Required.
+        required: true
+      DISCLOSURE_DENYLIST:
+        description: >-
+          Org denylist, one fixed string per line (dryvist org secret).
+          Declared optional here (not `required: true`) so a caller that
+          inherits it before it exists gets a clear, diagnosable job
+          failure from the scan step below instead of an opaque
+          workflow-graph startup failure with no logs.
+        required: false
+
+concurrency:
+  group: disclosure-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  gitleaks:
+    name: gitleaks (redacted)
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Materialize the org ruleset into a config file
+        env:
+          GITLEAKS_PRIVATE_CONFIG: ${{ secrets.GITLEAKS_PRIVATE_CONFIG }}
+        run: printf '%s' "$GITLEAKS_PRIVATE_CONFIG" > "$RUNNER_TEMP/gitleaks.toml"
+
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE_KEY }}
+          GITLEAKS_CONFIG: ${{ runner.temp }}/gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_SUMMARY: "false"
+
+  disclosure-denylist:
+    name: disclosure-denylist
+    runs-on: ${{ inputs.runner_label }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Sparse-checkout the shared scanner from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ github.job_workflow_sha || 'main' }}
+          path: .gh-shared
+          sparse-checkout: |
+            scripts/disclosure-denylist-scan.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Materialize the org denylist into a file
+        # An empty/unset secret writes an empty file; the scanner below
+        # (scripts/disclosure-denylist-scan.sh) already treats an
+        # empty/missing denylist file as an instrument error (exit 2 with
+        # a clear ::error:: message), so no extra guard is needed here.
+        env:
+          DISCLOSURE_DENYLIST: ${{ secrets.DISCLOSURE_DENYLIST }}
+        run: printf '%s' "$DISCLOSURE_DENYLIST" > "$RUNNER_TEMP/denylist.txt"
+
+      - name: Scan diff, title and body
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base="${BASE_SHA:-HEAD~1}"
+          bash .gh-shared/scripts/disclosure-denylist-scan.sh \
+            "$RUNNER_TEMP/denylist.txt" "$base"
