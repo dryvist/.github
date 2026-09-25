@@ -64,6 +64,14 @@ on:
         type: string
         required: false
         default: "runs-on=${{ github.run_id }}/runner=2cpu-linux-x64"
+      private_input_repos:
+        description: >-
+          Comma-separated repo names (same owner as the caller) to grant
+          Nix read-only GitHub access to, for a private flake input. Empty
+          by default.
+        type: string
+        required: false
+        default: ""
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true
@@ -98,6 +106,16 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      - name: Generate read-only token for private flake inputs
+        id: private-input-token
+        if: inputs.private_input_repos != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          repositories: ${{ inputs.private_input_repos }}
+          permission-contents: read
+
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -125,6 +143,10 @@ jobs:
         # env var, never direct interpolation into run: (injection risk).
         env:
           CHANNELS_DIR: ${{ inputs.channels_dir }}
+          NIX_CONFIG: >-
+            ${{ inputs.private_input_repos != ''
+                && format('access-tokens = github.com={0}', steps.private-input-token.outputs.token)
+                || '' }}
         run: |
           if [ -n "$CHANNELS_DIR" ]; then
             # The sub-flake owns its own lock; a root relock does not descend
@@ -136,6 +158,11 @@ jobs:
           nix flake update
 
       - name: Validate flake
+        env:
+          NIX_CONFIG: >-
+            ${{ inputs.private_input_repos != ''
+                && format('access-tokens = github.com={0}', steps.private-input-token.outputs.token)
+                || '' }}
         run: nix flake check --no-build
 
       - name: Report channel drift
