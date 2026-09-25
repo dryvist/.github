@@ -38,8 +38,11 @@ on:
       DISCLOSURE_DENYLIST:
         description: >-
           Org denylist, one fixed string per line (dryvist org secret).
-          Required.
-        required: true
+          Declared optional here (not `required: true`) so a caller that
+          inherits it before it exists gets a clear, diagnosable job
+          failure from the scan step below instead of an opaque
+          workflow-graph startup failure with no logs.
+        required: false
 
 concurrency:
   group: disclosure-gate-${{ github.workflow }}-${{ github.ref }}
@@ -97,6 +100,10 @@ jobs:
           persist-credentials: false
 
       - name: Materialize the org denylist into a file
+        # An empty/unset secret writes an empty file; the scanner below
+        # (scripts/disclosure-denylist-scan.sh) already treats an
+        # empty/missing denylist file as an instrument error (exit 2 with
+        # a clear ::error:: message), so no extra guard is needed here.
         env:
           DISCLOSURE_DENYLIST: ${{ secrets.DISCLOSURE_DENYLIST }}
         run: printf '%s' "$DISCLOSURE_DENYLIST" > "$RUNNER_TEMP/denylist.txt"
