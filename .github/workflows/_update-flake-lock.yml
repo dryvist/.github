@@ -64,6 +64,19 @@ on:
         type: string
         required: false
         default: "runs-on=${{ github.run_id }}/runner=2cpu-linux-x64"
+      private_input_repos:
+        description: >-
+          Comma-separated repo names (same owner as the caller) that a
+          private flake input needs read access to, e.g. a caller whose
+          flake.nix pulls `github:<owner>/<private-repo>`. `nix flake
+          update`/`check` fetch inputs directly against the GitHub API, not
+          through git, so the checkout token alone does not cover them —
+          this widens the minted App token's `repositories:` scope and
+          feeds it to Nix as a `github.com` access token. Leave empty for
+          repos whose inputs are all public (the default).
+        type: string
+        required: false
+        default: ""
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true
@@ -95,6 +108,14 @@ jobs:
         with:
           client-id: ${{ vars.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          # Explicit even in the common case (empty private_input_repos):
+          # this always resolves to a non-empty list, so it never falls into
+          # create-github-app-token's "empty repositories: means every repo
+          # in the installation" over-scoping — just the calling repo, same
+          # as the implicit default, plus any private inputs it named.
+          repositories: >-
+            ${{ format('{0}{1}', github.event.repository.name,
+                inputs.private_input_repos != '' && format(',{0}', inputs.private_input_repos) || '') }}
           permission-contents: write
           permission-pull-requests: write
 
@@ -125,6 +146,7 @@ jobs:
         # env var, never direct interpolation into run: (injection risk).
         env:
           CHANNELS_DIR: ${{ inputs.channels_dir }}
+          NIX_CONFIG: "access-tokens = github.com=${{ steps.app-token.outputs.token }}"
         run: |
           if [ -n "$CHANNELS_DIR" ]; then
             # The sub-flake owns its own lock; a root relock does not descend
@@ -136,6 +158,8 @@ jobs:
           nix flake update
 
       - name: Validate flake
+        env:
+          NIX_CONFIG: "access-tokens = github.com=${{ steps.app-token.outputs.token }}"
         run: nix flake check --no-build
 
       - name: Report channel drift
