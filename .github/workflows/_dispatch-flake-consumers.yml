@@ -6,9 +6,10 @@
 # own DISPATCH_CONSUMERS list; this workflow holds the shared token-mint
 # and cross-repo dispatch call so it lives in exactly one place.
 #
-# The event_type is always update-flake-input: every consumer's
+# The event_type defaults to update-flake-input: every flake-consumer's
 # deps-flake-lock.yml listens for exactly that name, and the payload is
-# informational (see below), so one type serves every publisher.
+# informational (see below). A caller with a different downstream listener
+# overrides it via the event_type input.
 #
 # WHAT THE FLAKE CONSUMER NOW DOES (changed 2026-08-05). The event_type name is
 # unchanged so no publisher needed editing, but the receiver no longer bumps the
@@ -39,6 +40,14 @@ on:
         type: string
         required: false
         default: ${{ github.event.repository.name }}
+      event_type:
+        description: >-
+          repository_dispatch event_type to send. Defaults to
+          update-flake-input for flake-lock consumers; override for a
+          different downstream listener.
+        type: string
+        required: false
+        default: update-flake-input
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true
@@ -74,14 +83,15 @@ jobs:
           # repository_dispatch requires contents:write on the target.
           permission-contents: write
 
-      - name: Dispatch update-flake-input
+      - name: Dispatch consumer event
         # Use env vars — never interpolate inputs or matrix directly into
         # run: steps (expression injection risk).
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET_REPO: ${{ matrix.repo }}
           SOURCE_INPUT: ${{ inputs.source_input }}
+          EVENT_TYPE: ${{ inputs.event_type }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY_OWNER}/${TARGET_REPO}/dispatches" \
-            -f event_type=update-flake-input \
+            -f event_type="${EVENT_TYPE}" \
             -f "client_payload[input]=${SOURCE_INPUT}"
