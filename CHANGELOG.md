@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0](https://github.com/dryvist/.github/compare/v1.3.0...v1.4.0) (2026-09-25)
+
+
+### Features
+
+* **update-flake-lock:** support private flake inputs ([#207](https://github.com/dryvist/.github/issues/207)) ([698ddf1](https://github.com/dryvist/.github/commit/698ddf1f34cb3e708b38d6813410ab3a27b3c470))
+* **workflows:** add optional event_type input to dispatch-flake-consumers ([#205](https://github.com/dryvist/.github/issues/205)) ([11ef252](https://github.com/dryvist/.github/commit/11ef252e68b0afbf3a2573e0e24c82576dc6e4a7))
+* **workflows:** add reusable disclosure gate (gitleaks + denylist) ([#204](https://github.com/dryvist/.github/issues/204)) ([3887542](https://github.com/dryvist/.github/commit/3887542376241ee4dd29c4c31c900c52591d96fe))
+
 ## [1.3.0](https://github.com/dryvist/.github/compare/v1.2.1...v1.3.0) (2026-09-24)
 
 
