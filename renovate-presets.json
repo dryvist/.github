@@ -402,6 +402,13 @@
         "git-tags"
       ],
       "enabled": false
+    },
+    {
+      "description": "The top-level minimumReleaseAge (3 days, above) defaults minimumReleaseAgeBehaviour to `timestamp-required`, which treats a release with no releaseTimestamp as not yet past the age check rather than as stable. The git-refs datasource never supplies a releaseTimestamp, so every git-refs update (the git-pinned-collections custom.regex manager above) stayed under the Dependency Dashboard's 'Pending Status Checks' section forever, with no PR ever opened, regardless of how long the pinned branch had actually moved. Scope the opt-in `timestamp-optional` behaviour to datasource=git-refs only, so every other minimumReleaseAge-gated update keeps requiring a real timestamp.",
+      "matchDatasources": [
+        "git-refs"
+      ],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
   ]
 }
