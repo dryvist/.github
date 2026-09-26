@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.1](https://github.com/dryvist/.github/compare/v1.4.0...v1.4.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **renovate:** scope own-org auto-merge to git-refs customManager pins ([#210](https://github.com/dryvist/.github/issues/210)) ([1d13f18](https://github.com/dryvist/.github/commit/1d13f18e3457e7c5af44f0129b253edbf568a80d))
+* **renovate:** unstick git-refs digest updates (ansible-galaxy duplicate lookup + minimumReleaseAgeBehaviour) ([#208](https://github.com/dryvist/.github/issues/208)) ([29da180](https://github.com/dryvist/.github/commit/29da18040b51569d37eed32b922f7ab51b29ce3c))
+
 ## [1.4.0](https://github.com/dryvist/.github/compare/v1.3.0...v1.4.0) (2026-09-25)
 
 
