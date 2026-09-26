@@ -393,7 +393,7 @@
       ]
     },
     {
-      "description": "The built-in ansible-galaxy manager has no concept of the `# renovate:` comment override used by the git-pinned-collections custom.regex manager above. For any `type: git` collection entry it always assigns datasource=github-tags/git-tags against the raw pinned commit SHA, which can never resolve to a tag and fails lookup every run (Dependency Dashboard warning: `Failed to look up github-tags package <url>: no-result`). That failing, duplicate extraction sits on the exact same requirements.yml lines the custom.regex manager already tracks correctly via currentDigest, and both git-pinned collections in ansible-proxmox-apps (dryvist/homelab-contracts, viniciussaporto/community.proxmox) sat stuck in that repo's Dependency Dashboard 'Pending Status Checks' section for weeks with no PR ever opened while every other tracked dependency kept refreshing normally. Disabling only the ansible-galaxy manager's github-tags/git-tags extraction removes the failing duplicate without touching the working custom.regex entries.",
+      "description": "Disables the ansible-galaxy manager's github-tags/git-tags lookups; git-pinned collections are tracked by the git-pinned-collections custom.regex manager (git-refs) instead.",
       "matchManagers": [
         "ansible-galaxy"
       ],
@@ -404,7 +404,7 @@
       "enabled": false
     },
     {
-      "description": "The top-level minimumReleaseAge (3 days, above) defaults minimumReleaseAgeBehaviour to `timestamp-required`, which treats a release with no releaseTimestamp as not yet past the age check rather than as stable. The git-refs datasource never supplies a releaseTimestamp, so every git-refs update (the git-pinned-collections custom.regex manager above) stayed under the Dependency Dashboard's 'Pending Status Checks' section forever, with no PR ever opened, regardless of how long the pinned branch had actually moved. Scope the opt-in `timestamp-optional` behaviour to datasource=git-refs only, so every other minimumReleaseAge-gated update keeps requiring a real timestamp.",
+      "description": "git-refs supplies no release timestamp; timestamp-optional lets minimumReleaseAge pass for git-refs updates instead of holding them indefinitely. Every other datasource still requires a timestamp.",
       "matchDatasources": [
         "git-refs"
       ],
