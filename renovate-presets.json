@@ -391,6 +391,17 @@
         "* 5 * * 1",
         "* 13-14 * * 4"
       ]
+    },
+    {
+      "description": "The built-in ansible-galaxy manager has no concept of the `# renovate:` comment override used by the git-pinned-collections custom.regex manager above. For any `type: git` collection entry it always assigns datasource=github-tags/git-tags against the raw pinned commit SHA, which can never resolve to a tag and fails lookup every run (Dependency Dashboard warning: `Failed to look up github-tags package <url>: no-result`). That failing, duplicate extraction sits on the exact same requirements.yml lines the custom.regex manager already tracks correctly via currentDigest, and both git-pinned collections in ansible-proxmox-apps (dryvist/homelab-contracts, viniciussaporto/community.proxmox) sat stuck in that repo's Dependency Dashboard 'Pending Status Checks' section for weeks with no PR ever opened while every other tracked dependency kept refreshing normally. Disabling only the ansible-galaxy manager's github-tags/git-tags extraction removes the failing duplicate without touching the working custom.regex entries.",
+      "matchManagers": [
+        "ansible-galaxy"
+      ],
+      "matchDatasources": [
+        "github-tags",
+        "git-tags"
+      ],
+      "enabled": false
     }
   ]
 }
