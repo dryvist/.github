@@ -75,9 +75,26 @@ unannotated=0
 while IFS= read -r -d '' f; do
   files_scanned=$((files_scanned + 1))
 
+  # requirements.yml's git-refs customManager (renovate-presets.json) tolerates
+  # ANY lines between the annotation and the `version:` SHA (`(?:[^\n]*\n)*?`)
+  # — not just comment lines — because a real git-type collection entry always
+  # carries a `- name: <url>` and `type: git` line in between. Every OTHER
+  # annotation manager (role defaults/vars/tasks/...) only tolerates comment
+  # lines in that gap. Scoping the wider tolerance to requirements*.yml keeps
+  # this checker a faithful mirror of each manager's actual regex instead of
+  # picking one gap width for every file class.
+  case "$(basename "$f")" in
+    requirements*.yml | requirements*.yaml) req_file=1 ;;
+    *) req_file=0 ;;
+  esac
+
   # Tracks whether an annotation was seen above, surviving blank lines and
   # any number of plain comment lines in between (mirrors the customManager
-  # regex's `(?:\s*#[^\n]*\n)*` gap) — reset only by real content.
+  # regex's `(?:\s*#[^\n]*\n)*` gap) — reset only by real content. In a
+  # requirements.yml file, a real content line is reset only once it is
+  # actually consumed as a matched pin, so the `- name:`/`type: git` carrier
+  # lines of a git-type entry don't clear the state before `version:` is
+  # reached.
   annotated=0
   lineno=0
   while IFS= read -r line || [[ -n "$line" ]]; do
@@ -111,9 +128,10 @@ while IFS= read -r -d '' f; do
         unannotated=$((unannotated + 1))
         echo "::error file=${f#./},line=${lineno}::unannotated version pin — add a '# renovate: datasource=... depName=...' comment on the line above (blank lines OK), or '# renovate: ignore — <reason>' if this is deliberately not a Renovate-trackable dependency: ${line}" >&2
       fi
+      annotated=0
+    elif [[ "$req_file" -eq 0 ]]; then
+      annotated=0
     fi
-
-    annotated=0
   done <"$f"
 done < <(find "$ROOT" -type f \( "${PATH_ARGS[@]}" \) -not -path '*/.git/*' -not -path '*/.worktrees/*' -print0)
 
