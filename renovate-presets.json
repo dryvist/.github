@@ -391,6 +391,24 @@
         "* 5 * * 1",
         "* 13-14 * * 4"
       ]
+    },
+    {
+      "description": "Disables the ansible-galaxy manager's github-tags/git-tags lookups; git-pinned collections are tracked by the git-pinned-collections custom.regex manager (git-refs) instead.",
+      "matchManagers": [
+        "ansible-galaxy"
+      ],
+      "matchDatasources": [
+        "github-tags",
+        "git-tags"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "git-refs supplies no release timestamp; timestamp-optional lets minimumReleaseAge pass for git-refs updates instead of holding them indefinitely. Every other datasource still requires a timestamp.",
+      "matchDatasources": [
+        "git-refs"
+      ],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
   ]
 }
