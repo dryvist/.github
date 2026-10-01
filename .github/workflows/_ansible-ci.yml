@@ -254,7 +254,7 @@ jobs:
           # it finds against requirements.yml rather than trusting the tree.
           restore-keys: |
             ansible-galaxy-${{ runner.os }}-
-      - uses: ansible/ansible-lint@665d9e07a1943254d2910faffc106adaf7ea7294 # v26
+      - uses: ansible/ansible-lint@e7f397ad6dfa20d274afa17cd7bbedd84ed136f5 # v26
         with:
           args: ${{ inputs.lint_args }}
 
