@@ -7,8 +7,8 @@
 #        GIT_TOKEN         optional token for private inputs
 #        STALE_NAMES_FILE  optional; the stale input names are written there, one per line
 # Only root inputs of type github are checked. The branch is original.ref, or the
-# repository's default branch when the input names none. An input pinned to a
-# revision (original.rev) tracks no branch and is skipped.
+# repository's default branch when the input names none. An owned input pinned to
+# a revision (original.rev) fails: ours always track a branch.
 set -euo pipefail
 
 lock=${1:-flake.lock}
@@ -23,13 +23,19 @@ inputs=$(jq -r --arg owners "$OWNERS" '
   ($owners | ascii_downcase | split(" ") | map(select(. != ""))) as $ours
   | . as $l | $l.nodes[$l.root].inputs // {} | to_entries[]
   | .key as $name | ($l.nodes[.value | if type == "string" then . else last end]) as $n
-  | select($n.original.type? == "github" and ($n.original.rev == null) and (($n.original.owner | ascii_downcase) as $o | $ours | index($o)))
+  | select($n.original.type? == "github" and (($n.original.owner | ascii_downcase) as $o | $ours | index($o)))
   | [$name, "\($n.original.owner)/\($n.original.repo)",
-     (if $n.original.ref then "refs/heads/\($n.original.ref)" else "HEAD" end), $n.locked.rev] | @tsv' "$lock")
+     (if $n.original.rev then "PINNED" elif $n.original.ref then "refs/heads/\($n.original.ref)" else "HEAD" end),
+     $n.locked.rev] | @tsv' "$lock")
 
 stale=0
 while IFS=$'\t' read -r name repo want rev; do
   [ -n "$name" ] || continue
+  if [ "$want" = PINNED ]; then
+    echo "::error::owned input $name ($repo) is pinned to a rev; track a branch instead"
+    stale=1
+    continue
+  fi
   url="https://github.com/$repo.git"
   [ -n "${GIT_TOKEN:-}" ] && url="https://x-access-token:$GIT_TOKEN@github.com/$repo.git"
   head=$(git ls-remote "$url" "$want" | awk -v w="$want" '$2 == w { print $1 }')
