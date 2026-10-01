@@ -316,7 +316,7 @@ jobs:
           commit-message: "chore(deps): update flake.lock"
           title: "chore(deps): update flake.lock"
           body: |
-            Automated whole-lock relock (`nix flake update`), triggered by
+            ${{ needs.stale.outputs.inputs != '' && format('Automated targeted relock of our inputs behind their branch head (`nix flake update {0}`), triggered by', needs.stale.outputs.inputs) || 'Automated whole-lock relock (`nix flake update`), triggered by' }}
             `${{ github.event_name }}`.
 
             | input | from | to |
