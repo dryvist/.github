@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Fail when a direct flake input owned by one of OWNERS is not locked at its branch head.
+# Check the direct flake inputs owned by one of OWNERS.
 #
-# Usage: flake-lock-fresh.sh [flake.lock]
+# Usage: flake-lock-fresh.sh [--pr BASE_LOCK] [flake.lock]
+#   default (freshness): fail when an owned input is not locked at its branch head.
+#   --pr BASE_LOCK: compare against the base branch's lock, with no live lookup of
+#                   branch heads. Fail when an owned input moved to a rev that does
+#                   not descend from the base lock's rev. A missing BASE_LOCK means
+#                   the lock is new and only the pinned-rev rule applies.
 # Env:   OWNERS            space-separated input owners to check (case-insensitive);
 #                          inputs from any other owner are ignored. Defaults to OWNED below.
 #        GIT_TOKEN         optional token for private inputs
@@ -11,6 +16,8 @@
 # a revision (original.rev) fails: ours always track a branch.
 set -euo pipefail
 
+base=
+if [ "${1:-}" = --pr ]; then base=${2:?--pr needs a base lock path}; shift 2; fi
 lock=${1:-flake.lock}
 [ -f "$lock" ] || { echo "no $lock, nothing to check"; exit 0; }
 # The one list of owners whose flake inputs are ours. JacobPEvans redirects to dryvist.
@@ -34,6 +41,25 @@ while IFS=$'\t' read -r name repo want rev; do
   if [ "$want" = PINNED ]; then
     echo "::error::owned input $name ($repo) is pinned to a rev; track a branch instead"
     stale=1
+    continue
+  fi
+  if [ -n "$base" ]; then
+    old=$([ -f "$base" ] && jq -r --arg n "$name" '. as $l | ($l.nodes[$l.root].inputs // {})[$n] // empty
+      | $l.nodes[if type == "string" then . else last end].locked.rev // empty' "$base")
+    if [ -z "$old" ] || [ "$old" = "$rev" ]; then
+      echo "$name: unchanged from base"
+      continue
+    fi
+    # status is "ahead" when the new rev descends from the base rev.
+    auth=()
+    [ -n "${GIT_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GIT_TOKEN")
+    status=$(curl -fsSL ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$repo/compare/$old...$rev" | jq -r .status) || status=unknown
+    if [ "$status" = ahead ]; then
+      echo "$name: $old -> $rev moves forward"
+    else
+      echo "::error::$name ($repo) moves from $old to $rev, which does not descend from it ($status)"
+      stale=1
+    fi
     continue
   fi
   url="https://github.com/$repo.git"

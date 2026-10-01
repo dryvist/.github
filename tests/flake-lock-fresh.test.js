@@ -13,13 +13,20 @@ const script = path.join(__dirname, '..', 'scripts', 'flake-lock-fresh.sh');
 const HEAD = 'a'.repeat(40);
 const STALE = 'b'.repeat(40);
 
-function run(lock) {
+function run(lock, { base, status = 'ahead' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flf-'));
   // Fake git: every ref resolves to HEAD.
   fs.writeFileSync(path.join(dir, 'git'), `#!/bin/sh\nprintf '%s\\t%s\\n' ${HEAD} "$3"\n`, { mode: 0o755 });
+  // Fake curl: the compare API answers with `status`.
+  fs.writeFileSync(path.join(dir, 'curl'), `#!/bin/sh\necho '{"status":"${status}"}'\n`, { mode: 0o755 });
   fs.writeFileSync(path.join(dir, 'flake.lock'), JSON.stringify(lock));
+  const args = [];
+  if (base) {
+    fs.writeFileSync(path.join(dir, 'base.lock'), JSON.stringify(base));
+    args.push('--pr', path.join(dir, 'base.lock'));
+  }
   const names = path.join(dir, 'stale-names');
-  const r = spawnSync('bash', [script, path.join(dir, 'flake.lock')], {
+  const r = spawnSync('bash', [script, ...args, path.join(dir, 'flake.lock')], {
     env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, OWNERS: 'ours other-ours', STALE_NAMES_FILE: names },
     encoding: 'utf8',
   });
@@ -68,4 +75,38 @@ test('fails an owned input pinned to a revision, without listing it for relock',
   assert.equal(r.status, 1);
   assert.match(r.stdout, /owned input p \(ours\/r\) is pinned to a rev; track a branch instead/);
   assert.deepEqual(r.names, []);
+});
+
+// --pr mode: deterministic against the base lock; the fake git (every head = HEAD) is never consulted.
+const OLD = 'c'.repeat(40);
+
+test('pr: passes an unchanged lock even when the branch head moved', () => {
+  const r = run(lock({ a: node('ours', OLD, 'main') }), { base: lock({ a: node('ours', OLD, 'main') }), status: 'behind' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test('pr: passes a fast-forward of a locked rev', () => {
+  const r = run(lock({ a: node('ours', STALE, 'main') }), { base: lock({ a: node('ours', OLD, 'main') }), status: 'ahead' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test('pr: fails a locked rev that does not descend from the base rev', () => {
+  for (const status of ['behind', 'diverged']) {
+    const r = run(lock({ a: node('ours', STALE, 'main') }), { base: lock({ a: node('ours', OLD, 'main') }), status });
+    assert.equal(r.status, 1, status);
+    assert.match(r.stdout, /a \(ours\/r\) moves from c{40} to b{40}, which does not descend from it/);
+  }
+});
+
+test('pr: fails an owned input pinned to a revision', () => {
+  const pinned = node('ours', OLD);
+  pinned.original.rev = OLD;
+  const r = run(lock({ p: pinned }), { base: lock({ p: pinned }) });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /is pinned to a rev/);
+});
+
+test('pr: passes a new input with no base entry', () => {
+  const r = run(lock({ a: node('ours', STALE, 'main') }), { base: lock({}), status: 'behind' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
 });

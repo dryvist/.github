@@ -1,7 +1,11 @@
-# Reusable: fail when a direct flake input owned by this org is not at its branch head.
+# Reusable: check the direct flake inputs owned by this org.
 #
 # Checks the caller's root flake.lock with scripts/flake-lock-fresh.sh. Only root
 # inputs whose owner is the caller's owner are checked; third-party inputs are ignored.
+# Pull request: compared with the base branch's lock (--pr); fails on a pinned rev or
+# an owned input moved to a rev that does not descend from the base one.
+# Other events: compared with live branch heads; stale inputs are reported and an
+# update-flake-input repository_dispatch starts the caller's targeted relock.
 # A repo without a flake.lock passes. Pass GH_APP_PRIVATE_KEY when the lock has
 # private inputs; without it, a private input cannot be resolved and fails the check.
 name: _flake-lock-fresh
@@ -27,6 +31,16 @@ jobs:
       - name: Checkout flake.lock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
+          sparse-checkout: flake.lock
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout the base branch's flake.lock
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .base
           persist-credentials: false
           sparse-checkout: flake.lock
           sparse-checkout-cone-mode: false
@@ -64,7 +78,32 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Check owned inputs are at branch head
+        id: check
         env:
           OWNERS: ${{ vars.FLAKE_INPUT_OWNERS }}
-          GIT_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: bash .gh-shared/scripts/flake-lock-fresh.sh flake.lock
+          GIT_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            exec bash .gh-shared/scripts/flake-lock-fresh.sh --pr .base/flake.lock flake.lock
+          fi
+          STALE_NAMES_FILE=stale.txt bash .gh-shared/scripts/flake-lock-fresh.sh flake.lock || true
+          echo "stale=$(paste -sd' ' stale.txt 2>/dev/null)" >> "$GITHUB_OUTPUT"
+
+      - name: Mint dispatch token for this repository
+        id: dispatch-token
+        if: steps.check.outputs.stale != '' && env.HAS_APP_KEY == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # The caller's _update-flake-lock.yml (targeted) relocks just the stale inputs.
+      - name: Dispatch the targeted relock
+        if: steps.dispatch-token.outputs.token != ''
+        env:
+          GH_TOKEN: ${{ steps.dispatch-token.outputs.token }}
+          REPO: ${{ github.repository }}
+        run: gh api "repos/$REPO/dispatches" -f event_type=update-flake-input
