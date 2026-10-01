@@ -60,3 +60,12 @@ test('never lists a third-party input, even a stale one', () => {
   assert.equal(r.status, 1);
   assert.deepEqual(r.names, ['b']);
 });
+
+test('fails an owned input pinned to a revision, without listing it for relock', () => {
+  const pinned = node('ours', STALE);
+  pinned.original.rev = STALE;
+  const r = run(lock({ p: pinned }));
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /owned input p \(ours\/r\) is pinned to a rev; track a branch instead/);
+  assert.deepEqual(r.names, []);
+});
