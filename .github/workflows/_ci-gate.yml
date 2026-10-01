@@ -692,11 +692,12 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: bash .gh-shared/scripts/ci-gate-watchdog.sh
 
-  # Every root flake input owned by us must be locked at its branch head.
-  # Passes when the repo has no flake.lock. Pull requests only.
+  # Owned root flake inputs: on a pull request, no pinned revs and no move to a
+  # rev that does not descend from the base lock's; on the default branch,
+  # stale inputs dispatch the targeted relock. Passes when the repo has no flake.lock.
   flake-lock-fresh:
     name: Flake Lock Fresh
-    if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+    if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)) }}
     uses: dryvist/.github/.github/workflows/_flake-lock-fresh.yml@main
     secrets:
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
