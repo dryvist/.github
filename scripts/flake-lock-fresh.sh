@@ -7,7 +7,8 @@
 #        GIT_TOKEN         optional token for private inputs
 #        STALE_NAMES_FILE  optional; the stale input names are written there, one per line
 # Only root inputs of type github are checked. The branch is original.ref, or the
-# repository's default branch when the input names none.
+# repository's default branch when the input names none. An input pinned to a
+# revision (original.rev) tracks no branch and is skipped.
 set -euo pipefail
 
 lock=${1:-flake.lock}
@@ -22,7 +23,7 @@ inputs=$(jq -r --arg owners "$OWNERS" '
   ($owners | ascii_downcase | split(" ") | map(select(. != ""))) as $ours
   | . as $l | $l.nodes[$l.root].inputs // {} | to_entries[]
   | .key as $name | ($l.nodes[.value | if type == "string" then . else last end]) as $n
-  | select($n.original.type? == "github" and (($n.original.owner | ascii_downcase) as $o | $ours | index($o)))
+  | select($n.original.type? == "github" and ($n.original.rev == null) and (($n.original.owner | ascii_downcase) as $o | $ours | index($o)))
   | [$name, "\($n.original.owner)/\($n.original.repo)",
      (if $n.original.ref then "refs/heads/\($n.original.ref)" else "HEAD" end), $n.locked.rev] | @tsv' "$lock")
 
