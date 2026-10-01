@@ -53,6 +53,6 @@ jobs:
 
       - name: Check owned inputs are at branch head
         env:
-          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS || github.repository_owner }}
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS }}
           GIT_TOKEN: ${{ steps.app-token.outputs.token }}
         run: bash .gh-shared/scripts/flake-lock-fresh.sh flake.lock

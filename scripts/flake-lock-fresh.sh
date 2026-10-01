@@ -3,7 +3,7 @@
 #
 # Usage: flake-lock-fresh.sh [flake.lock]
 # Env:   OWNERS            space-separated input owners to check (case-insensitive);
-#                          inputs from any other owner are ignored
+#                          inputs from any other owner are ignored. Defaults to OWNED below.
 #        GIT_TOKEN         optional token for private inputs
 #        STALE_NAMES_FILE  optional; the stale input names are written there, one per line
 # Only root inputs of type github are checked. The branch is original.ref, or the
@@ -12,7 +12,9 @@ set -euo pipefail
 
 lock=${1:-flake.lock}
 [ -f "$lock" ] || { echo "no $lock, nothing to check"; exit 0; }
-: "${OWNERS:?OWNERS is required}"
+# The one list of owners whose flake inputs are ours. JacobPEvans redirects to dryvist.
+OWNED="dryvist JacobPEvans JacobPEvans-personal"
+OWNERS=${OWNERS:-$OWNED}
 [ -n "${STALE_NAMES_FILE:-}" ] && : >"$STALE_NAMES_FILE"
 
 # name <TAB> owner/repo <TAB> ls-remote ref <TAB> locked rev (no field is ever empty)

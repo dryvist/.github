@@ -54,7 +54,7 @@ jobs:
           GH_TOKEN: ${{ steps.read-token.outputs.token }}
           GIT_TOKEN: ${{ steps.read-token.outputs.token }}
           OWNER: ${{ github.repository_owner }}
-          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS || github.repository_owner }}
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS }}
         run: |
           set -euo pipefail
           gh api --paginate "orgs/$OWNER/repos?per_page=100" \

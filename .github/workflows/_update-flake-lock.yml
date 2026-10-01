@@ -154,7 +154,7 @@ jobs:
         env:
           CHANNELS_DIR: ${{ inputs.channels_dir }}
           EVENT_NAME: ${{ github.event_name }}
-          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS || github.repository_owner }}
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS }}
           GIT_TOKEN: ${{ steps.app-token.outputs.token }}
           NIX_CONFIG: >-
             ${{ inputs.private_input_repos != ''
