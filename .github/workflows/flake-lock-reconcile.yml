@@ -1,0 +1,101 @@
+# Relock every org repo whose flake.lock has an owned input behind its branch head.
+#
+# Runs scripts/flake-lock-fresh.sh against each repo's flake.lock and sends
+# repository_dispatch update-flake-input to the stale ones, which their existing
+# deps-flake-lock.yml (_update-flake-lock.yml) turns into one relock PR. Which repo
+# consumes which is read from the locks themselves, so there is no consumer list.
+#
+# This repo is public: logs name public repos only and report private ones as a count.
+name: Flake lock reconcile
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Report stale repos without dispatching. Scheduled runs are always live.
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: flake-lock-reconcile
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: automation
+    permissions:
+      contents: read
+    steps:
+      - name: Mint read token for the org
+        id: read-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-contents: read
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/flake-lock-fresh.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Find stale repos
+        id: find
+        env:
+          GH_TOKEN: ${{ steps.read-token.outputs.token }}
+          GIT_TOKEN: ${{ steps.read-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS || github.repository_owner }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "orgs/$OWNER/repos?per_page=100" \
+            --jq '.[] | select(.archived | not) | [.name, .visibility] | @tsv' > repos.tsv
+          stale=() private_stale=0
+          while IFS=$'\t' read -r repo visibility; do
+            gh api -H "Accept: application/vnd.github.raw" "repos/$OWNER/$repo/contents/flake.lock" > lock.json 2>/dev/null || continue
+            gh api "repos/$OWNER/$repo/contents/.github/workflows/deps-flake-lock.yml" --silent 2>/dev/null || continue
+            if [ "$visibility" = public ]; then
+              bash scripts/flake-lock-fresh.sh lock.json | sed "s/^/$repo: /" && continue
+            else
+              bash scripts/flake-lock-fresh.sh lock.json > /dev/null && continue
+              private_stale=$((private_stale + 1))
+            fi
+            stale+=("$repo")
+          done < repos.tsv
+          echo "stale repos: ${#stale[@]} (private: $private_stale)"
+          printf '%s\n' "${stale[@]}" | paste -sd, - | sed 's/^/repos=/' >> "$GITHUB_OUTPUT"
+
+      - name: Mint dispatch token for the stale repos
+        id: write-token
+        if: steps.find.outputs.repos != '' && (github.event_name == 'schedule' || !inputs.dry_run)
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.find.outputs.repos }}
+          # repository_dispatch requires contents:write on the target.
+          permission-contents: write
+
+      - name: Dispatch relock
+        if: steps.write-token.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.write-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPOS: ${{ steps.find.outputs.repos }}
+        run: |
+          set -euo pipefail
+          for repo in ${REPOS//,/ }; do
+            gh api "repos/$OWNER/$repo/dispatches" -f event_type=update-flake-input \
+              -f "client_payload[input]=flake-lock-reconcile" > /dev/null
+          done
+          echo "dispatched relock to the stale repos"

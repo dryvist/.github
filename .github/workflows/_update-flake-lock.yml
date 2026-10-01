@@ -121,6 +121,16 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
 
+      - name: Checkout the freshness script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          persist-credentials: false
+          sparse-checkout: scripts/flake-lock-fresh.sh
+          sparse-checkout-cone-mode: false
+
       - name: Install Nix
         uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3
 
@@ -143,11 +153,28 @@ jobs:
         # env var, never direct interpolation into run: (injection risk).
         env:
           CHANNELS_DIR: ${{ inputs.channels_dir }}
+          EVENT_NAME: ${{ github.event_name }}
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS || github.repository_owner }}
+          GIT_TOKEN: ${{ steps.app-token.outputs.token }}
           NIX_CONFIG: >-
             ${{ inputs.private_input_repos != ''
                 && format('access-tokens = github.com={0}', steps.private-input-token.outputs.token)
                 || '' }}
         run: |
+          if [ "$EVENT_NAME" = repository_dispatch ]; then
+            # A dispatch relocks only the owned inputs that are behind their branch
+            # head, computed here rather than read from the payload. Third-party
+            # inputs such as nixpkgs never move, so the PR stays auto-mergeable;
+            # they move on the scheduled whole-flake relock below.
+            STALE_NAMES_FILE=/tmp/stale-inputs bash .gh-shared/scripts/flake-lock-fresh.sh flake.lock || true
+            mapfile -t stale </tmp/stale-inputs
+            if [ "${#stale[@]}" -eq 0 ]; then
+              echo "No owned input is behind its branch head."
+              exit 0
+            fi
+            nix flake update "${stale[@]}"
+            exit 0
+          fi
           if [ -n "$CHANNELS_DIR" ]; then
             # The sub-flake owns its own lock; a root relock does not descend
             # into it, so it must be relocked first.
