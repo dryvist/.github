@@ -72,6 +72,15 @@ on:
         type: string
         required: false
         default: ""
+      targeted:
+        description: >-
+          Relock only the owned inputs (scripts/flake-lock-fresh.sh) that are
+          behind their branch head, and do nothing when none are. Third-party
+          inputs such as nixpkgs never move, so the PR stays auto-mergeable.
+          When false, the whole flake is relocked.
+        type: boolean
+        required: false
+        default: false
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true
@@ -85,8 +94,57 @@ concurrency:
 permissions: {}
 
 jobs:
+  # Targeted mode only: a seconds-long check, with no Nix install or cache
+  # restore, that lists the owned inputs behind their branch head.
+  stale:
+    name: Find stale owned inputs
+    if: inputs.targeted
+    runs-on: ${{ inputs.runner_label }}
+    environment: automation
+    timeout-minutes: 5
+    outputs:
+      inputs: ${{ steps.find.outputs.inputs }}
+    steps:
+      - name: Generate read-only token for private flake inputs
+        id: private-input-token
+        if: inputs.private_input_repos != ''
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          repositories: ${{ inputs.private_input_repos }}
+          permission-contents: read
+
+      - name: Checkout flake.lock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: flake.lock
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout the freshness script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          persist-credentials: false
+          sparse-checkout: scripts/flake-lock-fresh.sh
+          sparse-checkout-cone-mode: false
+
+      - name: List owned inputs behind their branch head
+        id: find
+        env:
+          OWNERS: ${{ vars.FLAKE_INPUT_OWNERS }}
+          GIT_TOKEN: ${{ steps.private-input-token.outputs.token }}
+        run: |
+          STALE_NAMES_FILE=stale.txt bash .gh-shared/scripts/flake-lock-fresh.sh flake.lock || true
+          echo "inputs=$(paste -sd' ' stale.txt)" >> "$GITHUB_OUTPUT"
+
   relock:
     name: Relock flake.lock
+    needs: stale
+    if: ${{ !cancelled() && (!inputs.targeted || needs.stale.outputs.inputs != '') }}
     runs-on: ${{ inputs.runner_label }}
     environment: automation
     # Intentionally non-negotiable: relocking or validating past 20 minutes is
@@ -120,6 +178,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
 
       - name: Install Nix
         uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3
@@ -143,11 +202,18 @@ jobs:
         # env var, never direct interpolation into run: (injection risk).
         env:
           CHANNELS_DIR: ${{ inputs.channels_dir }}
+          STALE_INPUTS: ${{ needs.stale.outputs.inputs }}
           NIX_CONFIG: >-
             ${{ inputs.private_input_repos != ''
                 && format('access-tokens = github.com={0}', steps.private-input-token.outputs.token)
                 || '' }}
         run: |
+          if [ -n "$STALE_INPUTS" ]; then
+            # Targeted: only the owned inputs the stale job listed.
+            read -ra stale <<<"$STALE_INPUTS"
+            nix flake update "${stale[@]}"
+            exit 0
+          fi
           if [ -n "$CHANNELS_DIR" ]; then
             # The sub-flake owns its own lock; a root relock does not descend
             # into it, so it must be relocked first.
