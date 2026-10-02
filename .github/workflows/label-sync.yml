@@ -26,7 +26,7 @@ jobs:
           config-file: .github/labels.yml
           delete-other-labels: true
 
-  # Enumerate the public repos to fan out to (this .github repo excluded).
+  # Enumerate the non-archived public repos to fan out to (this .github repo excluded).
   # Public listing only, so the repo-scoped GITHUB_TOKEN is sufficient and no
   # cross-repo credential is minted here. The fan-out below mints its own,
   # scoped to one repo per matrix leg.
@@ -45,7 +45,7 @@ jobs:
           ORG: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          repos=$(gh repo list "$ORG" --visibility public --limit 100 --json name \
+          repos=$(gh repo list "$ORG" --visibility public --no-archived --limit 1000 --json name \
             --jq 'map(.name | select(. != ".github")) | if length == 0 then error("empty repo listing — refusing to sync nothing") else . end')
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
 
