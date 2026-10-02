@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.3](https://github.com/dryvist/.github/compare/v1.5.2...v1.5.3) (2026-10-02)
+
+
+### Performance
+
+* **ci:** restore the previous pre-commit cache when the hook config changes ([#223](https://github.com/dryvist/.github/issues/223)) ([cf1779f](https://github.com/dryvist/.github/commit/cf1779f8497b280476e181eae4ae816075b24068))
+
 ## [1.5.2](https://github.com/dryvist/.github/compare/v1.5.1...v1.5.2) (2026-10-02)
 
 
