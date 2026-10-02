@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.2](https://github.com/dryvist/.github/compare/v1.5.1...v1.5.2) (2026-10-02)
+
+
+### Bug Fixes
+
+* **label-sync:** add repos from the org repo inventory to the fan-out ([#221](https://github.com/dryvist/.github/issues/221)) ([227827a](https://github.com/dryvist/.github/commit/227827a1a4d3f7a752c2f8a553263c667a10f7c4))
+
 ## [1.5.1](https://github.com/dryvist/.github/compare/v1.5.0...v1.5.1) (2026-10-02)
 
 
