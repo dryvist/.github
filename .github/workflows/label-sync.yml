@@ -26,26 +26,34 @@ jobs:
           config-file: .github/labels.yml
           delete-other-labels: true
 
-  # Enumerate the public repos to fan out to (this .github repo excluded).
-  # Public listing only, so the repo-scoped GITHUB_TOKEN is sufficient and no
-  # cross-repo credential is minted here. The fan-out below mints its own,
-  # scoped to one repo per matrix leg.
+  # Enumerate every non-archived repo in the org to fan out to (this .github
+  # repo excluded). Private repos are only visible to an App installation
+  # token, so one is minted here (metadata read only); the fan-out below mints
+  # its own, scoped to one repo per matrix leg.
   list:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    environment: automation
     outputs:
       repos: ${{ steps.list.outputs.repos }}
     steps:
+      - id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          permission-metadata: read
       # `set -euo pipefail` + jq's own emptiness assertion fail at the source:
       # an auth/rate-limit/network error must not silently become a no-op
       # matrix (the swallowed-failure mode this PR exists to remove).
       - id: list
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           ORG: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          repos=$(gh repo list "$ORG" --visibility public --limit 100 --json name \
+          repos=$(gh repo list "$ORG" --no-archived --limit 1000 --json name \
             --jq 'map(.name | select(. != ".github")) | if length == 0 then error("empty repo listing — refusing to sync nothing") else . end')
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
 
