@@ -26,10 +26,12 @@ jobs:
           config-file: .github/labels.yml
           delete-other-labels: true
 
-  # Enumerate the non-archived public repos to fan out to (this .github repo excluded).
-  # Public listing only, so the repo-scoped GITHUB_TOKEN is sufficient and no
-  # cross-repo credential is minted here. The fan-out below mints its own,
-  # scoped to one repo per matrix leg.
+  # Enumerate the repos to fan out to: the live non-archived public repos plus
+  # every non-archived repo in the org's repo inventory
+  # (tofu-github config/repos.yml), which also names private repos. This
+  # .github repo is excluded. Both reads are public, so the repo-scoped
+  # GITHUB_TOKEN is sufficient and no cross-repo credential is minted here.
+  # The fan-out below mints its own, scoped to one repo per matrix leg.
   list:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -45,8 +47,11 @@ jobs:
           ORG: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          repos=$(gh repo list "$ORG" --visibility public --no-archived --limit 1000 --json name \
-            --jq 'map(.name | select(. != ".github")) | if length == 0 then error("empty repo listing — refusing to sync nothing") else . end')
+          public=$(gh repo list "$ORG" --visibility public --no-archived --limit 1000 --json name --jq 'map(.name)')
+          inventory=$(gh api -H "Accept: application/vnd.github.raw+json" "repos/$ORG/tofu-github/contents/config/repos.yml" \
+            | yq -o=json '[.repos | to_entries[] | select(.value.archived != true) | .key]')
+          repos=$(jq -cn --argjson a "$public" --argjson b "$inventory" \
+            '$a + $b | unique | map(select(. != ".github")) | if length == 0 then error("empty repo listing — refusing to sync nothing") else . end')
           echo "repos=$repos" >> "$GITHUB_OUTPUT"
 
   # Fan out one isolated job per repo. Same trusted, pinned action as `self`,
