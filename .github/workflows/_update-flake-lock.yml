@@ -115,9 +115,20 @@ jobs:
           repositories: ${{ inputs.private_input_repos }}
           permission-contents: read
 
+      # The caller sets `permissions: {}`, so GITHUB_TOKEN cannot read a private
+      # caller repository. Default scope of this token is the caller repository.
+      - name: Generate read-only token for the caller repository
+        id: caller-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.GH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          permission-contents: read
+
       - name: Checkout flake.lock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          token: ${{ steps.caller-token.outputs.token }}
           persist-credentials: false
           sparse-checkout: flake.lock
           sparse-checkout-cone-mode: false
