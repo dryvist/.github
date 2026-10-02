@@ -2,7 +2,7 @@
 # dryvist Standard Labels
 # =============================================================================
 # Canonical label set for all repositories.
-# Synced to all repos via .github/workflows/label-sync.yml on push to main.
+# Applied to every unarchived org repository by dryvist/tofu-github.
 #
 # Categories:
 #   type:*     - What kind of change (aligns with semantic versioning)
