@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.4](https://github.com/dryvist/.github/compare/v1.5.3...v1.5.4) (2026-10-02)
+
+
+### Bug Fixes
+
+* **flake:** check out the caller repository with an App token in the stale-input job ([#227](https://github.com/dryvist/.github/issues/227)) ([d5d9181](https://github.com/dryvist/.github/commit/d5d91812452ec90563474b619501476c6218b5fe))
+
 ## [1.5.3](https://github.com/dryvist/.github/compare/v1.5.2...v1.5.3) (2026-10-02)
 
 
