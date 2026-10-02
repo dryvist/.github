@@ -72,15 +72,26 @@ jobs:
           enable-cache: true
 
       - name: Cache pre-commit hook environments
+        id: pre-commit-cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          # A hook bump changes the key; restoring the newest older cache lets
+          # pre-commit install only the changed hook instead of every env.
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
 
       # `uv run` installs the project + dev extra implicitly — no venv/install
       # script. Runs the consumer's .pre-commit-config.yaml hook set.
       - name: Lint / format / type gate (pre-commit)
         run: uv run --extra dev pre-commit run --all-files --show-diff-on-failure
+
+      # A restored older cache still holds the superseded hook envs; drop them
+      # before the new key is saved so the cache does not grow on every bump.
+      - name: Drop superseded pre-commit hook environments
+        if: steps.pre-commit-cache.outputs.cache-hit != 'true'
+        run: uv run --extra dev pre-commit gc
 
   test:
     name: Test
