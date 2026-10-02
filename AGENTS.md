@@ -111,22 +111,18 @@ Work through this in order when creating a dryvist repo.
    config declares. Config-free mode (`release-type:` set, blank
    `config-file`/`manifest-file`) is a supported alternative and needs none of
    those files. **A repo with a release config but no caller releases nothing.**
-3. **Register it in the governance IaC.** Add an entry to
-   [`tofu-github`](https://github.com/dryvist/tofu-github)'s `config/repos.yml`.
-   This is what actually manages merge methods, auto-merge, branch deletion,
-   Dependabot, the public-only secret-scanning block, and — for git-flow repos —
-   the `develop` branch and default-branch switch. Look the visibility up live
-   (`gh repo view <repo> --json visibility`); never assume public, because the
-   secret-scanning block is cost-gated on it. If the repo already has a
-   `develop` branch or custom property set out of band, the entry needs an
-   `import` block — a plain create 422s.
+3. **Governance is automatic.** [`tofu-github`](https://github.com/dryvist/tofu-github)
+   governs every unarchived org repo by default (merge methods, auto-merge,
+   branch deletion, Dependabot, the public-only secret-scanning block), and a
+   new repo is adopted on the next apply. Its `config/repos.yml` holds
+   per-repo overrides only; add an entry there only to override the defaults.
 4. **Add the baseline files:** `LICENSE`, `AGENTS.md`, and a Nix dev-shell entry
    (`flake.nix` or a committed `.envrc`).
 5. **Do not scaffold `.file-size.yml`.** Only add one when the repo genuinely
    needs `extended`, `exempt`, or `scan` overrides (see File-size gate above).
 6. **Record any legitimate opt-out.** If a convention genuinely does not apply
    (a template that should not release, a state-only repo), add the repo to
-   `conventions_exempt:` in that same `config/repos.yml`, listing the specific
+   `conventions_exempt:` in `tofu-github`'s `config/repos.yml`, listing the specific
    check names to skip and why. Opt-outs are per check, never per repo — an
    exemption from releasing does not excuse a missing LICENSE.
 
@@ -138,8 +134,8 @@ requires `docs-publisher-provenance.yml` on the `docs` repo alone. So
 `conventions-check.yml` (like `markdownlint.yml`) only runs where a repo calls
 it; wiring an org-wide required workflow is a `tofu-github` change.
 `repo-conventions-sweep.yml` runs
-weekly, covers repos with no PR traffic, additionally reports repos missing
-from `config/repos.yml`, and upserts one tracking issue in this repo.
+weekly, covers repos with no PR traffic, and upserts one tracking issue in this
+repo.
 
 The sweep reports **public repos only** — this repo is public, so its issues,
 job summaries, and Actions logs are world-readable, and naming a private repo

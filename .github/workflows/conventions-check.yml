@@ -6,9 +6,8 @@
 # markdownlint.yml (the proven required-workflow pattern) but checks PRESENCE,
 # not content, of the repo conventions below.
 #
-# Repos with no PR traffic are never evaluated here, and no per-repo check can
-# see whether a repo is registered in the governance IaC at all. Both blind
-# spots are covered by repo-conventions-sweep.yml in this repo.
+# Repos with no PR traffic are never evaluated here; that blind spot is
+# covered by repo-conventions-sweep.yml in this repo.
 #
 # SOFT ROLLOUT: this defaults to WARN mode (annotate + exit 0) so it NEVER
 # breaks a PR, even on the ~22 repos currently missing AGENTS.md. A repo opts in

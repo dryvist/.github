@@ -1,9 +1,8 @@
 # Org-wide repo-conventions drift sweep.
 #
 # conventions-check.yml catches drift at PR time, but only on repos that have
-# PRs — a repo created and left alone is never evaluated, and NO check can see
-# whether a repo is registered in the governance IaC at all. This sweep covers
-# both blind spots on a schedule and reports them where an agent or human will
+# PRs — a repo created and left alone is never evaluated. This sweep covers
+# that blind spot on a schedule and reports it where an agent or human will
 # actually look: a job summary plus one upserted tracking issue in this repo.
 #
 # PUBLIC REPOS ONLY, deliberately. This repo is public, so its issue bodies,
@@ -12,8 +11,8 @@
 # all, so this job needs no cross-repo credential; run the same checks locally
 # for private detail (see AGENTS.md > New repo checklist).
 #
-# Registration is read from the governance IaC's own inventory at run time, so
-# this workflow never keeps a second copy of the repo list.
+# Per-check opt-outs are read from the governance IaC's own inventory at run
+# time, so this workflow never keeps a second copy of them.
 name: Repo Conventions Sweep
 
 on:
@@ -38,12 +37,12 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Sweep public repos for conventions and registration drift
+      - name: Sweep public repos for conventions drift
         env:
           GH_TOKEN: ${{ github.token }}
           ORG: ${{ github.repository_owner }}
-          # Governance IaC inventory: single source of truth for which repos
-          # are managed and which are recorded as legitimate opt-outs.
+          # Governance IaC inventory: single source of truth for recorded
+          # legitimate opt-outs.
           INVENTORY_REPO: tofu-github
           INVENTORY_PATH: config/repos.yml
         run: |
@@ -52,7 +51,6 @@ jobs:
           # --- inputs -------------------------------------------------------
           gh api "repos/${ORG}/${INVENTORY_REPO}/contents/${INVENTORY_PATH}" \
             --jq '.content' | base64 -d > inventory.yml
-          yq -r '.repos | keys | .[]' inventory.yml | sort > registered.txt
           # Flatten opt-outs once, as "<repo> <check> <check>...". Deliberately
           # expressed with to_entries/join rather than env-var indexing, which
           # is spelled differently by the two widely-installed yq
@@ -109,9 +107,6 @@ jobs:
               esac
             fi
 
-            reg=yes
-            grep -qxF "$repo" registered.txt || { reg=no; note_gap UNREGISTERED; }
-
             # .file-size.yml content lint: repos should only commit overrides,
             # never restate org defaults or carry an empty placeholder file.
             if case " $tree " in *" .file-size.yml "*) true;; *) false;; esac; then
@@ -130,7 +125,7 @@ jobs:
               ok=$((ok + 1))
             else
               drift=$((drift + 1))
-              rows="${rows}| \`${repo}\` | ${reg} | ${gaps} |"$'\n'
+              rows="${rows}| \`${repo}\` | ${gaps} |"$'\n'
             fi
           done < public.txt
 
@@ -142,11 +137,10 @@ jobs:
             echo "Repos with a recorded per-check opt-out: ${exempted}"
             echo
             if [ "$drift" -gt 0 ]; then
-              echo "| Repo | Registered | Gaps |"
-              echo "| --- | --- | --- |"
+              echo "| Repo | Gaps |"
+              echo "| --- | --- |"
               printf '%s' "$rows"
               echo
-              echo "\`UNREGISTERED\` = absent from the governance IaC inventory."
               echo "Fix by following AGENTS.md > New repo checklist, or record a"
               echo "justified opt-out under \`conventions_exempt:\` in the inventory."
             else
