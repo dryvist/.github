@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/dryvist/.github/compare/v1.5.0...v1.5.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **label-sync:** skip archived repos and lift the listing cap ([#219](https://github.com/dryvist/.github/issues/219)) ([2efa9b7](https://github.com/dryvist/.github/commit/2efa9b78efff218a41aeda0f651fdf967b6ec2f0))
+
 ## [1.5.0](https://github.com/dryvist/.github/compare/v1.4.0...v1.5.0) (2026-10-01)
 
 
