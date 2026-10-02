@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.5.0](https://github.com/dryvist/.github/compare/v1.4.0...v1.5.0) (2026-10-01)
+
+
+### Features
+
+* **ci-gate:** require owned flake inputs at branch head ([#215](https://github.com/dryvist/.github/issues/215)) ([04ec7ea](https://github.com/dryvist/.github/commit/04ec7eab5999ced352fc8746da8d80fbfd6a29d8))
+* **flake:** check owned flake inputs and relock only the stale ones ([#211](https://github.com/dryvist/.github/issues/211)) ([58cd281](https://github.com/dryvist/.github/commit/58cd281c28e9fa6600a94e13ae3ada9dd6c2e59a))
+
+
+### Bug Fixes
+
+* **ci:** deterministic flake-lock PR gate; cache pre-commit envs ([#218](https://github.com/dryvist/.github/issues/218)) ([81e7660](https://github.com/dryvist/.github/commit/81e766008fce15a7120979ca063c43394393b51d))
+* **flake:** fail an owned input pinned to a revision ([#216](https://github.com/dryvist/.github/issues/216)) ([8d3a08e](https://github.com/dryvist/.github/commit/8d3a08ef8826fb983ca9ca561ca1793315188deb))
+* **flake:** name the relocked inputs in targeted relock PR bodies ([#217](https://github.com/dryvist/.github/issues/217)) ([696ba75](https://github.com/dryvist/.github/commit/696ba7574a7ec86edd742515603602367c97e2b6))
+* **renovate:** scope own-org auto-merge to git-refs customManager pins ([#210](https://github.com/dryvist/.github/issues/210)) ([1d13f18](https://github.com/dryvist/.github/commit/1d13f18e3457e7c5af44f0129b253edbf568a80d))
+* **renovate:** unstick git-refs digest updates (ansible-galaxy duplicate lookup + minimumReleaseAgeBehaviour) ([#208](https://github.com/dryvist/.github/issues/208)) ([29da180](https://github.com/dryvist/.github/commit/29da18040b51569d37eed32b922f7ab51b29ce3c))
+
 ## [1.4.0](https://github.com/dryvist/.github/compare/v1.3.0...v1.4.0) (2026-09-25)
 
 
