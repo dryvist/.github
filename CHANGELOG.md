@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.5](https://github.com/dryvist/.github/compare/v1.5.4...v1.5.5) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ansible-ci:** run the gated jobs on scripts/** changes ([#229](https://github.com/dryvist/.github/issues/229)) ([13886d7](https://github.com/dryvist/.github/commit/13886d7a5f280caf9525f988ff98c396b5a8564e))
+
 ## [1.5.4](https://github.com/dryvist/.github/compare/v1.5.3...v1.5.4) (2026-10-02)
 
 
