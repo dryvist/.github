@@ -115,9 +115,11 @@
 # and `nix-build` are skipped for dependency-only bot PRs — the authors live
 # in `scripts/ci-gate-detect-deps-only.sh` and are pinned by its self-check,
 # rather than restated here where a copy silently rotted once already —
-# UNLESS `flake.lock` itself changed, since a
-# lockfile bump must still build. Both signals are computed once in
-# `changes` (`is-deps-only`, `is-flake-lock-change`) and reused by both jobs.
+# UNLESS `flake.lock` or any `*.nix` file changed, since a lockfile bump
+# must still build and a version bump in a `.nix` file can move a
+# fixed-output hash. The signals are computed once in `changes`
+# (`is-deps-only`, `is-flake-lock-change`, `is-nix-source-change`) and
+# reused by both jobs.
 #
 # Fork-PR runner guard (central invariant): every `runs-on:`/`runner_label:`
 # in this file resolves through
@@ -427,6 +429,7 @@ jobs:
       extra: ${{ steps.filter.outputs.extra }}
       is-deps-only: ${{ steps.detect-deps.outputs.is-deps-only }}
       is-flake-lock-change: ${{ steps.lockfilter.outputs.flake-lock }}
+      is-nix-source-change: ${{ steps.lockfilter.outputs.nix-source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -434,15 +437,17 @@ jobs:
         with:
           filters: ${{ inputs.filters }}
 
-      # Static (not caller-supplied) so `is-flake-lock-change` is always
-      # available regardless of whether a caller's `filters` input tracks
-      # flake.lock under its own `nix` key.
+      # Static (not caller-supplied) so `is-flake-lock-change` and
+      # `is-nix-source-change` are always available regardless of how a
+      # caller's `filters` input defines its own `nix` key.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: lockfilter
         with:
           filters: |
             flake-lock:
               - 'flake.lock'
+            nix-source:
+              - '**.nix'
 
       - name: Sparse-checkout shared scripts from this repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -488,7 +493,7 @@ jobs:
     # further when `scope` definitively succeeded and said "none" - a
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
-    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
     with:
       all_systems: ${{ inputs.all_systems }}
@@ -512,7 +517,7 @@ jobs:
     # something other than "full" (lint-only or none skip it); a scope
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
-    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
@@ -730,7 +735,7 @@ jobs:
           python-version: '3.x'
 
       - name: Aggregate results
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # release/v1
+        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
         with:
           # `watchdog` is always-success-on-completion; treating it as
           # allowed-skip lets `alls-green` ignore its result either way.
