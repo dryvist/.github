@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.6](https://github.com/dryvist/.github/compare/v1.5.5...v1.5.6) (2026-10-03)
+
+
+### Bug Fixes
+
+* **ci-gate:** run Nix checks on deps-only PRs that change Nix files ([#231](https://github.com/dryvist/.github/issues/231)) ([5edd133](https://github.com/dryvist/.github/commit/5edd13311d514f5d3207db903b4fa391919658de))
+
 ## [1.5.5](https://github.com/dryvist/.github/compare/v1.5.4...v1.5.5) (2026-10-03)
 
 
