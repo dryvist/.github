@@ -24,6 +24,9 @@
   "branchConcurrentLimit": 3,
   "prHourlyLimit": 0,
   "rebaseWhen": "conflicted",
+  "gitIgnoredAuthors": [
+    "279454174+dryvist-github-actions[bot]@users.noreply.github.com"
+  ],
   "ignoreDeprecated": true,
   "osvVulnerabilityAlerts": true,
   "pre-commit": {
