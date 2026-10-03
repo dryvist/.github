@@ -137,10 +137,9 @@ production hosts are all declared in Nix, `nix build` becomes the universal
 ### [Infrastructure as code](https://docs.jacobpevans.com/infrastructure/overview)
 
 OpenTofu for everything provisionable — virtual machines, networks, cloud
-accounts, even GitHub itself. Terrakube runs the workspaces inside the homelab,
-with short-lived credentials supplied natively by OpenBao. Modules are written
-to be reused: golden-image builders and the governance layer that keeps the
-whole org consistent.
+accounts, even GitHub itself. Terrakube runs the workspaces inside the homelab.
+Modules are written to be reused: golden-image builders and the governance
+layer that keeps the whole org consistent.
 
 - Proxmox VMs, LXC containers, networking, firewall rules — declarative,
   with safe concurrent state.
@@ -159,8 +158,6 @@ box, Ansible delivers the workload.
   baselines.
 - Application roles for observability platforms, syslog load balancers,
   and other long-running services.
-- Secrets injection via Doppler so playbooks stay declarative and the
-  sensitive bits never land on disk.
 
 ### [AI development tooling](https://docs.jacobpevans.com/ai-development/overview)
 
@@ -215,11 +212,9 @@ place; each layer is observable to the one above it.
    starts from a Nix flake. `nix build` is the only way in.
 2. **Provisioning layer (Terrakube / OpenTofu).** Once a Nix-built host
    exists, Terrakube workspaces carve up cloud and homelab capacity around it:
-   VMs, LXC containers, cloud resources, and GitHub org governance. OpenBao
-   supplies short-lived workspace credentials without storing them in code.
+   VMs, LXC containers, cloud resources, and GitHub org governance.
 3. **Configuration layer (Ansible).** Provisioned hosts get turned into
-   services by idempotent roles that pull secrets at runtime and converge
-   on a declared state.
+   services by idempotent roles that converge on a declared state.
 4. **Observability fabric (Cribl + OpenTelemetry + Splunk).** Every layer
    above emits telemetry into a shared pipeline that shapes, indexes, and
    alerts. Includes traces from the AI tools themselves.
