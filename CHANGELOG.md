@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/dryvist/.github/compare/v1.5.6...v1.6.0) (2026-10-03)
+
+
+### Features
+
+* **renovate:** ignore the hash-fixer bot as a commit author ([#233](https://github.com/dryvist/.github/issues/233)) ([d217fcf](https://github.com/dryvist/.github/commit/d217fcfc01d2bd1cbf51ef45e0ca75536a4ff5fb))
+
 ## [1.5.6](https://github.com/dryvist/.github/compare/v1.5.5...v1.5.6) (2026-10-03)
 
 
