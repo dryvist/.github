@@ -196,6 +196,10 @@ jobs:
               # below — they were fixed separately because they gate different
               # jobs, which is exactly why the second gap survived the first.
               - 'tests/**'
+              # Repo scripts (the converge runner and its helpers) are what
+              # those Python suites exercise, so a script-only change must run
+              # them too.
+              - 'scripts/**'
             molecule:
               - 'roles/**'
               - 'molecule/**'
