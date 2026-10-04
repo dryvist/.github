@@ -129,6 +129,9 @@ crash.*.log
 # (committed project config above is intentionally NOT ignored)
 # ════════════════════════════════════════════════════════════════════
 
+# Project-local agent skill links are generated from user configuration.
+.agents/
+
 # Claude Code machine-local state
 .claude/settings.local.json
 .claude/.credentials.json
