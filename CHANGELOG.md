@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/dryvist/.github/compare/v1.6.0...v1.6.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* handle unknown Merge Gate results ([#240](https://github.com/dryvist/.github/issues/240)) ([9c29df5](https://github.com/dryvist/.github/commit/9c29df57405de7f6f030d3ce6a94f0845efb50d9))
+
 ## [1.6.0](https://github.com/dryvist/.github/compare/v1.5.6...v1.6.0) (2026-10-03)
 
 
