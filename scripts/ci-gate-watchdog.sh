@@ -4,8 +4,8 @@
 # Poll the run's sibling jobs and EXIT AS SOON AS none is still `queued`
 # (everything got scheduled) — only cancel jobs that remain stuck in `queued`
 # after QUEUE_TIMEOUT_MINUTES. Cancelling forces a terminal state so `gate` can
-# finally schedule and `re-actors/alls-green` can evaluate, ensuring the required
-# `Merge Gate` status always reports.
+# finally schedule and the shared gate aggregate can evaluate, ensuring the
+# required `Merge Gate` status always reports.
 #
 # Why poll instead of `sleep $TIMEOUT`: a fixed sleep billed a full
 # QUEUE_TIMEOUT_MINUTES of runner time on EVERY run, even though jobs only get

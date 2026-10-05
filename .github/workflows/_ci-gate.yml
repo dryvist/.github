@@ -14,7 +14,7 @@
 #   watchdog -> sleeps queue_timeout_minutes, cancels any sibling job still
 #               in `queued` state so the gate is never blocked indefinitely
 #   gate     -> name MUST stay "Merge Gate" (matches branch protection rulesets);
-#               aggregates results via re-actors/alls-green
+#               aggregates results with the shared result script
 #
 # Content-aware scope classifier (`scope` job):
 #
@@ -400,7 +400,7 @@ jobs:
   # a SECOND, additional layer on top of the deterministic path filters
   # `changes` already computes - narrowing further, never replacing them
   # (each conditional job below still carries its original filter-based
-  # `if:`). `allowed-failures: scope` in the gate's alls-green step means a
+  # `if:`). `allowed-failures: scope` in the gate aggregate means a
   # classifier infra failure is visible as a red job but never blocks the
   # Merge Gate; every job below only narrows when `needs.scope.result ==
   # 'success'` AND the output says so, so a scope failure or an empty
@@ -484,7 +484,7 @@ jobs:
   # ============================================================================
   # CONDITIONAL CHECKS
   # Each is gated on `inputs.<toggle>` AND `needs.changes.outputs.<filter>`.
-  # Disabled or untouched paths skip; `re-actors/alls-green` accepts skips.
+  # Disabled or untouched paths skip; the gate aggregate accepts configured skips.
   # ============================================================================
   nix-validate:
     name: Nix Validate
@@ -726,44 +726,33 @@ jobs:
       actions: read
       contents: read
     steps:
-      # alls-green is a composite Python action. GitHub-hosted images provide
-      # `python`; install the same maintained runtime explicitly so this gate
-      # has the identical contract on self-hosted runners.
-      - name: Set up Python for the result aggregator
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          python-version: '3.x'
-
-      - name: Aggregate results
-        uses: re-actors/alls-green@05ac9388f0aebcb5727afa17fcccfecd6f8ec5fe # v1.2.2
-        with:
-          # `watchdog` is always-success-on-completion; treating it as
-          # allowed-skip lets `alls-green` ignore its result either way.
-          allowed-skips: nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, watchdog, flake-lock-fresh
-          # `scope` never skips (it has no `if:`), so it needs
-          # allowed-FAILURES, not allowed-skips: a classifier infra failure
-          # (bad secret, dead vendor, a real script bug) shows up red in
-          # the job list - visible, per the PR #402 review - but every job
-          # above already defers to its own filter whenever
-          # `needs.scope.result != 'success'`, so the failure has no unsafe
-          # effect and must not block the org's Merge Gate on its own.
-          allowed-failures: scope
-          jobs: ${{ toJSON(needs) }}
-
-      # Retrospective run report (job durations + a runner-capacity queue-delay
-      # warning). Runs last, when every sibling is terminal and timestamps are
-      # final. Non-blocking: `always()` renders it even on a failed gate, and
-      # `continue-on-error` keeps a report hiccup from ever gating a merge.
-      - name: Sparse-checkout run-report script from this repo
+          node-version: '22'
+      # The run report is non-blocking; the aggregator is required to produce
+      # the Merge Gate result.
+      - name: Sparse-checkout gate scripts from this repo
         if: ${{ always() }}
-        continue-on-error: true
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
           ref: ${{ job.workflow_sha }}
           path: .gh-shared
-          sparse-checkout: scripts/ci-gate-run-report.sh
+          sparse-checkout: |
+            scripts/ci-gate-aggregate.mts
+            scripts/ci-gate-run-report.sh
           sparse-checkout-cone-mode: false
+      - name: Aggregate results
+        env:
+          CI_GATE_JOBS: ${{ toJSON(needs) }}
+          CI_GATE_ALLOWED_SKIPS: >-
+            nix-validate, nix-build, markdown-lint, file-size, token-limits,
+            python-security, python-ci, ansible-ci, renovate-annotations,
+            tofu-ci, osv-scan, dependency-review, zizmor, watchdog,
+            flake-lock-fresh
+          CI_GATE_ALLOWED_FAILURES: scope
+        run: node .gh-shared/scripts/ci-gate-aggregate.mts
+      # Run after every sibling is terminal, when timestamps are final.
       - name: Job durations + queue-delay summary
         if: ${{ always() }}
         continue-on-error: true
