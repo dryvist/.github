@@ -714,7 +714,9 @@ jobs:
   gate:
     name: Merge Gate
     needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh]
-    if: ${{ always() && !cancelled() }}
+    # Run after workflow cancellation too, so cancelled sibling checks aggregate
+    # to a failing required status instead of a skipped (successful) job.
+    if: ${{ always() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
