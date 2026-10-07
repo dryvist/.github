@@ -7,6 +7,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
 const selectorPath = require.resolve('../.github/scripts/select-molecule-scenarios.js');
+const ansibleCiWorkflowPath = require.resolve('../.github/workflows/_ansible-ci.yml');
 const { selectMoleculeScenarios } = require(selectorPath);
 
 function selection(changedFiles, scenarios = {}, contractFiles = []) {
@@ -47,6 +48,21 @@ test('uses contract-only coverage when every relevant path is covered', () => {
     'roles/no_scenario/tasks/main.yml',
     'tests/contract.py',
   ]), '[]');
+});
+
+test('uses contract coverage for a requirements-only change without widening the matrix', () => {
+  const workflow = readFileSync(ansibleCiWorkflowPath, 'utf8');
+  const fullMatrix = workflow.match(/^            full_matrix:\n((?:^              .*\n)*)/m)?.[1];
+
+  assert.ok(fullMatrix, 'the full_matrix filter is present');
+  assert.doesNotMatch(fullMatrix, /^              - 'requirements\.yml'$/m);
+  assert.match(fullMatrix, /^              - 'requirements-ci\.txt'$/m);
+  assert.equal((workflow.match(/^              - 'requirements\.yml'$/gm) || []).length, 3);
+  assert.equal(selection(['requirements.yml'], {}, ['requirements.yml']), '[]');
+});
+
+test('an uncovered requirements-only change keeps the full matrix', () => {
+  assert.equal(selection(['requirements.yml']), '');
 });
 
 test('an unmapped path widens a mixed contract-only change', () => {

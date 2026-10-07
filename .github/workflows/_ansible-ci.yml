@@ -270,7 +270,6 @@ jobs:
               - 'molecule/shared/**'
               - 'molecule/resources/**'
               - '.config/molecule/**'
-              - 'requirements.yml'
               - 'requirements-ci.txt'
               - 'ansible.cfg'
               - '.github/workflows/**'
