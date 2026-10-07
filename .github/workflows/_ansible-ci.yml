@@ -183,10 +183,13 @@ jobs:
       # Normalized ONCE, here, so every consumer shares one contract: an empty
       # string means "run every scenario"; [] means all relevant files are
       # covered by the caller's contract-only filter. Unmapped paths widen.
+      # A caller-declared scenario or contract can narrow a broad path only
+      # when the selector covers every changed Ansible file. The selector
+      # fails closed for missing or unmapped paths; promotions and pushes
+      # still receive the full matrix.
       molecule_scenarios: >-
         ${{ (github.event_name == 'pull_request' &&
         github.event.pull_request.base.ref != inputs.full_matrix_base &&
-        steps.classify.outputs.full_matrix != 'true' &&
         steps.scenario_selection.outputs.scenarios != '' &&
         steps.scenario_selection.outputs.scenarios) || '' }}
     steps:

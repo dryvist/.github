@@ -49,6 +49,25 @@ test('uses contract-only coverage when every relevant path is covered', () => {
   ]), '[]');
 });
 
+test('uses the campaign contract for the observed playbook and telemetry fixture changes', () => {
+  const changedFiles = [
+    'playbooks/llm-model-campaign-target.yml',
+    'playbooks/tasks/llm-model-campaign-convert.yml',
+    'playbooks/templates/llm-model-campaign-dimensions.json.j2',
+    'tests/llm_model_campaign/fixtures/nvidia-smi-enforced-power-limit.csv',
+    'tests/llm_model_campaign/test_dimensions.py',
+  ];
+
+  assert.equal(selection(changedFiles, {}, changedFiles), '[]');
+});
+
+test('an unrelated playbook change still widens the campaign contract selection', () => {
+  assert.equal(selection([
+    'playbooks/llm-model-campaign-target.yml',
+    'playbooks/site.yml',
+  ], {}, ['playbooks/llm-model-campaign-target.yml']), '');
+});
+
 test('an unmapped path widens a mixed contract-only change', () => {
   assert.equal(selection(['roles/no_scenario/tasks/main.yml', 'roles/new_role/tasks/main.yml'], {}, [
     'roles/no_scenario/tasks/main.yml',
