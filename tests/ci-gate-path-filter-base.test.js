@@ -8,9 +8,12 @@ const workflow = readFileSync(
 );
 
 test('both shared path filters compare pushes against the pushed branch', () => {
-  const filters = workflow.split('uses: dorny/paths-filter@');
-  assert.equal(filters.length - 1, 2);
-  for (const filter of filters.slice(1)) {
-    assert.match(filter, /with:\n(?:[^\n]*\n)*?\s+base: \$\{\{ github\.ref \}\}/);
+  const filters = workflow
+    .split('\n      - uses: dorny/paths-filter@')
+    .slice(1)
+    .map((step) => step.split('\n      - uses:')[0]);
+  assert.equal(filters.length, 2);
+  for (const filter of filters) {
+    assert.match(filter, /^\s+base: \$\{\{ github\.ref \}\}$/m);
   }
 });
