@@ -494,9 +494,12 @@ jobs:
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
     if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: dryvist/.github/.github/workflows/_nix-validate.yml@main
+    # Keep nested workflow calls on the same immutable source revision while
+    # validating changes to this reusable workflow repository.
+    uses: ./.github/workflows/_nix-validate.yml
     with:
-      all_systems: ${{ inputs.all_systems }}
+      all_systems: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.all_systems }}
+      focused_checks: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
