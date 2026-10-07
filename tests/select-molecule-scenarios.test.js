@@ -56,13 +56,23 @@ test('uses contract coverage for a requirements-only change without widening the
 
   assert.ok(fullMatrix, 'the full_matrix filter is present');
   assert.doesNotMatch(fullMatrix, /^              - 'requirements\.yml'$/m);
+  assert.doesNotMatch(fullMatrix, /^              - '\.github\/(?:workflows|scripts)\/\*\*'$/m);
   assert.match(fullMatrix, /^              - 'requirements-ci\.txt'$/m);
   assert.equal((workflow.match(/^              - 'requirements\.yml'$/gm) || []).length, 3);
   assert.equal(selection(['requirements.yml'], {}, ['requirements.yml']), '[]');
+  assert.equal(selection(['.github/workflows/ci-gate.yml'], {
+    default: ['.github/workflows/ci-gate.yml'],
+  }), '["default"]');
 });
 
 test('an uncovered requirements-only change keeps the full matrix', () => {
   assert.equal(selection(['requirements.yml']), '');
+});
+
+test('an uncovered workflow change keeps the full matrix', () => {
+  assert.equal(selection(['.github/workflows/new-ci.yml'], {
+    default: ['.github/workflows/ci-gate.yml'],
+  }), '');
 });
 
 test('an unmapped path widens a mixed contract-only change', () => {

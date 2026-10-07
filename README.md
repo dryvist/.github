@@ -206,10 +206,11 @@ Merge Gate contract.
 - Public pull-request CI stays on GitHub-hosted runners. Private repositories
   can select their approved private runner label.
 - The reusable workflow widens shared execution inputs and unclassified paths
-  to the full matrix. `requirements.yml` remains Molecule-relevant and may use
-  scenario or contract-only coverage when the required `Merge Gate` exercises
-  every changed file; without mapped coverage, the selector widens to the full
-  matrix. A failed selector or contract must fail the required `Merge Gate`.
+  to the full matrix. `requirements.yml` and CI-harness changes remain
+  Molecule-relevant and may use scenario or contract-only coverage when the
+  required `Merge Gate` exercises every changed file; without mapped coverage,
+  the selector widens to the full matrix. A failed selector or contract must
+  fail the required `Merge Gate`.
 - A caller may use `molecule_contract_filters` (the reserved filter name is
   `contract_only`) only when its role-specific contract test runs inside that same `Merge Gate`; the caller's Molecule
   workflow still runs its contract suite.
