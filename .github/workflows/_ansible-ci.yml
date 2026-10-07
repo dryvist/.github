@@ -28,12 +28,10 @@
 #       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
 #       with: { emit_gate: true }
-# Scope policy (canonical): a check runs in proportion to the change that
-# triggered it; the one guaranteed end-to-end sweep is promotion to a
-# git-flow repo's production branch. Narrow at the consumer, never in a
-# filter several repos share, and never let the job that decides what to
-# skip be skippable itself.
-# https://docs.jacobpevans.com/d/decisions/ci-scope-follows-the-change/
+# Scope policy (canonical): PRs into `develop` use changed-role Molecule and
+# repo-local contracts; PRs into `main` and non-PR runs use the full matrix.
+# Narrow only at the consumer, and keep every classifier inside the required
+# Merge Gate. See the policy and history in README.md.
 #
 
 name: _ansible-ci
@@ -67,6 +65,13 @@ on:
           runs the full matrix. Unset (the default) keeps the previous behaviour.
         type: string
         default: ""
+      full_matrix_base:
+        description: >-
+          PR target branch that always runs the full Ansible and Molecule
+          checks. Defaults to `main`; set only for a repo with a different
+          promotion branch.
+        type: string
+        default: main
       molecule_requirements:
         description: >-
           Pip requirements file with the molecule job's dependencies (each repo
@@ -155,8 +160,17 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
     outputs:
-      ansible: ${{ steps.filter.outputs.ansible }}
-      molecule: ${{ steps.filter.outputs.molecule }}
+      # Non-PR events and promotion PRs must not be narrowed by the classifier.
+      ansible: >-
+        ${{ steps.filter.outputs.ansible == 'true'
+            || github.event_name != 'pull_request'
+            || github.event.pull_request.base.ref ==
+            inputs.full_matrix_base }}
+      molecule: >-
+        ${{ steps.filter.outputs.molecule == 'true'
+            || github.event_name != 'pull_request'
+            || github.event.pull_request.base.ref ==
+            inputs.full_matrix_base }}
       # Normalized ONCE, here, so every consumer shares one contract: an empty
       # string means "run every scenario". Widening happens for a non-PR event,
       # for a shared-input path, and
@@ -166,6 +180,7 @@ jobs:
       # having tested nothing.
       molecule_scenarios: >-
         ${{ (github.event_name == 'pull_request' &&
+        github.event.pull_request.base.ref != inputs.full_matrix_base &&
         steps.full_matrix.outputs.full_matrix != 'true' &&
         steps.scenarios.outputs.changes != '[]') &&
         steps.scenarios.outputs.changes || '' }}

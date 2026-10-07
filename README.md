@@ -191,3 +191,25 @@ npx -y markdownlint-cli2 "**/*.md"
 - [markdownlint-cli2 configuration](https://github.com/DavidAnson/markdownlint-cli2#configuration)
 - [Renovate `extends` docs](https://docs.renovatebot.com/config-presets/)
 - [release-please-action](https://github.com/googleapis/release-please-action)
+
+## Ansible CI policy
+
+The shared Ansible workflow implements changed-role selection and the required
+Merge Gate contract.
+
+- PRs into `develop` run lint, syntax and contract checks plus Molecule
+  scenarios selected from changed roles and their consumers.
+- PRs into `main` run the full Molecule matrix and required contracts before
+  merge.
+- Pushes to `develop` and `main` run the full matrix. Repositories with
+  integration checks run them on the `main` push.
+- Public pull-request CI stays on GitHub-hosted runners. Private repositories
+  can select their approved private runner label.
+- Shared inputs and unclassified changes widen to the full matrix. A failed
+  selector or contract must fail the required `Merge Gate`.
+
+`molecule_scenario_filters` remains caller-supplied because role-to-scenario
+relationships differ by repository. PR #164 introduced that input as an opt-in;
+callers without a map kept the full matrix. The reusable workflow now defaults
+`main` to full-matrix behavior. The private docs decision records the policy
+and runner measurements.
