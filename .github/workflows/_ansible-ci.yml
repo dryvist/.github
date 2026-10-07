@@ -28,12 +28,11 @@
 #       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
 #       with: { emit_gate: true }
-# Scope policy (canonical): a check runs in proportion to the change that
-# triggered it; the one guaranteed end-to-end sweep is promotion to a
-# git-flow repo's production branch. Narrow at the consumer, never in a
-# filter several repos share, and never let the job that decides what to
-# skip be skippable itself.
-# https://docs.jacobpevans.com/d/decisions/ci-scope-follows-the-change/
+# Scope policy (canonical): PRs into `develop` use changed-role Molecule and
+# repo-local contracts; PRs into `main` and pushes to `main` or `develop` use
+# the full matrix. Shared inputs and unmapped changes also widen the matrix.
+# Narrow only at the consumer, and keep every classifier inside the required
+# Merge Gate. See the policy and history in README.md.
 #
 
 name: _ansible-ci
@@ -60,20 +59,26 @@ on:
       molecule_scenario_filters:
         description: >-
           Optional YAML map of molecule scenario name -> paths, in
-          dorny/paths-filter syntax. When set, a pull request runs only the
-          scenarios whose paths changed instead of the whole
-          `molecule_scenarios` matrix; a push to the default branch always runs
-          the full matrix. Unset (the default) keeps the previous behaviour.
+          dorny/paths-filter syntax. Develop pull requests run only the
+          scenarios whose paths changed; promotion pull requests into
+          full_matrix_base and shared inputs widen to the full matrix. Pushes
+          to main or develop also run the full matrix. Unset keeps the previous
+          behaviour.
+        type: string
+        default: ""
+      molecule_contract_filters:
+        description: >-
+          Optional path-filter map named contract_only for files covered by caller-owned
+          contract checks without a Molecule scenario. Every Molecule-relevant
+          changed path must be covered. Use only when the contract check runs
+          inside the same required Merge Gate.
         type: string
         default: ""
       full_matrix_base:
         description: >-
-          Branch whose incoming pull requests always run the FULL molecule
-          matrix, regardless of `molecule_scenario_filters`. The scope policy
-          above names promotion into a git-flow repo's production branch as the
-          one guaranteed end-to-end sweep, and in a repo whose CI fires only on
-          `pull_request` that promotion PR is the only place the sweep can
-          happen.
+          PR target branch that always runs the full Ansible and Molecule
+          checks. Defaults to `main`; set only for a repo with a different
+          promotion branch.
         type: string
         default: main
       molecule_requirements:
@@ -146,12 +151,12 @@ on:
         value: ${{ jobs.changes.outputs.molecule }}
       molecule_scenarios:
         description: >-
-          JSON array of the scenarios a pull request touched, or an empty
-          string meaning "run every scenario". A caller that owns molecule
-          locally (`molecule: false`) reads this to narrow its own matrix, so
-          every repo shares ONE change-detection definition. Empty is the only
-          widening signal a consumer has to handle; the rules that produce it
-          live in the changes job.
+          JSON array of the scenarios a pull request touched, [] when the
+          caller declares contract-only coverage, or an empty string meaning
+          "run every scenario". Callers that own Molecule locally
+          (`molecule: false`) read this output so every repo shares ONE
+          change-detection definition. Unmapped changes widen to the full
+          matrix; contract_only must be backed by a caller contract check.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
 
 permissions:
@@ -164,16 +169,26 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
     outputs:
-      ansible: ${{ steps.filter.outputs.ansible }}
-      molecule: ${{ steps.filter.outputs.molecule }}
+      # Non-PR events and promotion PRs must not be narrowed by the classifier.
+      ansible: >-
+        ${{ steps.filter.outputs.ansible == 'true'
+            || github.event_name != 'pull_request'
+            || github.event.pull_request.base.ref ==
+            inputs.full_matrix_base }}
+      molecule: >-
+        ${{ steps.filter.outputs.molecule == 'true'
+            || github.event_name != 'pull_request'
+            || github.event.pull_request.base.ref ==
+            inputs.full_matrix_base }}
       # Normalized ONCE, here, so every consumer shares one contract: an empty
-      # string means "run every scenario". Widening happens for a push, for a
-      # pull request into the production branch, and when the map matched
-      # nothing — that last case means the map does not cover the change (an
-      # unmapped role, a new scenario, a requirements bump), and narrowing
-      # there would leave an empty matrix, a skipped job and a green gate
-      # having tested nothing.
-      molecule_scenarios: ${{ (github.event_name == 'pull_request' && github.event.pull_request.base.ref != inputs.full_matrix_base && steps.scenarios.outputs.changes != '[]') && steps.scenarios.outputs.changes || '' }}
+      # string means "run every scenario"; [] means all relevant files are
+      # covered by the caller's contract-only filter. Unmapped paths widen.
+      molecule_scenarios: >-
+        ${{ (github.event_name == 'pull_request' &&
+        github.event.pull_request.base.ref != inputs.full_matrix_base &&
+        steps.classify.outputs.full_matrix != 'true' &&
+        steps.scenario_selection.outputs.scenarios != '' &&
+        steps.scenario_selection.outputs.scenarios) || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -206,25 +221,85 @@ jobs:
               - 'scripts/**'
             molecule:
               - 'roles/**'
+              - 'playbooks/**'
+              - 'inventory/**'
+              - 'group_vars/**'
+              - 'host_vars/**'
               - 'molecule/**'
               - '.config/molecule/**'
               - 'requirements.yml'
+              - 'requirements-ci.txt'
+              - 'ansible.cfg'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
               # Suites that live outside molecule/ but run under the molecule
               # workflow. Without these, editing one of those tests does not
               # run it: a change confined to the suite leaves this filter
               # false, every molecule job is skipped, and the PR merges green
               # having never exercised the thing it changed.
               - 'tests/**'
-      # Per-scenario narrowing. `changes` is a JSON array of the filter names
-      # that matched, which feeds the molecule matrix directly — the same
-      # off-the-shelf action, no scripts. Skipped (and so empty) when the
-      # caller passes no map, which is what keeps this back-compatible.
+      # Match all Molecule-relevant paths once. File lists let the selector
+      # verify that every changed path is covered by a scenario or caller
+      # contract before narrowing the matrix.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
-        id: scenarios
-        if: ${{ inputs.molecule_scenario_filters != '' }}
+        id: classify
+        if: ${{ github.event_name == 'pull_request' }}
         with:
-          filters: ${{ inputs.molecule_scenario_filters }}
-
+          list-files: json
+          filters: |
+            changed:
+              - 'roles/**'
+              - 'playbooks/**'
+              - 'inventory/**'
+              - 'group_vars/**'
+              - 'host_vars/**'
+              - 'molecule/**'
+              - '.config/molecule/**'
+              - 'requirements.yml'
+              - 'requirements-ci.txt'
+              - 'ansible.cfg'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
+              - 'tests/**'
+            full_matrix:
+              - 'playbooks/**'
+              - 'inventory/**'
+              - 'group_vars/**'
+              - 'host_vars/**'
+              - 'roles/**/meta/**'
+              - 'molecule/shared/**'
+              - 'molecule/resources/**'
+              - '.config/molecule/**'
+              - 'requirements.yml'
+              - 'requirements-ci.txt'
+              - 'ansible.cfg'
+              - '.github/workflows/**'
+              - '.github/scripts/**'
+            ${{ inputs.molecule_scenario_filters }}
+            ${{ inputs.molecule_contract_filters }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: >-
+          ${{ github.event_name == 'pull_request' &&
+          (inputs.molecule_scenario_filters != '' ||
+          inputs.molecule_contract_filters != '') }}
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: .github/scripts/select-molecule-scenarios.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Select scenarios only when every relevant path is covered
+        id: scenario_selection
+        if: >-
+          ${{ github.event_name == 'pull_request' &&
+          (inputs.molecule_scenario_filters != '' ||
+          inputs.molecule_contract_filters != '') }}
+        env:
+          CHANGED_FILES: ${{ steps.classify.outputs.changed_files }}
+          MATCHED_FILTERS: ${{ steps.classify.outputs.changes }}
+          FILTER_OUTPUTS: ${{ toJSON(steps.classify.outputs) }}
+        run: node .gh-shared/.github/scripts/select-molecule-scenarios.js
   ansible-lint:
     name: Ansible Lint
     needs: changes
@@ -269,7 +344,14 @@ jobs:
   molecule:
     name: Molecule (${{ matrix.scenario }})
     needs: changes
-    if: ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' }}
+    if: >-
+      ${{ inputs.molecule &&
+      (needs.changes.outputs.molecule == 'true' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == inputs.full_matrix_base) ||
+      (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))) &&
+      needs.changes.outputs.molecule_scenarios != '[]' }}
     # Molecule gets its own label so it can run on the self-hosted fleet while
     # the quick jobs stay hosted. Hosted for a public repo and for fork PRs;
     # self-hosted (molecule_runner_label) only for a private repo's own PRs.
