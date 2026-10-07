@@ -199,15 +199,18 @@ Merge Gate contract.
 
 - PRs into `develop` run lint, syntax and contract checks plus Molecule
   scenarios selected from changed roles and their consumers.
-- PRs into `main` run the full Molecule matrix and required contracts before
-  merge.
-- Pushes to `develop` and `main` run the full matrix. Repositories with
-  integration checks run them on the `main` push.
+- PRs into `main` run the full Molecule matrix, contracts, and the repository's
+  integration checks before merge.
+- Pushes to `develop` and `main` run the full matrix; integration checks also
+  run on `main` pushes.
 - Public pull-request CI stays on GitHub-hosted runners. Private repositories
   can select their approved private runner label.
-- Shared Ansible inputs and unclassified role or scenario paths widen to the
-  full matrix. A CI-harness-only change runs the repository's smoke scenario.
-  A failed selector or contract must fail the required `Merge Gate`.
+- Shared inputs (playbooks, inventory, role dependencies, Molecule resources,
+  requirements, and workflows) and unclassified role or scenario paths widen to the full
+  matrix. A failed selector or contract must fail the required `Merge Gate`.
+- A caller may use `molecule_contract_filters` (the reserved filter name is
+  `contract_only`) only when its role-specific contract test runs inside that same `Merge Gate`; the caller's Molecule
+  workflow still runs its contract suite.
 
 `molecule_scenario_filters` remains caller-supplied because role-to-scenario
 relationships differ by repository. PR #164 introduced that input as an opt-in;

@@ -195,6 +195,15 @@ For every change in dryvist:
 5. Conventional commits (`fix:`, `feat:`, `chore:`, etc.) — release-please
    uses these to compute bumps.
 
+Ansible CI callers use the shared policy in `README.md` and
+`.github/workflows/_ansible-ci.yml`: develop pull requests run changed-role
+coverage; main promotion pull requests and pushes to main/develop run the full
+Molecule matrix. Shared inventory, playbooks, role dependencies, unmapped changes, and failed selectors must
+keep the single required `Merge Gate` red until validation succeeds. A caller
+may use `molecule_contract_filters` with the reserved key `contract_only` only
+when every relevant file is covered by its contract and the test runs in that
+same gate.
+
 ### Adding a new reusable workflow
 
 A brand-new `_*.yml` lands in **its own PR first, with no wiring**. A
