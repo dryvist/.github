@@ -30,6 +30,14 @@ test('selects all mapped scenarios when every relevant path is covered', () => {
   }), '["a","b"]');
 });
 
+test('selects the mapped scenario for a caller workflow change', () => {
+  const changedFile = '.github/workflows/ci-gate.yml';
+
+  assert.equal(selection([changedFile], {
+    llm_gpu_serving: [changedFile],
+  }), '["llm_gpu_serving"]');
+});
+
 test('accepts scenario names used by the repository scenario discovery contract', () => {
   assert.equal(selection(['molecule/scenario-2/molecule.yml'], {
     'scenario-2': ['molecule/scenario-2/molecule.yml'],

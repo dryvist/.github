@@ -206,8 +206,10 @@ Merge Gate contract.
 - Public pull-request CI stays on GitHub-hosted runners. Private repositories
   can select their approved private runner label.
 - Shared inputs (playbooks, inventory, role dependencies, Molecule resources,
-  requirements, and workflows) and unclassified role or scenario paths widen to the full
-  matrix. A failed selector or contract must fail the required `Merge Gate`.
+  requirements, and shared CI scripts) widen to the full matrix. Workflow files
+  use their caller-declared scenario or contract mapping; unmapped changes widen
+  to the full matrix. A failed selector or contract must fail the required
+  `Merge Gate`.
 - A caller may use `molecule_contract_filters` (the reserved filter name is
   `contract_only`) only when its role-specific contract test runs inside that same `Merge Gate`; the caller's Molecule
   workflow still runs its contract suite.

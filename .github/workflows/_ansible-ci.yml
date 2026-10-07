@@ -30,7 +30,8 @@
 #       with: { emit_gate: true }
 # Scope policy (canonical): PRs into `develop` use changed-role Molecule and
 # repo-local contracts; PRs into `main` and pushes to `main` or `develop` use
-# the full matrix. Shared inputs and unmapped changes also widen the matrix.
+# the full matrix. Shared inputs and unmapped changes also widen the matrix;
+# mapped workflow files use their caller-declared scenarios.
 # Narrow only at the consumer, and keep every classifier inside the required
 # Merge Gate. See the policy and history in README.md.
 #
@@ -276,7 +277,6 @@ jobs:
               - 'requirements.yml'
               - 'requirements-ci.txt'
               - 'ansible.cfg'
-              - '.github/workflows/**'
               - '.github/scripts/**'
             ${{ inputs.molecule_scenario_filters }}
             ${{ inputs.molecule_contract_filters }}
