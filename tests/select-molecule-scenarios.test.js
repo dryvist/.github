@@ -7,6 +7,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
 const selectorPath = require.resolve('../.github/scripts/select-molecule-scenarios.js');
+const workflowPath = require.resolve('../.github/workflows/_ansible-ci.yml');
 const { selectMoleculeScenarios } = require(selectorPath);
 
 function selection(changedFiles, scenarios = {}, contractFiles = [], fullMatrixFiles = []) {
@@ -35,6 +36,28 @@ test('selects all mapped scenarios when every relevant path is covered', () => {
   );
 });
 
+test('selects the mapped scenario for a caller workflow change', () => {
+  const changedFile = '.github/workflows/ci-gate.yml';
+
+  assert.equal(
+    selection([changedFile], { llm_gpu_serving: [changedFile] }),
+    '["llm_gpu_serving"]',
+  );
+});
+
+test('caller workflow paths are classified without forcing the full matrix', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const changedStart = workflow.indexOf('            changed:\n');
+  const fullMatrixStart = workflow.indexOf('            full_matrix:\n', changedStart);
+  const scenarioFiltersStart = workflow.indexOf('            ${{ inputs.molecule_scenario_filters }}', fullMatrixStart);
+
+  assert.ok(changedStart >= 0);
+  assert.ok(fullMatrixStart > changedStart);
+  assert.ok(scenarioFiltersStart > fullMatrixStart);
+  assert.match(workflow.slice(changedStart, fullMatrixStart), /- '\.github\/workflows\/\*\*'/);
+  assert.doesNotMatch(workflow.slice(fullMatrixStart, scenarioFiltersStart), /\.github\/workflows\/\*\*/);
+});
+
 test('accepts scenario names used by the repository scenario discovery contract', () => {
   assert.equal(
     selection(['molecule/scenario-2/molecule.yml'], {
@@ -61,6 +84,30 @@ test('uses contract-only coverage when every relevant path is covered', () => {
       'tests/contract.py',
     ]),
     '[]',
+  );
+});
+
+test('uses the campaign contract for the observed playbook and telemetry fixture changes', () => {
+  const changedFiles = [
+    'playbooks/llm-model-campaign-target.yml',
+    'playbooks/tasks/llm-model-campaign-convert.yml',
+    'playbooks/templates/llm-model-campaign-dimensions.json.j2',
+    'tests/llm_model_campaign/fixtures/nvidia-smi-enforced-power-limit.csv',
+    'tests/llm_model_campaign/test_dimensions.py',
+  ];
+
+  assert.equal(selection(changedFiles, {}, changedFiles), '[]');
+});
+
+test('an unrelated playbook path fails instead of widening the campaign contract selection', () => {
+  assert.throws(
+    () =>
+      selection(
+        ['playbooks/llm-model-campaign-target.yml', 'playbooks/site.yml'],
+        {},
+        ['playbooks/llm-model-campaign-target.yml'],
+      ),
+    /no scenario, caller-contract, or full-matrix mapping: playbooks\/site\.yml/,
   );
 });
 

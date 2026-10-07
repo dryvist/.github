@@ -274,7 +274,6 @@ jobs:
               - 'requirements.yml'
               - 'requirements-ci.txt'
               - 'ansible.cfg'
-              - '.github/workflows/**'
               - '.github/scripts/**'
             ${{ inputs.molecule_scenario_filters }}
             ${{ inputs.molecule_contract_filters }}
