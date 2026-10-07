@@ -10,6 +10,7 @@ on:
       - 'scripts/ci-gate-aggregate.mts'
       - 'scripts/flake-lock-fresh.sh'
       - 'tests/**'
+      - '.github/workflows/_ci-gate.yml'
       - '.github/workflows/tests.yml'
 
 concurrency:
