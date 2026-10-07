@@ -345,7 +345,12 @@ jobs:
     name: Molecule (${{ matrix.scenario }})
     needs: changes
     if: >-
-      ${{ inputs.molecule && needs.changes.outputs.molecule == 'true' &&
+      ${{ inputs.molecule &&
+      (needs.changes.outputs.molecule == 'true' ||
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.base.ref == inputs.full_matrix_base) ||
+      (github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))) &&
       needs.changes.outputs.molecule_scenarios != '[]' }}
     # Molecule gets its own label so it can run on the self-hosted fleet while
     # the quick jobs stay hosted. Hosted for a public repo and for fork PRs;
