@@ -28,11 +28,11 @@
 #       permissions: { contents: read, pull-requests: read }
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
 #       with: { emit_gate: true }
-# Scope policy (canonical): PRs into `develop` use changed-role Molecule and
-# repo-local contracts; PRs into `main` and pushes to `main` or `develop` use
-# the full matrix. Shared inputs and unmapped changes also widen the matrix.
-# Narrow only at the consumer, and keep every classifier inside the required
-# Merge Gate. See the policy and history in README.md.
+# Scope policy (canonical): pull requests and non-main pushes use only the
+# Molecule scenarios mapped to their changed paths. Unmapped paths fail unless
+# they are declared full-matrix inputs, which defer Molecule to the post-merge
+# run on `main`. Keep every classifier inside the required Merge Gate. See the
+# policy and history in README.md.
 #
 
 name: _ansible-ci
@@ -59,11 +59,11 @@ on:
       molecule_scenario_filters:
         description: >-
           Optional YAML map of molecule scenario name -> paths, in
-          dorny/paths-filter syntax. Develop pull requests run only the
-          scenarios whose paths changed; promotion pull requests into
-          full_matrix_base and shared inputs widen to the full matrix. Pushes
-          to main or develop also run the full matrix. Unset keeps the previous
-          behaviour.
+          dorny/paths-filter syntax. Pull requests and non-main pushes run only
+          the scenarios whose paths changed. Every changed Molecule path must
+          match a scenario, caller contract, or full-matrix rule; otherwise
+          classification fails. Full-matrix paths defer all Molecule work to
+          the push to main after merge.
         type: string
         default: ""
       molecule_contract_filters:
@@ -76,9 +76,8 @@ on:
         default: ""
       full_matrix_base:
         description: >-
-          PR target branch that always runs the full Ansible and Molecule
-          checks. Defaults to `main`; set only for a repo with a different
-          promotion branch.
+          Deprecated compatibility input. Pull request base branches no
+          longer widen the Molecule matrix; the full suite runs after merge.
         type: string
         default: main
       molecule_requirements:
@@ -151,12 +150,11 @@ on:
         value: ${{ jobs.changes.outputs.molecule }}
       molecule_scenarios:
         description: >-
-          JSON array of the scenarios a pull request touched, [] when the
-          caller declares contract-only coverage, or an empty string meaning
-          "run every scenario". Callers that own Molecule locally
-          (`molecule: false`) read this output so every repo shares ONE
-          change-detection definition. Unmapped changes widen to the full
-          matrix; contract_only must be backed by a caller contract check.
+          JSON array of scenarios mapped to changed paths, [] when a caller
+          contract or full-matrix rule covers the change, and an empty string
+          only for the full suite on a push to main. Callers
+          that own Molecule locally (`molecule: false`) read this output so
+          every repo shares ONE change-detection definition.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
 
 permissions:
@@ -169,31 +167,31 @@ jobs:
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
     outputs:
-      # Non-PR events and promotion PRs must not be narrowed by the classifier.
       ansible: >-
         ${{ steps.filter.outputs.ansible == 'true'
-            || github.event_name != 'pull_request'
-            || github.event.pull_request.base.ref ==
-            inputs.full_matrix_base }}
+            || (github.event_name == 'push'
+            && github.ref == 'refs/heads/main') }}
       molecule: >-
         ${{ steps.filter.outputs.molecule == 'true'
-            || github.event_name != 'pull_request'
-            || github.event.pull_request.base.ref ==
-            inputs.full_matrix_base }}
-      # Normalized ONCE, here, so every consumer shares one contract: an empty
-      # string means "run every scenario"; [] means all relevant files are
-      # covered by the caller's contract-only filter. Unmapped paths widen.
-      molecule_scenarios: >-
-        ${{ (github.event_name == 'pull_request' &&
-        github.event.pull_request.base.ref != inputs.full_matrix_base &&
-        steps.classify.outputs.full_matrix != 'true' &&
-        steps.scenario_selection.outputs.scenarios != '' &&
-        steps.scenario_selection.outputs.scenarios) || '' }}
+            || (github.event_name == 'push'
+            && github.ref == 'refs/heads/main') }}
+      # Normalize ONCE for every consumer: an empty string means all scenarios
+      # only after a push to main; focused PRs and branch pushes use mapped
+      # scenarios or [] when caller contracts cover the change.
+      molecule_scenarios: ${{ steps.scenario_scope.outputs.scenarios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Require a previous commit for focused branch pushes
+        if: >-
+          ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' &&
+          github.event.before == '0000000000000000000000000000000000000000' }}
+        run: |
+          echo "Cannot classify a first push without a previous commit." >&2
+          exit 1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           filters: |
             ansible:
               - '**.yml'
@@ -243,8 +241,11 @@ jobs:
       # contract before narrowing the matrix.
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: classify
-        if: ${{ github.event_name == 'pull_request' }}
+        if: >-
+          ${{ github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main') }}
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           list-files: json
           filters: |
             changed:
@@ -277,9 +278,21 @@ jobs:
               - '.github/scripts/**'
             ${{ inputs.molecule_scenario_filters }}
             ${{ inputs.molecule_contract_filters }}
+      - name: Require focused Molecule path mappings
+        if: >-
+          ${{ (github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main')) &&
+          steps.filter.outputs.molecule == 'true' &&
+          steps.classify.outputs.full_matrix != 'true' &&
+          inputs.molecule_scenario_filters == '' &&
+          inputs.molecule_contract_filters == '' }}
+        run: |
+          echo "Add Molecule scenario or caller-contract path mappings." >&2
+          exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: >-
-          ${{ github.event_name == 'pull_request' &&
+          ${{ (github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main')) &&
           (inputs.molecule_scenario_filters != '' ||
           inputs.molecule_contract_filters != '') }}
         with:
@@ -292,7 +305,8 @@ jobs:
       - name: Select scenarios only when every relevant path is covered
         id: scenario_selection
         if: >-
-          ${{ github.event_name == 'pull_request' &&
+          ${{ (github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main')) &&
           (inputs.molecule_scenario_filters != '' ||
           inputs.molecule_contract_filters != '') }}
         env:
@@ -300,6 +314,20 @@ jobs:
           MATCHED_FILTERS: ${{ steps.classify.outputs.changes }}
           FILTER_OUTPUTS: ${{ toJSON(steps.classify.outputs) }}
         run: node .gh-shared/.github/scripts/select-molecule-scenarios.js
+      - name: Publish Molecule scenario selection
+        id: scenario_scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          SELECTED_SCENARIOS: ${{ steps.scenario_selection.outputs.scenarios }}
+        run: |
+          if [[ "$EVENT_NAME" == push && "$REF" == refs/heads/main ]]; then
+            printf 'scenarios=\n' >> "$GITHUB_OUTPUT"
+          elif [[ -n "$SELECTED_SCENARIOS" ]]; then
+            printf 'scenarios=%s\n' "$SELECTED_SCENARIOS" >> "$GITHUB_OUTPUT"
+          else
+            printf 'scenarios=[]\n' >> "$GITHUB_OUTPUT"
+          fi
   ansible-lint:
     name: Ansible Lint
     needs: changes
@@ -346,11 +374,7 @@ jobs:
     needs: changes
     if: >-
       ${{ inputs.molecule &&
-      (needs.changes.outputs.molecule == 'true' ||
-      (github.event_name == 'pull_request' &&
-      github.event.pull_request.base.ref == inputs.full_matrix_base) ||
-      (github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'))) &&
+      needs.changes.outputs.molecule == 'true' &&
       needs.changes.outputs.molecule_scenarios != '[]' }}
     # Molecule gets its own label so it can run on the self-hosted fleet while
     # the quick jobs stay hosted. Hosted for a public repo and for fork PRs;
