@@ -198,24 +198,23 @@ The shared Ansible workflow implements changed-role selection and the required
 Merge Gate contract.
 
 - PRs into `develop` run lint, syntax and contract checks plus Molecule
-  scenarios selected from changed roles and their consumers.
-- PRs into `main` run the full Molecule matrix, contracts, and the repository's
-  integration checks before merge.
-- Pushes to `develop` and `main` run the full matrix; integration checks also
-  run on `main` pushes.
+  scenarios selected from changed paths.
+- PRs into `main` use the same focused scenario selection and contract checks.
+- Pushes to non-main branches use focused scenarios for the changed paths;
+  pushes to `main` run the full suite after merge.
 - Public pull-request CI stays on GitHub-hosted runners. Private repositories
   can select their approved private runner label.
-- Shared inputs (playbooks, inventory, role dependencies, Molecule resources,
-  requirements, and shared CI scripts) widen to the full matrix. Workflow files
-  use their caller-declared scenario or contract mapping; unmapped changes widen
-  to the full matrix. A failed selector or contract must fail the required
-  `Merge Gate`.
+- Every Molecule-relevant changed path must map to a scenario or to a caller
+  contract running inside the same required `Merge Gate`. Declared full-matrix
+  paths defer Molecule to the post-merge run on `main`; other unmapped paths
+  fail selection instead of widening a PR to the full matrix. Caller workflow
+  files can use scenario or caller-contract mappings.
 - A caller may use `molecule_contract_filters` (the reserved filter name is
-  `contract_only`) only when its role-specific contract test runs inside that same `Merge Gate`; the caller's Molecule
-  workflow still runs its contract suite.
+  `contract_only`) only when its role-specific contract test runs inside that
+  same `Merge Gate`; the caller's Molecule workflow still runs its contract
+  suite.
 
 `molecule_scenario_filters` remains caller-supplied because role-to-scenario
-relationships differ by repository. PR #164 introduced that input as an opt-in;
-callers without a map kept the full matrix. The reusable workflow now defaults
-`main` to full-matrix behavior. The private docs decision records the policy
-and runner measurements.
+relationships differ by repository. Callers must map every relevant path to a
+scenario or a caller contract before focused PR/branch checks can pass. The
+private docs decision records the policy and runner measurements.
