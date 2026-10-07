@@ -24,6 +24,14 @@ on:
         type: boolean
         required: false
         default: true
+      focused_checks:
+        description: >-
+          On non-main runs, evaluate flake outputs without building them and
+          build only the current system's checks. Main runs keep the full
+          `nix flake check` suite.
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: nix-validate-${{ github.workflow }}-${{ github.ref }}
@@ -111,6 +119,7 @@ jobs:
           save: ${{ github.event_name != 'pull_request' }}
 
       - name: Check flake
+        if: ${{ !inputs.focused_checks }}
         # --all-systems evaluates outputs for every declared system to catch
         # darwin-only broken packages from the linux runner. Disabled by setting
         # `all_systems: false` for repos whose checks build platform-specific
@@ -120,3 +129,14 @@ jobs:
         run: |
           # shellcheck disable=SC2086 # Expands deliberately to zero or one flag.
           nix flake check $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going
+
+      - name: Check focused flake checks
+        if: inputs.focused_checks
+        env:
+          ALL_SYSTEMS_FLAG: ${{ inputs.all_systems && '--all-systems' || '' }}
+        run: |
+          # Evaluate flake outputs but build only the current system's check derivations.
+          # shellcheck disable=SC2086 # Expands deliberately to zero or one flag.
+          nix flake check --no-build $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going
+          system="$(nix eval --impure --raw --expr builtins.currentSystem)"
+          nix build --no-link ".#checks.${system}" --print-build-logs --show-trace --keep-going
