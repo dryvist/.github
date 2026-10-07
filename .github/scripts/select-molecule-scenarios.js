@@ -28,11 +28,22 @@ function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs }
     for (const file of files) coveredFiles.add(file);
   }
 
-  if (changedFiles.length === 0 || changedFiles.some((file) => !coveredFiles.has(file))) {
-    return '';
+  if (changedFiles.length === 0) return '[]';
+
+  const uncoveredFiles = changedFiles.filter((file) => !coveredFiles.has(file));
+  const fullMatrixFiles = new Set(parseJson(filterOutputs.full_matrix_files, [], 'full_matrix_files'));
+  const unclassifiedFiles = uncoveredFiles.filter((file) => !fullMatrixFiles.has(file));
+  if (unclassifiedFiles.length > 0) {
+    const message = [
+      'Changed Molecule paths have no scenario, caller-contract, or full-matrix mapping:',
+      ...unclassifiedFiles,
+    ].join(' ');
+    throw new Error(message);
   }
   if (scenarios.length > 0) return JSON.stringify(scenarios);
-  return matchedFilters.includes('contract_only') ? '[]' : '';
+  if (matchedFilters.includes('contract_only')) return '[]';
+  if (uncoveredFiles.length > 0) return '[]';
+  throw new Error('Changed Molecule paths have no scenario or caller-contract mapping.');
 }
 
 if (require.main === module) {
