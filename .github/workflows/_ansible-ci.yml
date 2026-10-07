@@ -271,10 +271,8 @@ jobs:
               - 'molecule/shared/**'
               - 'molecule/resources/**'
               - '.config/molecule/**'
-              - 'requirements.yml'
               - 'requirements-ci.txt'
               - 'ansible.cfg'
-              - '.github/scripts/**'
             ${{ inputs.molecule_scenario_filters }}
             ${{ inputs.molecule_contract_filters }}
       - name: Require focused Molecule path mappings

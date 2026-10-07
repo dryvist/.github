@@ -87,6 +87,37 @@ test('uses contract-only coverage when every relevant path is covered', () => {
   );
 });
 
+test('uses contract coverage for a requirements-only change without widening the matrix', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const fullMatrix = workflow.match(/^            full_matrix:\n((?:^              .*\n)*)/m)?.[1];
+
+  assert.ok(fullMatrix, 'the full_matrix filter is present');
+  assert.doesNotMatch(fullMatrix, /^              - 'requirements\.yml'$/m);
+  assert.doesNotMatch(fullMatrix, /^              - '\.github\/(?:workflows|scripts)\/\*\*'$/m);
+  assert.match(fullMatrix, /^              - 'requirements-ci\.txt'$/m);
+  assert.equal((workflow.match(/^              - 'requirements\.yml'$/gm) || []).length, 3);
+  assert.equal(selection(['requirements.yml'], {}, ['requirements.yml']), '[]');
+  assert.equal(
+    selection(['.github/workflows/ci-gate.yml'], {
+      default: ['.github/workflows/ci-gate.yml'],
+    }),
+    '["default"]',
+  );
+});
+
+test('uncovered requirements and CI harness paths fail selection', () => {
+  for (const changedFile of [
+    'requirements.yml',
+    '.github/workflows/new-ci.yml',
+    '.github/scripts/select-molecule-scenarios.js',
+  ]) {
+    assert.throws(
+      () => selection([changedFile]),
+      /no scenario, caller-contract, or full-matrix mapping:/,
+    );
+  }
+});
+
 test('uses the campaign contract for the observed playbook and telemetry fixture changes', () => {
   const changedFiles = [
     'playbooks/llm-model-campaign-target.yml',
