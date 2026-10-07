@@ -45,3 +45,29 @@ test('successes and explicitly allowed skips and failures pass', () => {
   assert.equal(run.status, 0);
   assert.match(run.stdout, /Merge Gate passed/);
 });
+
+test('focused PR passes when ci succeeds and Molecule has no selected scenarios', () => {
+  const run = runAggregator(
+    {
+      ci: { result: 'success' },
+      molecule: { result: 'skipped' },
+    },
+    'molecule',
+  );
+
+  assert.equal(run.status, 0);
+  assert.match(run.stdout, /Merge Gate passed: 2 jobs checked\./);
+});
+
+test('focused PR still fails if ci fails while Molecule has no selected scenarios', () => {
+  const run = runAggregator(
+    {
+      ci: { result: 'failure' },
+      molecule: { result: 'skipped' },
+    },
+    'molecule',
+  );
+
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr.trim(), 'Merge Gate failed: job "ci" returned failure.');
+});
