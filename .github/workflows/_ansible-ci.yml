@@ -319,12 +319,12 @@ jobs:
           path: |
             ~/.ansible/collections
             ~/.ansible/roles
-          key: ansible-galaxy-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+          key: ansible-galaxy-v2-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
           # A branch that edits requirements.yml gets a new key. A partial
           # restore keeps unchanged dependencies warm; the explicit install
           # below force-reconciles restored content against the current pins.
           restore-keys: |
-            ansible-galaxy-${{ runner.os }}-
+            ansible-galaxy-v2-${{ runner.os }}-
       - name: Install Ansible collections
         if: steps.galaxy-cache.outputs.cache-hit != 'true'
         run: ansible-galaxy collection install -r requirements.yml --force
@@ -385,7 +385,7 @@ jobs:
           path: |
             ~/.ansible/collections
             ~/.ansible/roles
-          key: ansible-galaxy-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+          key: ansible-galaxy-v2-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
       - name: Install Ansible collections
         if: steps.galaxy-cache.outputs.cache-hit != 'true'
         run: ansible-galaxy collection install -r requirements.yml --force
