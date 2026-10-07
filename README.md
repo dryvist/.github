@@ -207,9 +207,9 @@ Merge Gate contract.
 - Every Molecule-relevant changed path must map to a scenario or to a caller
   contract running inside the same required `Merge Gate`. Declared full-matrix
   paths defer Molecule to the post-merge run on `main`; other unmapped paths
-  fail selection instead of widening a PR to the full matrix. `requirements.yml`
-  and CI harness files can use scenario or caller-contract mappings, and fail
-  selection when those mappings are absent.
+  fail selection instead of widening a PR to the full matrix. Caller workflow
+  files, `requirements.yml`, and CI harness files can use scenario or
+  caller-contract mappings.
 - A caller may use `molecule_contract_filters` (the reserved filter name is
   `contract_only`) only when its role-specific contract test runs inside that
   same `Merge Gate`; the caller's Molecule workflow still runs its contract

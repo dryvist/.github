@@ -7,7 +7,7 @@ const { tmpdir } = require('node:os');
 const { join } = require('node:path');
 const test = require('node:test');
 const selectorPath = require.resolve('../.github/scripts/select-molecule-scenarios.js');
-const ansibleCiWorkflowPath = require.resolve('../.github/workflows/_ansible-ci.yml');
+const workflowPath = require.resolve('../.github/workflows/_ansible-ci.yml');
 const { selectMoleculeScenarios } = require(selectorPath);
 
 function selection(changedFiles, scenarios = {}, contractFiles = [], fullMatrixFiles = []) {
@@ -34,6 +34,28 @@ test('selects all mapped scenarios when every relevant path is covered', () => {
     }),
     '["a","b"]',
   );
+});
+
+test('selects the mapped scenario for a caller workflow change', () => {
+  const changedFile = '.github/workflows/ci-gate.yml';
+
+  assert.equal(
+    selection([changedFile], { llm_gpu_serving: [changedFile] }),
+    '["llm_gpu_serving"]',
+  );
+});
+
+test('caller workflow paths are classified without forcing the full matrix', () => {
+  const workflow = readFileSync(workflowPath, 'utf8');
+  const changedStart = workflow.indexOf('            changed:\n');
+  const fullMatrixStart = workflow.indexOf('            full_matrix:\n', changedStart);
+  const scenarioFiltersStart = workflow.indexOf('            ${{ inputs.molecule_scenario_filters }}', fullMatrixStart);
+
+  assert.ok(changedStart >= 0);
+  assert.ok(fullMatrixStart > changedStart);
+  assert.ok(scenarioFiltersStart > fullMatrixStart);
+  assert.match(workflow.slice(changedStart, fullMatrixStart), /- '\.github\/workflows\/\*\*'/);
+  assert.doesNotMatch(workflow.slice(fullMatrixStart, scenarioFiltersStart), /\.github\/workflows\/\*\*/);
 });
 
 test('accepts scenario names used by the repository scenario discovery contract', () => {
@@ -66,7 +88,7 @@ test('uses contract-only coverage when every relevant path is covered', () => {
 });
 
 test('uses contract coverage for a requirements-only change without widening the matrix', () => {
-  const workflow = readFileSync(ansibleCiWorkflowPath, 'utf8');
+  const workflow = readFileSync(workflowPath, 'utf8');
   const fullMatrix = workflow.match(/^            full_matrix:\n((?:^              .*\n)*)/m)?.[1];
 
   assert.ok(fullMatrix, 'the full_matrix filter is present');
@@ -94,6 +116,30 @@ test('uncovered requirements and CI harness paths fail selection', () => {
       /no scenario, caller-contract, or full-matrix mapping:/,
     );
   }
+});
+
+test('uses the campaign contract for the observed playbook and telemetry fixture changes', () => {
+  const changedFiles = [
+    'playbooks/llm-model-campaign-target.yml',
+    'playbooks/tasks/llm-model-campaign-convert.yml',
+    'playbooks/templates/llm-model-campaign-dimensions.json.j2',
+    'tests/llm_model_campaign/fixtures/nvidia-smi-enforced-power-limit.csv',
+    'tests/llm_model_campaign/test_dimensions.py',
+  ];
+
+  assert.equal(selection(changedFiles, {}, changedFiles), '[]');
+});
+
+test('an unrelated playbook path fails instead of widening the campaign contract selection', () => {
+  assert.throws(
+    () =>
+      selection(
+        ['playbooks/llm-model-campaign-target.yml', 'playbooks/site.yml'],
+        {},
+        ['playbooks/llm-model-campaign-target.yml'],
+      ),
+    /no scenario, caller-contract, or full-matrix mapping: playbooks\/site\.yml/,
+  );
 });
 
 test('an unmapped path fails for a mixed contract-only change', () => {
