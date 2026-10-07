@@ -31,6 +31,13 @@ test('cancelled jobs remain named failures', () => {
   assert.equal(run.stderr.trim(), 'Merge Gate failed: job "changes" returned cancelled.');
 });
 
+test('a cancelled watchdog remains a failure even though watchdog skips are allowed', () => {
+  const run = runAggregator({ watchdog: { result: 'cancelled' } }, 'watchdog');
+
+  assert.equal(run.status, 1);
+  assert.equal(run.stderr.trim(), 'Merge Gate failed: job "watchdog" returned cancelled.');
+});
+
 test('successes and explicitly allowed skips and failures pass', () => {
   const run = runAggregator(
     {

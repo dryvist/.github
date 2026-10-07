@@ -39,9 +39,9 @@
 #
 # GitHub Actions only schedules a `needs:` dependent once every upstream job
 # reaches a *terminal* state (success/failure/cancelled/skipped). A job stuck
-# in `queued` (e.g. self-hosted runner never picks it up) is NOT terminal, so
-# `gate` never runs and the required `Merge Gate` status never reports. The
-# watchdog forces a terminal state by cancelling stuck queued jobs.
+# in `queued` (e.g. self-hosted runner never picks it up) is NOT terminal. If a
+# sibling remains queued past the timeout, the watchdog cancels the run so an
+# incomplete check set cannot pass the required `Merge Gate`.
 #
 # Caller requirements (thin consumer shape):
 #
@@ -666,15 +666,15 @@ jobs:
 
   # ============================================================================
   # WATCHDOG
-  # Forces a terminal state for queued sibling jobs after queue_timeout_minutes.
-  # Itself reports success regardless — its job is to unstick the gate.
+  # Cancels the run if queued sibling jobs remain after queue_timeout_minutes.
+  # This leaves the required gate non-green rather than accepting partial CI.
   # ============================================================================
   watchdog:
     name: Queue Watchdog
     needs: changes
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     permissions:
-      actions: write   # required to cancel sibling jobs
+      actions: write   # required to cancel this run on a queue timeout
       contents: read   # required for actions/checkout sparse-checkout
     # Hardcoded ceiling — GHA expressions don't support arithmetic so this
     # can't be derived from `queue_timeout_minutes`. 30 min handles up to a
@@ -689,7 +689,7 @@ jobs:
           path: .gh-shared
           sparse-checkout: scripts/ci-gate-watchdog.sh
           sparse-checkout-cone-mode: false
-      - name: Sleep, then cancel any sibling job still queued
+      - name: Poll queue, then cancel the run if jobs remain queued
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QUEUE_TIMEOUT_MINUTES: ${{ inputs.queue_timeout_minutes }}
@@ -714,7 +714,9 @@ jobs:
   gate:
     name: Merge Gate
     needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh]
-    if: ${{ always() && !cancelled() }}
+    # Run after workflow cancellation too, so cancelled sibling checks aggregate
+    # to a failing required status instead of a skipped (successful) job.
+    if: ${{ always() }}
     runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:

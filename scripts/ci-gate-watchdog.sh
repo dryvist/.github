@@ -2,10 +2,9 @@
 # ci-gate-watchdog.sh — invoked by the `watchdog` job in _ci-gate.yml.
 #
 # Poll the run's sibling jobs and EXIT AS SOON AS none is still `queued`
-# (everything got scheduled) — only cancel jobs that remain stuck in `queued`
-# after QUEUE_TIMEOUT_MINUTES. Cancelling forces a terminal state so `gate` can
-# finally schedule and the shared gate aggregate can evaluate, ensuring the
-# required `Merge Gate` status always reports.
+# (everything got scheduled). If jobs remain queued after QUEUE_TIMEOUT_MINUTES,
+# cancel the workflow run. The Actions API does not expose job cancellation;
+# cancelling the run keeps an incomplete check set from passing.
 #
 # Why poll instead of `sleep $TIMEOUT`: a fixed sleep billed a full
 # QUEUE_TIMEOUT_MINUTES of runner time on EVERY run, even though jobs only get
@@ -55,7 +54,9 @@ while :; do
   sleep "$poll_interval"
 done
 
-while IFS=$'\t' read -r job_id job_name; do
-  echo "Cancelling stuck queued job: ${job_name} (id=${job_id})"
-  gh api -X POST "repos/${REPO}/actions/jobs/${job_id}/cancel" || true
+while IFS=$'\t' read -r _ job_name; do
+  echo "Stuck queued job: ${job_name}"
 done <<<"$stuck"
+
+echo "Cancelling workflow run ${RUN_ID}; queued jobs prevent a complete check set."
+gh api -X POST "repos/${REPO}/actions/runs/${RUN_ID}/cancel"
