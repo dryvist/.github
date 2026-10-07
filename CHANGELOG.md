@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/dryvist/.github/compare/v1.7.0...v1.7.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ci:** enforce focused Ansible Molecule scope ([#249](https://github.com/dryvist/.github/issues/249)) ([e3c0fa8](https://github.com/dryvist/.github/commit/e3c0fa803516d9a85697cce97583bc2b7cc5c6d6))
+
 ## [1.7.0](https://github.com/dryvist/.github/compare/v1.6.1...v1.7.0) (2026-10-07)
 
 
