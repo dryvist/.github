@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.4](https://github.com/dryvist/.github/compare/v1.7.3...v1.7.4) (2026-10-07)
+
+
+### Bug Fixes
+
+* allow covered requirements changes to narrow Molecule ([ad75cb5](https://github.com/dryvist/.github/commit/ad75cb53c6ffebc1e1e4256ac7a82a40514d2c3d))
+* **ci:** cancel stalled workflows with the run API ([1af748a](https://github.com/dryvist/.github/commit/1af748aad09acbf44f2436010487b02fd9b3921a))
+
 ## [1.7.3](https://github.com/dryvist/.github/compare/v1.7.2...v1.7.3) (2026-10-07)
 
 
