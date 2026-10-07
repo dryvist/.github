@@ -205,8 +205,9 @@ Merge Gate contract.
   integration checks run them on the `main` push.
 - Public pull-request CI stays on GitHub-hosted runners. Private repositories
   can select their approved private runner label.
-- Shared inputs and unclassified changes widen to the full matrix. A failed
-  selector or contract must fail the required `Merge Gate`.
+- Shared Ansible inputs and unclassified role or scenario paths widen to the
+  full matrix. A CI-harness-only change runs the repository's smoke scenario.
+  A failed selector or contract must fail the required `Merge Gate`.
 
 `molecule_scenario_filters` remains caller-supplied because role-to-scenario
 relationships differ by repository. PR #164 introduced that input as an opt-in;
