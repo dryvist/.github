@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.7.0](https://github.com/dryvist/.github/compare/v1.6.1...v1.7.0) (2026-10-07)
+
+
+### Features
+
+* add reusable benchmark result validation ([4c1d77a](https://github.com/dryvist/.github/commit/4c1d77adb9b56f243216c7a14a9101d3fb6875f4))
+* add reusable benchmark result validation ([4bde76f](https://github.com/dryvist/.github/commit/4bde76f53180be86236fc87136a7c5d7204a2d6e))
+
+
+### Bug Fixes
+
+* **ansible-ci:** widen molecule matrix for shared changes ([cb11a3b](https://github.com/dryvist/.github/commit/cb11a3b3fd81c892787e402f2997f253a44703f2))
+
 ## [1.6.1](https://github.com/dryvist/.github/compare/v1.6.0...v1.6.1) (2026-10-05)
 
 
