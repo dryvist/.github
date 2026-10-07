@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/dryvist/.github/compare/v1.7.1...v1.7.2) (2026-10-07)
+
+
+### Bug Fixes
+
+* **ci:** honor contract-covered Molecule paths ([6d65991](https://github.com/dryvist/.github/commit/6d65991feccef465a04c8ae5a3e4cb1f505caba4))
+
 ## [1.7.1](https://github.com/dryvist/.github/compare/v1.7.0...v1.7.1) (2026-10-07)
 
 
