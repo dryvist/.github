@@ -40,6 +40,9 @@ jobs:
       - name: Sweep public repos for conventions drift
         env:
           GH_TOKEN: ${{ github.token }}
+          # No checkout here, so gh cannot infer the repo from a git remote;
+          # the issue upsert at the end would fail without this.
+          GH_REPO: ${{ github.repository }}
           ORG: ${{ github.repository_owner }}
           # Governance IaC inventory: single source of truth for recorded
           # legitimate opt-outs.
