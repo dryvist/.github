@@ -31,7 +31,8 @@
 # Scope policy (canonical): pull requests and non-main pushes use only the
 # Molecule scenarios mapped to their changed paths. Unmapped paths fail unless
 # they are declared full-matrix inputs, which defer Molecule to the post-merge
-# run on `main`. Keep every classifier inside the required Merge Gate. See the
+# run on `main`, or are CI harness files under `.github/`, which select no
+# scenario. Keep every classifier inside the required Merge Gate. See the
 # policy and history in README.md.
 #
 

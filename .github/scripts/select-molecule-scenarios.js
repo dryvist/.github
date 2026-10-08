@@ -10,6 +10,12 @@ function parseJson(value, fallback, label) {
   }
 }
 
+// CI harness paths (workflows, scripts, configs under .github/) exercise no Molecule role. An unmapped one
+// selects no scenario; a caller opts it into Molecule by mapping it into a scenario filter.
+function isCiInfraPath(file) {
+  return file.startsWith('.github/');
+}
+
 function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs }) {
   const reserved = new Set(['changed', 'contract_only', 'full_matrix']);
   const scenarios = matchedFilters.filter((name) => !reserved.has(name));
@@ -32,7 +38,7 @@ function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs }
 
   const uncoveredFiles = changedFiles.filter((file) => !coveredFiles.has(file));
   const fullMatrixFiles = new Set(parseJson(filterOutputs.full_matrix_files, [], 'full_matrix_files'));
-  const unclassifiedFiles = uncoveredFiles.filter((file) => !fullMatrixFiles.has(file));
+  const unclassifiedFiles = uncoveredFiles.filter((file) => !fullMatrixFiles.has(file) && !isCiInfraPath(file));
   if (unclassifiedFiles.length > 0) {
     const message = [
       'Changed Molecule paths have no scenario, caller-contract, or full-matrix mapping:',
