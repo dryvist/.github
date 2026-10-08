@@ -32,6 +32,16 @@ on:
         type: boolean
         required: false
         default: false
+      timeout_minutes:
+        description: >-
+          Opt-in job timeout for a caller whose cold `nix flake check` closure
+          is known to exceed the org default. 0 (default) uses the org variable
+          GH_ACTION_TIMEOUT_NIX, falling back to 15. Any value above 0 replaces
+          it for this caller only. The cap still fails the required check when
+          exceeded.
+        type: number
+        required: false
+        default: 0
 
 concurrency:
   group: nix-validate-${{ github.workflow }}-${{ github.ref }}
@@ -44,13 +54,13 @@ jobs:
   validate:
     name: Validate
     runs-on: ${{ inputs.runner_label }}
-    # Intentionally non-negotiable: exceeding this cap signals a dependency,
-    # cache, or closure regression. Do not raise it; fix the root cause so this
-    # required check fails and blocks the regression instead. Queue-stuck
-    # handling lives in the _ci-gate watchdog; this is running-job defense.
+    # Running-job cap: exceeding it signals a dependency, cache, or closure
+    # regression and fails this required check. Queue-stuck handling lives in
+    # the _ci-gate watchdog; this is running-job defense.
     #
-    # The number comes from the org variable so it can change for every consumer
-    # without editing this file or any calling repository. `vars` is permitted
+    # The default comes from the org variable so it can change for every
+    # consumer without editing this file or any calling repository. A caller
+    # may raise it for its own run via `timeout_minutes`. `vars` is permitted
     # here — the context table allows github/needs/strategy/matrix/vars/inputs
     # for job-level timeout-minutes (not env, not secrets). In a reusable
     # workflow `vars` resolves from the CALLER's repository and organization.
@@ -63,7 +73,11 @@ jobs:
     # The `|| '15'` literal is likewise required: an unset variable interpolates
     # to an empty string, fromJSON('') errors, and fork PRs resolve org
     # variables empty.
-    timeout-minutes: ${{ fromJSON(vars.GH_ACTION_TIMEOUT_NIX || '15') }}
+    #
+    # `inputs.timeout_minutes > 0` guards the numeric input: 0 is falsy in
+    # expressions, so `cond && n || f` yields n only when the input is set and
+    # otherwise falls through to the org-variable value.
+    timeout-minutes: ${{ inputs.timeout_minutes > 0 && inputs.timeout_minutes || fromJSON(vars.GH_ACTION_TIMEOUT_NIX || '15') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
