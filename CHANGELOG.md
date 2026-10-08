@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/dryvist/.github/compare/v1.8.0...v1.8.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ci:** select no Molecule scenario for unmapped CI harness paths ([#271](https://github.com/dryvist/.github/issues/271)) ([df58858](https://github.com/dryvist/.github/commit/df5885872e14127a730be5997f43b485316e1441))
+
 ## [1.8.0](https://github.com/dryvist/.github/compare/v1.7.6...v1.8.0) (2026-10-08)
 
 
