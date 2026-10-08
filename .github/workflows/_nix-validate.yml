@@ -139,4 +139,16 @@ jobs:
           # shellcheck disable=SC2086 # Expands deliberately to zero or one flag.
           nix flake check --no-build $ALL_SYSTEMS_FLAG --print-build-logs --show-trace --keep-going
           system="$(nix eval --impure --raw --expr builtins.currentSystem)"
-          nix build --no-link ".#checks.${system}" --print-build-logs --show-trace --keep-going
+          check_names="$(
+            nix eval --raw \
+              --apply 'checks: builtins.concatStringsSep "\n" (builtins.attrNames checks)' \
+              ".#checks.${system}"
+          )"
+          if [ -n "$check_names" ]; then
+            check_installables=()
+            while IFS= read -r check; do
+              check_installables+=(".#checks.${system}.${check}")
+            done <<< "$check_names"
+            nix build --no-link --print-build-logs --show-trace --keep-going \
+              "${check_installables[@]}"
+          fi
