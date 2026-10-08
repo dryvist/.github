@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.6](https://github.com/dryvist/.github/compare/v1.7.5...v1.7.6) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ci:** validate Renovate configs in Ansible gates ([#259](https://github.com/dryvist/.github/issues/259)) ([443567f](https://github.com/dryvist/.github/commit/443567f7b7ae4d9516804870ea28a51d58a0d8b8))
+
 ## [1.7.5](https://github.com/dryvist/.github/compare/v1.7.4...v1.7.5) (2026-10-08)
 
 
