@@ -148,6 +148,9 @@ on:
       molecule:
         description: Whether molecule-relevant files changed (the standardized filter).
         value: ${{ jobs.changes.outputs.molecule }}
+      renovate_config:
+        description: Whether the caller's Renovate config changed.
+        value: ${{ jobs.changes.outputs.renovate_config }}
       molecule_scenarios:
         description: >-
           JSON array of scenarios mapped to changed paths, [] when a caller
@@ -175,6 +178,7 @@ jobs:
         ${{ steps.filter.outputs.molecule == 'true'
             || (github.event_name == 'push'
             && github.ref == 'refs/heads/main') }}
+      renovate_config: ${{ steps.filter.outputs.renovate_config }}
       # Normalize ONCE for every consumer: an empty string means all scenarios
       # only after a push to main; focused PRs and branch pushes use mapped
       # scenarios or [] when caller contracts cover the change.
@@ -236,6 +240,8 @@ jobs:
               # false, every molecule job is skipped, and the PR merges green
               # having never exercised the thing it changed.
               - 'tests/**'
+            renovate_config:
+              - 'renovate.json'
       # Match all Molecule-relevant paths once. File lists let the selector
       # verify that every changed path is covered by a scenario or caller
       # contract before narrowing the matrix.
@@ -463,9 +469,17 @@ jobs:
     with:
       runner_label: ${{ inputs.runner_label }}
 
+  renovate_config:
+    name: Renovate Config Validate
+    needs: changes
+    if: ${{ needs.changes.outputs.renovate_config == 'true' }}
+    uses: ./.github/workflows/renovate-config-validate.yml
+    with:
+      config_file: renovate.json
+
   gate:
     name: ${{ inputs.emit_gate && 'Merge Gate' || 'Result Validation' }}
-    needs: [changes, ansible-lint, molecule, token-limits, renovate-annotations]
+    needs: [changes, ansible-lint, molecule, token-limits, renovate-annotations, renovate_config]
     if: ${{ always() && !cancelled() }}
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
@@ -484,5 +498,5 @@ jobs:
       - name: Aggregate results
         env:
           CI_GATE_JOBS: ${{ toJSON(needs) }}
-          CI_GATE_ALLOWED_SKIPS: ansible-lint, molecule, token-limits, renovate-annotations
+          CI_GATE_ALLOWED_SKIPS: ansible-lint, molecule, token-limits, renovate-annotations, renovate_config
         run: node .gh-shared/scripts/ci-gate-aggregate.mts
