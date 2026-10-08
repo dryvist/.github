@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.5](https://github.com/dryvist/.github/compare/v1.7.4...v1.7.5) (2026-10-08)
+
+
+### Bug Fixes
+
+* **ci:** assert each path filter base independently ([ca91931](https://github.com/dryvist/.github/commit/ca91931dc5e666a41b8b68900bb7af5bc34012fa))
+* **ci:** build focused Nix checks individually ([2c260a5](https://github.com/dryvist/.github/commit/2c260a5ecfec47b88620cb7c4bf8c4bd01596865))
+* **ci:** build focused Nix checks individually ([aabd65f](https://github.com/dryvist/.github/commit/aabd65f3e6e6c1baa7a362d3260ad31b924eaaa4))
+* **ci:** detect changed paths on branch pushes ([a405e04](https://github.com/dryvist/.github/commit/a405e044369aa9401669f449de97f5d27ad4c2ac))
+* **ci:** detect changed paths on branch pushes ([2c1853f](https://github.com/dryvist/.github/commit/2c1853f39fab59e0e7fa31ef4457dba11f148333))
+
 ## [1.7.4](https://github.com/dryvist/.github/compare/v1.7.3...v1.7.4) (2026-10-07)
 
 
