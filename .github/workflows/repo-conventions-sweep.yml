@@ -115,7 +115,9 @@ jobs:
               if printf '%s' "$fs_cfg" | grep -Eq '^[[:space:]]*defaults:'; then
                 note_gap file-size-defaults
               fi
-              fs_body=$(printf '%s' "$fs_cfg" | grep -Ev '^[[:space:]]*(#|$)')
+              # sed, not grep -v: grep exits 1 when every line is a comment, and
+              # under set -e that ends the whole sweep with no output.
+              fs_body=$(printf '%s' "$fs_cfg" | sed -E '/^[[:space:]]*(#|$)/d')
               if ! printf '%s' "$fs_body" | grep -Eq '^[[:space:]]*(extended|exempt|scan):'; then
                 note_gap file-size-redundant
               fi
