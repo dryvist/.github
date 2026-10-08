@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.8.0](https://github.com/dryvist/.github/compare/v1.7.6...v1.8.0) (2026-10-08)
+
+
+### Features
+
+* **ci:** add per-caller timeout input to Nix Validate ([#262](https://github.com/dryvist/.github/issues/262)) ([f494a76](https://github.com/dryvist/.github/commit/f494a762501a013ae7d219e647c50a80859d3617))
+
+
+### Bug Fixes
+
+* **ci:** handle flakes without checks outputs ([#260](https://github.com/dryvist/.github/issues/260)) ([0ef9c9f](https://github.com/dryvist/.github/commit/0ef9c9f7c15a723fe7d2070e26e32beae2c28529))
+* **ci:** install Galaxy roles outside the linted tree ([#263](https://github.com/dryvist/.github/issues/263)) ([6175e7e](https://github.com/dryvist/.github/commit/6175e7ef5388fec27a48e3615899db1f0baecae2))
+* **ci:** keep the conventions sweep running past comment-only config ([#268](https://github.com/dryvist/.github/issues/268)) ([3483a78](https://github.com/dryvist/.github/commit/3483a78417402d5b94ea32f2d9c0fa410aae1580))
+* **release:** expose the cut tag for draft-then-publish asset releases ([#267](https://github.com/dryvist/.github/issues/267)) ([20484fe](https://github.com/dryvist/.github/commit/20484fe44ee50ec318712677ee0d95a1f2491e39))
+
 ## [1.7.6](https://github.com/dryvist/.github/compare/v1.7.5...v1.7.6) (2026-10-08)
 
 
