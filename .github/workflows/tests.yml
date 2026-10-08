@@ -11,6 +11,8 @@ on:
       - 'scripts/flake-lock-fresh.sh'
       - 'tests/**'
       - '.github/workflows/_ci-gate.yml'
+      - '.github/workflows/_ansible-ci.yml'
+      - '.github/workflows/renovate-config-validate.yml'
       - '.github/workflows/tests.yml'
 
 concurrency:

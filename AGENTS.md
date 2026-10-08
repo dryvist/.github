@@ -196,8 +196,8 @@ For every change in dryvist:
    uses these to compute bumps.
 
 Ansible CI callers use the shared policy in `README.md` and
-`.github/workflows/_ansible-ci.yml`: develop pull requests run changed-role
-coverage; main promotion pull requests and pushes to main/develop run the full
+`.github/workflows/_ansible-ci.yml`: pull requests and non-main pushes run
+focused changed-role coverage; only a push to `main` after merge runs the full
 Molecule matrix. Shared execution inputs, uncovered paths, and failed selectors
 must keep the single required `Merge Gate` red until validation succeeds. A
 caller may use `molecule_contract_filters` with the reserved key
