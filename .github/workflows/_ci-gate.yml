@@ -435,6 +435,10 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
+          # On a push, comparing to the same long-lived branch makes the
+          # action use the commit immediately before the push as its base.
+          # PR events continue to compare against their PR base branch.
+          base: ${{ github.ref }}
           filters: ${{ inputs.filters }}
 
       # Static (not caller-supplied) so `is-flake-lock-change` and
@@ -443,6 +447,9 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: lockfilter
         with:
+          # Keep static lock/source classification aligned with the caller's
+          # push range; PR events continue to use their PR base branch.
+          base: ${{ github.ref }}
           filters: |
             flake-lock:
               - 'flake.lock'
