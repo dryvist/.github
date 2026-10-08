@@ -320,6 +320,16 @@ on:
         required: false
         default: ''
 
+      nix_validate_timeout_minutes:
+        description: >-
+          Opt-in running-job timeout for `Nix Validate` only, forwarded as
+          `timeout_minutes` to `_nix-validate.yml`. 0 (default) keeps the org
+          variable GH_ACTION_TIMEOUT_NIX (fallback 15). Use only for a repo
+          whose cold `nix flake check` closure is known to exceed the default.
+        type: number
+        required: false
+        default: 0
+
       queue_timeout_minutes:
         description: >-
           Minutes the watchdog waits before cancelling sibling jobs still in
@@ -508,6 +518,7 @@ jobs:
       all_systems: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.all_systems }}
       focused_checks: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
+      timeout_minutes: ${{ inputs.nix_validate_timeout_minutes }}
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
   # the fork-PR guard doesn't apply here.
