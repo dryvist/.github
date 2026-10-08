@@ -105,16 +105,53 @@ test('uses contract coverage for a requirements-only change without widening the
   );
 });
 
-test('uncovered requirements and CI harness paths fail selection', () => {
-  for (const changedFile of [
-    'requirements.yml',
-    '.github/workflows/new-ci.yml',
-    '.github/scripts/select-molecule-scenarios.js',
-  ]) {
-    assert.throws(
-      () => selection([changedFile]),
-      /no scenario, caller-contract, or full-matrix mapping:/,
-    );
+test('uncovered requirements paths still fail selection', () => {
+  assert.throws(
+    () => selection(['requirements.yml']),
+    /no scenario, caller-contract, or full-matrix mapping: requirements\.yml$/,
+  );
+});
+
+test('unmapped CI harness paths select no scenario instead of failing', () => {
+  assert.equal(selection(['.github/workflows/new-ci.yml']), '[]');
+  assert.equal(selection(['.github/scripts/select-molecule-scenarios.js']), '[]');
+  assert.equal(
+    selection(['roles/a/tasks/main.yml', '.github/workflows/new-ci.yml'], {
+      a: ['roles/a/tasks/main.yml'],
+    }),
+    '["a"]',
+  );
+});
+
+test('an unmapped role path still fails beside an unmapped CI harness path', () => {
+  assert.throws(
+    () => selection(['.github/workflows/new-ci.yml', 'roles/new_role/tasks/main.yml']),
+    /no scenario, caller-contract, or full-matrix mapping: roles\/new_role\/tasks\/main\.yml$/,
+  );
+});
+
+test('a CI harness path runs the full set when the caller maps it into every scenario', () => {
+  const changedFile = '.github/workflows/new-ci.yml';
+
+  assert.equal(selection([changedFile], { a: [changedFile], b: [changedFile] }), '["a","b"]');
+});
+
+test('an unmapped CI harness path exits 0 with an empty matrix', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'molecule-selector-'));
+  const outputPath = join(directory, 'github-output');
+  try {
+    execFileSync(process.execPath, [selectorPath], {
+      env: {
+        ...process.env,
+        CHANGED_FILES: '[".github/workflows/new-ci.yml"]',
+        MATCHED_FILTERS: '["changed"]',
+        FILTER_OUTPUTS: '{}',
+        GITHUB_OUTPUT: outputPath,
+      },
+    });
+    assert.equal(readFileSync(outputPath, 'utf8'), 'scenarios=[]\n');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
