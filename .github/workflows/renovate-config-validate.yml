@@ -15,6 +15,13 @@ on:
       - "renovate-nix.json"
       - "renovate-presets.json"
       - "renovate-grouping.json"
+  workflow_call:
+    inputs:
+      config_file:
+        description: Repository Renovate config file to validate through RENOVATE_CONFIG_FILE.
+        type: string
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -28,13 +35,33 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      RENOVATE_VERSION: "44.82.4"
+      RENOVATE_CONFIG_FILE: ${{ inputs.config_file }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24.11.0"
+
+      - name: Cache Renovate CLI
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.npm
+          key: renovate-cli-${{ runner.os }}-${{ env.RENOVATE_VERSION }}
+          restore-keys: renovate-cli-${{ runner.os }}-
+
       - name: Validate Renovate config (strict)
-        run: >-
-          npx --yes --package renovate@latest --
-          renovate-config-validator --strict
-          default.json renovate.json renovate-nix.json
-          renovate-presets.json renovate-grouping.json
+        run: |
+          if [[ -n "$RENOVATE_CONFIG_FILE" ]]; then
+            npx --yes --package "renovate@${RENOVATE_VERSION}" -- \
+              renovate-config-validator --strict
+          else
+            npx --yes --package "renovate@${RENOVATE_VERSION}" -- \
+              renovate-config-validator --strict \
+              default.json renovate.json renovate-nix.json \
+              renovate-presets.json renovate-grouping.json
+          fi

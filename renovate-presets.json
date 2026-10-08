@@ -172,6 +172,32 @@
       "versioningTemplate": "python"
     },
     {
+      "description": "Literal `node-version` fields in GitHub Actions setup-node steps. Keep this custom manager alongside the shared Renovate validator runtime pin so the validator's compatible Node release stays tracked.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "node-version:\\s*[\"']?(?<currentValue>\\d+\\.\\d+\\.\\d+)[\"']?"
+      ],
+      "datasourceTemplate": "node-version",
+      "depNameTemplate": "node",
+      "versioningTemplate": "node"
+    },
+    {
+      "description": "The `RENOVATE_VERSION` environment pin used by the shared Renovate config validator. The workflow YAML environment field is outside built-in package managers, so track it through the npm datasource.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "RENOVATE_VERSION:\\s*[\"']?(?<currentValue>\\d+\\.\\d+\\.\\d+)[\"']?"
+      ],
+      "datasourceTemplate": "npm",
+      "depNameTemplate": "renovate",
+      "versioningTemplate": "npm"
+    },
+    {
       "description": "`pip install 'pkg==X.Y.Z'` pins inside a workflow `run:` step. The built-in `pip_requirements` manager only scans `requirements*.txt`/`.pip` files, never a shell command, so an inline install pin (e.g. `pip install 'check-jsonschema==0.37.2'`) is invisible to it. `matchStringsStrategy: recursive` finds each `pip install` (or `pip3 install`) invocation on a single line first, then re-scans that matched text for every `pkg==version` token in it \u2014 the shape needed when a line installs several pinned packages at once, not just the first. Unpinned packages and range constraints (`pkg>=X`) on the same line are not dependencies with a single currentValue and are left alone. `currentValue` excludes `*` and requires a trailing quote/whitespace/end boundary, so a wildcard pin (`'ansible-lint==25.*'`) fails to match rather than being truncated to `25.` and handed to pypi as a real (and wrong) currentValue \u2014 an earlier version of this pattern did exactly that. `pkg[extra]==X` (the `[proxy]`/`[docker]` extras syntax) and a backslash-continued multi-line `pip install \\` block are both untracked, not mis-extracted: `depName`'s character class has no `[`/`]`, and the outer match is confined to a single line (`[^\\n]*`).",
       "customType": "regex",
       "managerFilePatterns": [
