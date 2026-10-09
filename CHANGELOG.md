@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.2](https://github.com/dryvist/.github/compare/v1.8.1...v1.8.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ci:** set the repo for the conventions sweep issue upsert ([#270](https://github.com/dryvist/.github/issues/270)) ([d221cfb](https://github.com/dryvist/.github/commit/d221cfb514d4a2d339ea8020396033750a54e450))
+
 ## [1.8.1](https://github.com/dryvist/.github/compare/v1.8.0...v1.8.1) (2026-10-08)
 
 
