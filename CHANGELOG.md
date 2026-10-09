@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.3](https://github.com/dryvist/.github/compare/v1.8.2...v1.8.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ansible-ci:** install ansible before galaxy steps in the lint job ([#274](https://github.com/dryvist/.github/issues/274)) ([fcf84dc](https://github.com/dryvist/.github/commit/fcf84dc37ee20481be4a5006d3f1473d9d4bb34d))
+
 ## [1.8.2](https://github.com/dryvist/.github/compare/v1.8.1...v1.8.2) (2026-10-09)
 
 
