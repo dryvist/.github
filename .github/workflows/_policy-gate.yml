@@ -24,7 +24,7 @@ on:
       model:
         description: Router role alias to call.
         type: string
-        default: cheap
+        default: review-local
       max_diff_kb:
         description: Truncate the pull request diff at this many KiB.
         type: number
