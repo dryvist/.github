@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.4](https://github.com/dryvist/.github/compare/v1.8.3...v1.8.4) (2026-10-09)
+
+
+### Bug Fixes
+
+* **policy-gate:** default to the local review role ([#276](https://github.com/dryvist/.github/issues/276)) ([e3658cf](https://github.com/dryvist/.github/commit/e3658cfe2e8cb32c71e71d2f0a15e5aaa679d1ae))
+
 ## [1.8.3](https://github.com/dryvist/.github/compare/v1.8.2...v1.8.3) (2026-10-09)
 
 
