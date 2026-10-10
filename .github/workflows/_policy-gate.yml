@@ -43,6 +43,9 @@ on:
       NTFY_BASE_URL:
         description: Base URL of the ntfy hub for the override audit line. Optional.
         required: false
+      GH_APP_CLAUDE_BOT_PRIVATE_KEY:
+        description: Claude bot App private key; posts the check run on a gateway failure. Optional.
+        required: false
 
 permissions:
   contents: read
@@ -61,3 +64,4 @@ jobs:
       LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
       LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
       NTFY_BASE_URL: ${{ secrets.NTFY_BASE_URL }}
+      GH_APP_CLAUDE_BOT_PRIVATE_KEY: ${{ secrets.GH_APP_CLAUDE_BOT_PRIVATE_KEY }}
