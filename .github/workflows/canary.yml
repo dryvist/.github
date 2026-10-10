@@ -18,6 +18,11 @@
 # `ansible-direct` is the one exception: _ansible-ci.yml hard-codes its own
 # filter, so its lint runs only when the change touches Ansible paths. Its
 # coverage is printed to the job summary, not asserted.
+#
+# `template-callers` is static: it reads each template's ci-gate.yml caller from
+# the template's default branch and checks it against this commit's gate
+# (inputs, required inputs, permissions). It has no fixture, so it is required
+# like the other caller jobs.
 
 name: Canary
 
@@ -147,9 +152,35 @@ jobs:
           - '.github/scripts/**'
           - 'tests/**'
 
+  template-callers:
+    name: Template Callers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the candidate commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      # Unauthenticated: the templates are public. Any failed fetch fails the job.
+      - name: Fetch the template caller workflows from their default branch
+        run: |
+          mkdir -p "$RUNNER_TEMP/template-callers"
+          for template in python-template cc-edge-pack-template tofu-aws-templates; do
+            curl -fsSL "https://raw.githubusercontent.com/dryvist/${template}/main/.github/workflows/ci-gate.yml" \
+              -o "$RUNNER_TEMP/template-callers/${template}.yml"
+          done
+
+      - name: Check the callers against the candidate gate
+        run: |
+          yq --version
+          scripts/check-template-callers.sh "$RUNNER_TEMP"/template-callers/*.yml
+
   canary-summary:
     name: Canary
-    needs: [ansible, nix, tofu, python, docs, ansible-direct]
+    needs: [ansible, nix, tofu, python, docs, ansible-direct, template-callers]
     if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -163,6 +194,7 @@ jobs:
           R_PYTHON: ${{ needs.python.result }}
           R_DOCS: ${{ needs.docs.result }}
           R_ANSIBLE_DIRECT: ${{ needs.ansible-direct.result }}
+          R_TEMPLATE_CALLERS: ${{ needs.template-callers.result }}
           C_ANSIBLE: ${{ needs.ansible.outputs.ansible }}
           C_NIX: ${{ needs.nix.outputs.nix }}
           C_TOFU: ${{ needs.tofu.outputs.extra }}
@@ -194,6 +226,7 @@ jobs:
           result docs "$R_DOCS"; matched docs "$C_DOCS"
           result ansible-direct "$R_ANSIBLE_DIRECT"
           echo "ansible-direct: lint ran=${C_ANSIBLE_DIRECT:-false} (not asserted; see header)"
+          result template-callers "$R_TEMPLATE_CALLERS"
           exit "$fail"
 
   # Second arrival for a release: this push-to-main run finished after the
