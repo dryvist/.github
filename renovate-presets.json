@@ -379,7 +379,7 @@
       ]
     },
     {
-      "description": "dryvist/** digest, pin and pinDigest updates, any package manager: never auto-merge. A digest update means a ref or a version comment moved without a release, so each opens a PR with the needs-human label for review.",
+      "description": "dryvist/** digest, pin and pinDigest updates, any package manager: Renovate does not auto-merge them; the bot-PR auto-merge sweep merges each once its head commit has soaked and checks are green. A digest update means a ref or a version comment moved without a release.",
       "matchPackageNames": [
         "dryvist/**",
         "https://github.com/dryvist/**"
@@ -390,9 +390,6 @@
         "pinDigest"
       ],
       "automerge": false,
-      "addLabels": [
-        "needs-human"
-      ],
       "minimumReleaseAge": "0 days",
       "schedule": [
         "at any time"
