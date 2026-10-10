@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.6](https://github.com/dryvist/.github/compare/v1.9.5...v1.9.6) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci-gate:** make nix build opt-in and accept a build command ([#304](https://github.com/dryvist/.github/issues/304)) ([6d4f09f](https://github.com/dryvist/.github/commit/6d4f09f073c33255fcc9ad663a64505abb9d0697))
+
 ## [1.9.5](https://github.com/dryvist/.github/compare/v1.9.4...v1.9.5) (2026-10-10)
 
 
