@@ -145,6 +145,10 @@ name: _ci-gate
 on:
   workflow_call:
     inputs:
+      negative_canary_probe:
+        description: Deliberately required input with no default.
+        type: string
+        required: true
       filters:
         description: >-
           YAML body for dorny/paths-filter. Use the convention names listed
