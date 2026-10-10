@@ -12,10 +12,11 @@
 #
 # This reusable is the caller-side fix: run it from `pull_request: types:
 # [closed]` to sweep every workflow run on that PR's head branch, queued or
-# in-progress, via styfle/cancel-workflow-action. `ignore_sha: true` is
-# required because a `closed` event carries the same head SHA as the run(s)
-# it needs to cancel; `workflow_id: all` targets every workflow file, not
-# just the one this job runs in.
+# in-progress, via `gh run cancel` (scripts/cancel-on-close.sh). Runs match by
+# branch name, not SHA, because a `closed` event carries the same head SHA as
+# the run(s) it needs to cancel. The current run is never cancelled. A run that
+# is already gone (HTTP 404) or completed counts as cancelled; any other error
+# fails the job.
 name: _cancel-on-close
 
 on:
@@ -31,8 +32,22 @@ jobs:
     permissions:
       actions: write
     steps:
-      - name: Cancel runs on this PR's branch
-        uses: styfle/cancel-workflow-action@d07a454dad7609a92316b57b23c9ccfd4f59af66 # 0.13.1
+      # The script is read from this repo at the same ref as this workflow, as the
+      # other reusables do, so callers never run a copy that drifts from it.
+      - name: Checkout the cancel script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ignore_sha: true
-          workflow_id: all
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          persist-credentials: false
+          sparse-checkout: scripts/cancel-on-close.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Cancel runs on this PR's branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: bash .gh-shared/scripts/cancel-on-close.sh "$BRANCH"
