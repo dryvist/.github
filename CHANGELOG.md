@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.12](https://github.com/dryvist/.github/compare/v1.9.11...v1.9.12) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci-gate:** treat release-please metadata as mapped and match nested requirements files ([#316](https://github.com/dryvist/.github/issues/316)) ([e62ddf0](https://github.com/dryvist/.github/commit/e62ddf04f008281746cc2beef4abd16690139dbe))
+
 ## [1.9.11](https://github.com/dryvist/.github/compare/v1.9.10...v1.9.11) (2026-10-10)
 
 
