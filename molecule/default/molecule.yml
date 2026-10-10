@@ -1,0 +1,22 @@
+---
+# Delegated driver: no instances are created. The converge and verify run on
+# the runner itself. Exercises the molecule path without Docker or a VM.
+driver:
+  name: default
+  options:
+    managed: false
+provisioner:
+  name: ansible
+  inventory:
+    hosts:
+      all:
+        hosts:
+          localhost:
+            ansible_connection: local
+verifier:
+  name: ansible
+scenario:
+  test_sequence:
+    - converge
+    - idempotence
+    - verify

@@ -1,0 +1,10 @@
+---
+- name: Converge the canary marker
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Write the canary marker file
+      ansible.builtin.copy:
+        dest: /tmp/dryvist-canary-marker
+        content: canary
+        mode: "0644"

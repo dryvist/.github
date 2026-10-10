@@ -1,0 +1,15 @@
+---
+- name: Verify the canary marker
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Stat the canary marker file
+      ansible.builtin.stat:
+        path: /tmp/dryvist-canary-marker
+      register: canary_marker
+
+    - name: Assert the marker exists with the expected content
+      ansible.builtin.assert:
+        that:
+          - canary_marker.stat.exists
+          - canary_marker.stat.size == 6
