@@ -37,10 +37,6 @@ on:
         required: false
         default: ""
 
-concurrency:
-  group: osv-scan-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 # The scan only reads the tree. Nothing uploads to code scanning — the
 # previous delegate ran with upload-sarif hardcoded false, and callers grant
 # contents: read only.

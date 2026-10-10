@@ -22,10 +22,6 @@ on:
         required: false
         default: ubuntu-latest
 
-concurrency:
-  group: zizmor-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
 
