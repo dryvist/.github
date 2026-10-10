@@ -82,6 +82,25 @@ test('mapped Molecule paths still go through the scenario selector', () => {
   assert.match(ansibleCi, /run: node \.gh-shared\/\.github\/scripts\/select-molecule-scenarios\.js/);
 });
 
+test('lint roles path keeps the repo ansible.cfg roles_path between repo roles/ and Galaxy roles', () => {
+  const { execFileSync } = require('node:child_process');
+  const { mkdtempSync, writeFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
+  const step = ansibleCi.match(/- name: Set Ansible roles path\n\s+run: (.*)\n/);
+  assert.ok(step, 'Set Ansible roles path step exists');
+  const resolve = (cfg) => {
+    const dir = mkdtempSync(join(tmpdir(), 'roles-path-'));
+    if (cfg !== null) writeFileSync(join(dir, 'ansible.cfg'), cfg);
+    const env = { PATH: process.env.PATH, GITHUB_WORKSPACE: '/ws', HOME: '/h', GITHUB_ENV: join(dir, 'env') };
+    execFileSync('bash', ['-ec', step[1]], { cwd: dir, env });
+    return readFileSync(env.GITHUB_ENV, 'utf8').trim();
+  };
+  assert.equal(resolve(null), 'ANSIBLE_ROLES_PATH=/ws/roles:/h/.ansible/roles');
+  assert.equal(resolve('[defaults]\nroles_path = ansible/roles\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:ansible/roles:/h/.ansible/roles');
+  assert.equal(resolve('[defaults]\n# roles_path = nope\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:/h/.ansible/roles');
+});
+
 test('the molecule output is false when the caller repo has no Molecule scenario', () => {
   assert.match(
     ansibleCi,
