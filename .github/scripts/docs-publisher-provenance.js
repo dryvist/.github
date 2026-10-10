@@ -15,6 +15,7 @@ const CONTROL_PLANE_PATHS = new Set([
 function isGeneratedPath(path) {
   return !(
     CONTROL_PLANE_PATHS.has(path) ||
+    path.startsWith('.claude/') ||
     path.startsWith('.github/') ||
     path.startsWith('scripts/')
   );
