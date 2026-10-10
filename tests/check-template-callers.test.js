@@ -3,14 +3,19 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('../', import.meta.url));
 const script = join(repo, 'scripts/check-template-callers.sh');
 
-// A caller shaped like a template's ci-gate.yml: one job that calls _ci-gate.yml.
-function caller({ withBlock = '', grant = ['contents: read', 'pull-requests: read', 'actions: write'] } = {}) {
+// A caller shaped like a template's ci-gate.yml: one job that calls _ci-gate.yml
+// at `ref`, with the python profile unless withBlock says otherwise.
+function caller({
+  ref = 'v1',
+  withBlock = '    with:\n      profile: python\n',
+  grant = ['contents: read', 'pull-requests: read', 'actions: write'],
+} = {}) {
   const perms = grant.map((line) => `      ${line}`).join('\n');
   return `name: CI Gate
 on:
@@ -19,7 +24,7 @@ jobs:
   gate:
     permissions:
 ${perms}
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@${ref}
 ${withBlock}`;
 }
 
@@ -54,14 +59,19 @@ test('a caller that passes known inputs and grants the gate its scopes passes', 
 });
 
 test('a with key the gate does not declare fails, naming the template and key', () => {
-  const r = run({ callers: { 'cc-edge-pack-template': caller({ withBlock: '    with:\n      bogus_key: true\n' }) } });
+  const r = run({
+    callers: {
+      'cc-edge-pack-template': caller({ withBlock: '    with:\n      profile: docs\n      bogus_key: true\n' }),
+    },
+  });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /cc-edge-pack-template: job 'gate' passes 'bogus_key'/);
 });
 
 test('a required gate input the caller omits fails, naming the template and input', () => {
   const r = run({
-    gateEdit: (text) => text.replace(/^ {4}inputs:\n/m, '    inputs:\n      must_pass:\n        type: boolean\n        required: true\n'),
+    gateEdit: (text) =>
+      text.replace(/^ {4}inputs:\n/m, '    inputs:\n      must_pass:\n        type: boolean\n        required: true\n'),
     callers: { 'tofu-aws-templates': caller() },
   });
   assert.equal(r.status, 1);
@@ -76,8 +86,32 @@ test('a caller that grants less than the gate needs fails, naming the scope', ()
 
 test('a caller with no job that calls _ci-gate.yml fails', () => {
   const r = run({
-    callers: { 'docs-template': 'name: docs\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: true\n' },
+    callers: {
+      'docs-template':
+        'name: docs\non: push\njobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - run: true\n',
+    },
   });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /docs-template: no job calls _ci-gate.yml/);
+});
+
+test('a caller pinned to a ref other than v1 fails, naming the job and ref', () => {
+  const r = run({ callers: { 'python-template': caller({ ref: 'main' }) } });
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stdout,
+    /python-template: job 'gate' calls dryvist\/\.github\/\.github\/workflows\/_ci-gate\.yml@main, not dryvist/,
+  );
+});
+
+test('a caller with no profile input fails, naming the job', () => {
+  const r = run({ callers: { 'python-template': caller({ withBlock: '    with:\n      nix_validate: true\n' }) } });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /python-template: job 'gate' omits the profile input/);
+});
+
+test('a profile the gate does not accept fails, naming the value', () => {
+  const r = run({ callers: { 'python-template': caller({ withBlock: '    with:\n      profile: java\n' }) } });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /python-template: job 'gate' passes profile 'java'/);
 });

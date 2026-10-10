@@ -6,7 +6,9 @@
 #   2. each input marked `required: true` is passed;
 #   3. the calling job's permissions grant reaches the highest level each scope
 #      needs across the gate's jobs (a job without a block inherits the workflow
-#      default) and across the ./ reusables those jobs call.
+#      default) and across the ./ reusables those jobs call;
+#   4. the calling job uses dryvist/.github/.github/workflows/_ci-gate.yml@v1 and
+#      its `profile:` input is one of the presets the gate accepts.
 #
 # A caller is named in messages by its file name without .yml. Needs mikefarah
 # yq v4 (preinstalled on ubuntu-24.04). Shorthand permissions (read-all) are not
@@ -30,6 +32,9 @@ fi
 
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 gate="${repo}/.github/workflows/_ci-gate.yml"
+# The reusable every caller pins, and the profile presets its `profile` input accepts.
+gate_ref="dryvist/.github/.github/workflows/_ci-gate.yml@v1"
+profiles="ansible nix tofu python docs"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 fail=0
@@ -75,7 +80,7 @@ highest() {
 }
 
 check_caller() {
-  local file=$1 name jobs job passed granted scope need_level have
+  local file=$1 name jobs job passed granted scope need_level have uses profile
   name=$(basename "$file" .yml)
   jobs=$(yq -r '.jobs | to_entries[] | select((.value.uses // "") | contains("_ci-gate.yml")) | .key' "$file")
   if [[ -z $jobs ]]; then
@@ -84,6 +89,15 @@ check_caller() {
   fi
   while read -r job; do
     [[ -n $job ]] || continue
+    uses=$(JOB="$job" yq -r '.jobs[env(JOB)].uses' "$file")
+    [[ $uses == "$gate_ref" ]] ||
+      err "${name}: job '${job}' calls ${uses}, not ${gate_ref}"
+    profile=$(JOB="$job" yq -r '.jobs[env(JOB)].with.profile // ""' "$file")
+    if [[ -z $profile ]]; then
+      err "${name}: job '${job}' omits the profile input (one of: ${profiles})"
+    elif [[ " $profiles " != *" $profile "* ]]; then
+      err "${name}: job '${job}' passes profile '${profile}' (one of: ${profiles})"
+    fi
     passed=$(JOB="$job" yq -r '(.jobs[env(JOB)].with // {}) | keys | .[]' "$file")
     while read -r key; do
       [[ -n $key ]] || continue
