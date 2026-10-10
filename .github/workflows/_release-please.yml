@@ -176,16 +176,7 @@ jobs:
             METHOD=--merge
           fi
           gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
-          for _ in 1 2 3; do
-            if out=$(gh pr merge "$PR_NUMBER" --auto "$METHOD" 2>&1); then echo "$out"; exit 0; fi
-            # Repo setting off: the release is already cut, so skip auto-merge rather than fail it.
-            if grep -q "Auto merge is not allowed" <<<"$out"; then
-              echo "::notice::Auto-merge skipped for ${GH_REPO}: the repository setting 'Allow auto-merge' is off (Settings > General > Pull Requests). Release PR #${PR_NUMBER} stays open for a manual merge."
-              exit 0
-            fi
-            echo "$out" >&2
-            sleep 15
-          done
+          for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto "$METHOD" && exit 0; sleep 15; done
           exit 1
 
   # Back-merge the release commit main -> develop on git-flow repos, so develop's
