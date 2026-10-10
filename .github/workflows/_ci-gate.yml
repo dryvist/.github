@@ -147,12 +147,23 @@ on:
         description: >-
           YAML body for dorny/paths-filter. Use the convention names listed
           in this file's header to enable the matching conditional check.
+          Empty (default) uses the `profile` block when a profile is set,
+          otherwise the markdown block. A non-empty value overrides the
+          profile's block.
         type: string
         required: false
-        default: |
-          markdown:
-            - '**.md'
-            - '.markdownlint*'
+        default: ''
+
+      profile:
+        description: >-
+          Preset that supplies a default `filters` block and enables its
+          matching toggles: ansible, nix, tofu, python or docs. Empty
+          (default) keeps the explicit-input behaviour. A profile toggle is
+          OR-ed with its explicit input, so `profile` enables a job but cannot
+          turn one off.
+        type: string
+        required: false
+        default: ''
 
       nix_validate:
         description: Enable `Nix Validate` (gated on `nix` filter)
@@ -462,6 +473,63 @@ jobs:
       is-nix-source-change: ${{ steps.lockfilter.outputs.nix-source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # One filter body: an explicit `filters` input wins, else the profile's
+      # block, else the markdown default (the behaviour with no profile set).
+      - name: Resolve filter body
+        id: resolve
+        env:
+          PROFILE: ${{ inputs.profile }}
+          CALLER_FILTERS: ${{ inputs.filters }}
+        run: |
+          set -euo pipefail
+          markdown='markdown:
+            - "**.md"
+            - ".markdownlint*"'
+          case "$PROFILE" in
+            "") block="" ;;
+            ansible) block='ansible:
+            - "ansible/**"
+            - "roles/**"
+            - "playbooks/**"
+            - "inventory/**"
+            - "**/molecule/**"
+            - "**/group_vars/**"
+            - "**/host_vars/**"
+            - "requirements.yml"
+            - ".ansible-lint*"' ;;
+            nix) block='nix:
+            - "**.nix"
+            - "flake.lock"' ;;
+            tofu) block='terraform:
+            - "**.tf"
+            - "**.tofu"
+            - ".tflint.hcl"
+            - "**/*.tfvars"' ;;
+            python) block='python:
+            - "**.py"
+            - "pyproject.toml"
+            - "uv.lock"
+            - "requirements*.txt"
+            - "setup.cfg"
+            - "setup.py"' ;;
+            docs) block="" ;;
+            *)
+              echo "::error::unknown profile '$PROFILE' (expected ansible, nix, tofu, python or docs)"
+              exit 1
+              ;;
+          esac
+          if [[ -n "$CALLER_FILTERS" ]]; then
+            body="$CALLER_FILTERS"
+          elif [[ -n "$block" ]]; then
+            body="$markdown"$'\n'"$block"
+          else
+            body="$markdown"
+          fi
+          {
+            echo "filters<<RESOLVED_FILTERS_EOF"
+            printf '%s\n' "$body"
+            echo "RESOLVED_FILTERS_EOF"
+          } >> "$GITHUB_OUTPUT"
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
@@ -469,7 +537,7 @@ jobs:
           # action use the commit immediately before the push as its base.
           # PR events continue to compare against their PR base branch.
           base: ${{ github.ref }}
-          filters: ${{ inputs.filters }}
+          filters: ${{ steps.resolve.outputs.filters }}
 
       # Static (not caller-supplied) so `is-flake-lock-change` and
       # `is-nix-source-change` are always available regardless of how a
@@ -530,7 +598,7 @@ jobs:
     # further when `scope` definitively succeeded and said "none" - a
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
-    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.nix_validate || inputs.profile == 'nix') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     # Keep nested workflow calls on the same immutable source revision while
     # validating changes to this reusable workflow repository.
     uses: ./.github/workflows/_nix-validate.yml
@@ -558,7 +626,7 @@ jobs:
     # something other than "full" (lint-only or none skip it); a scope
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
-    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && (inputs.nix_build || inputs.profile == 'nix') && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
@@ -588,7 +656,7 @@ jobs:
   python-security:
     name: Python Security
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.python_security && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.python_security || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
@@ -604,7 +672,7 @@ jobs:
     # Full-tier: this runs the full lint/format/type/test matrix, not just
     # a fast validate - only narrows when scope succeeded and said
     # something other than full.
-    if: ${{ !cancelled() && inputs.python_ci && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && (inputs.python_ci || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
@@ -661,7 +729,7 @@ jobs:
   ansible-ci:
     name: Ansible CI
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.ansible_ci && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.ansible_ci || inputs.profile == 'ansible') && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
@@ -689,7 +757,7 @@ jobs:
   tofu-ci:
     name: OpenTofu CI
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.tofu_ci && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.tofu_ci || inputs.profile == 'tofu') && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
