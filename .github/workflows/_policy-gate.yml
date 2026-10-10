@@ -1,7 +1,7 @@
 # Reusable: Policy Gate wrapper
 #
-# Thin pass-through to dryvist/ai-workflows/.github/workflows/policy-gate.yml
-# @main, so a dryvist/.github consumer opts in via one _ci-gate.yml input
+# Thin pass-through to dryvist/ai-workflows/.github/workflows/policy-gate.yml,
+# so a dryvist/.github consumer opts in via one _ci-gate.yml input
 # instead of wiring the external reusable directly. Advisory by default
 # (policy_gate_block false); wired into _ci-gate.yml needs-free (never in
 # gate.needs), same shape as _agent-pr-body.yml.

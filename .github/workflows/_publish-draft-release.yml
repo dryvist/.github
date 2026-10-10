@@ -29,7 +29,7 @@
 #       ...                      # attach assets to the draft with github.token
 #     publish:
 #       needs: build-and-upload
-#       uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@main
+#       uses: dryvist/.github/.github/workflows/_publish-draft-release.yml@<40-hex commit SHA> # vX.Y.Z
 #       with:
 #         tag: ${{ needs.build-and-upload.outputs.tag }}
 #       secrets:

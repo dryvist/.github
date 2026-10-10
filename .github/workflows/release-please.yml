@@ -12,7 +12,7 @@ jobs:
       contents: write
       pull-requests: write
     # Self-referencing local `uses:` — this repo IS dryvist/.github, so it
-    # cannot pin itself at @main the way every other caller in the org does.
+    # calls its own reusable workflow by path.
     uses: ./.github/workflows/_release-please.yml
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}

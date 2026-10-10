@@ -76,7 +76,7 @@ on:
 jobs:
   gate:
     permissions: { contents: read, pull-requests: read, actions: write }
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@<40-hex commit SHA> # vX.Y.Z
 ```
 
 `markdown_lint` and `file_size` are on by default and `filters` defaults to
@@ -106,7 +106,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dryvist/.github/.github/workflows/_release-please.yml@v1
+    uses: dryvist/.github/.github/workflows/_release-please.yml@<40-hex commit SHA> # vX.Y.Z
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
@@ -140,14 +140,15 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
 ## Calling the shared workflows
 
-Callers reference the reusable workflows at the floating major tag:
+Callers pin each reusable workflow to a commit SHA, with the release tag as a trailing comment:
 
 ```yaml
-uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
+uses: dryvist/.github/.github/workflows/_ci-gate.yml@<40-hex commit SHA> # vX.Y.Z
 ```
 
-- `v1` moves to a release commit only after the Canary check on that commit succeeds.
-- Breaking changes ship as `v2`. `v1` callers are unaffected until they move.
+- Renovate updates the SHA and the version comment together, in one PR per consumer.
+- Patch updates merge automatically after CI passes. Minor and major updates, and release PRs, are merged by a person.
+- Nix, Ansible and OpenTofu git references use the floating major tag (`?ref=vN`). The lock file records the exact revision.
 - Third-party actions in these workflows are pinned to full commit SHAs.
 
 ## API
@@ -166,7 +167,7 @@ This repo exposes the following inheritance surfaces:
 | `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
-| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@v1` |
+| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@<40-hex commit SHA> # vX.Y.Z` |
 | `.github/workflows/{markdownlint,conventions-check,ai-review}.yml` | Org-wide Required Workflows; `tofu-github` rulesets inject them into every repo's PRs |
 | `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
 | `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |

@@ -53,45 +53,48 @@ gate minor/patch; they gate only majors and PR-creation cadence.
   advisory only — it labels findings for human follow-up but does not gate or block
   auto-merge.
 
-All third-party GitHub Actions — trusted orgs included — are pinned to SHA
-digests, not tags; dryvist self-references ride the floating major tag (see
-Version Pinning below).
+All third-party GitHub Actions — trusted orgs included — and all dryvist
+reusable workflows are pinned to SHA digests, not tags (see Version Pinning
+below).
 
 ## Version Pinning
 
 | Source | Strategy |
 | --- | --- |
-| dryvist self-references | `@v1` floating major tag (see the note below the table) |
+| dryvist reusable workflows (`uses:`) | Commit SHA pin + released version tag as a trailing comment (`# vX.Y.Z`); Renovate bumps both together |
+| dryvist Nix, Ansible and OpenTofu git refs | Floating major tag (`?ref=vN`); the lock file holds the exact revision |
 | All third-party GitHub Actions | SHA commit hash pins + released version tag as a trailing comment (`# v4.2.2`); Renovate bumps both together |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
 
-dryvist self-references ride the floating major tag (`@v1`), moved only by
-`promote-major-tag.yml` after the canary passes; breaking changes ship as a
-new major.
+Patch updates to dryvist references merge automatically after CI passes.
+Minor and major updates, and release-please PRs, are merged by a person.
+Floating major tags (`vN`) move on release, after the Canary check passes.
+They serve the Nix, Ansible and OpenTofu git refs only.
 
 Trust tiers govern *review cadence for majors* (above), never the pin style:
 there is no semver-tag allowance for trusted actions. Non-`uses:` pins that
 Renovate cannot infer from context carry an explicit
 `# renovate: datasource=… depName=… versioning=…` tag.
 
-### Scanner posture for `@main` self-references
+### Scanner posture for dryvist SHA pins
 
-`dryvist/*` reusable workflows are referenced at `@main` across every consumer.
-Each scanner allows it by the most native means available — no reinvented
-config files:
+`dryvist/*` reusable workflows are referenced by commit SHA. Each scanner
+handles that pin by the most native means available — no reinvented config
+files:
 
-| Scanner | How `dryvist/*@main` is allowed |
+| Scanner | How `dryvist/*` SHA pins are handled |
 | --- | --- |
-| **Renovate** | `pinDigests: false` for `dryvist/**`, overriding the global `pinGitHubActionDigests`; `@main` is never SHA-pinned. |
+| **Renovate** | Updates the SHA and the `# vX.Y.Z` comment together; patch updates auto-merge, minor and major updates do not. |
 | **zizmor** | `unpinned-uses` policy `dryvist/*: ref-pin` in `zizmor.yml`. |
 | **CodeQL** | Code scanning default setup on public repos (free), managed as IaC in dryvist/tofu-github (per-repo, pending the provider resource). |
-| **OSV-Scanner** | N/A — OSV reports dependency vulnerabilities, not ref-pinning, so `@main` is never flagged. |
+| **OSV-Scanner** | N/A — OSV reports dependency vulnerabilities, not ref-pinning. |
 
 Untrusted/external actions are unaffected and remain SHA-pinned. Code scanning is
 enabled on **public repos only** — the 11 private repos are excluded to avoid
-the paid GitHub Code Security per-committer charge. Flagging same-org `@main` is
-a known CodeQL false positive ([codeql#18316]); those alerts are dismissed
-natively in the code scanning UI rather than suppressed by a committed file.
+the paid GitHub Code Security per-committer charge. Flagging same-org branch
+references is a known CodeQL false positive ([codeql#18316]); those alerts are
+dismissed natively in the code scanning UI rather than suppressed by a committed
+file.
 
 [codeql#18316]: https://github.com/github/codeql/issues/18316
 
@@ -104,7 +107,7 @@ natively in the code scanning UI rather than suppressed by a committed file.
 
 ## Auditable Workflow Boundaries
 
-This repo's own reusable workflows are referenced at `@main` by dryvist
-repos intentionally — they are first-party and self-owned (this repo
-extends nothing external). If you need to audit a specific workflow run,
-the resolved SHA is logged in the GitHub Actions UI for that run.
+Dryvist repos reference this repo's reusable workflows by commit SHA. The SHA in
+a caller's `uses:` line names the exact workflow version that runs. If you need
+to audit a specific workflow run, the resolved SHA is logged in the GitHub
+Actions UI for that run.
