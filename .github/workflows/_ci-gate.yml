@@ -197,7 +197,7 @@ on:
           PRs are stable enough to trust without a full build.
         type: boolean
         default: false
-      markdown_lint:
+      markdown_lint_x:
         description: Enable `Markdown Lint` (gated on `markdown` filter)
         type: boolean
         default: true
@@ -670,7 +670,7 @@ jobs:
   markdown-lint:
     name: Markdown Lint
     needs: changes
-    if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
+    if: ${{ !cancelled() && inputs.markdown_lint_x && needs.changes.outputs.markdown == 'true' }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
