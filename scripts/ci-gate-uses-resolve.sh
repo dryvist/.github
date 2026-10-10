@@ -2,9 +2,11 @@
 # Fails when a caller workflow's `uses:` names a reusable workflow or local
 # path that does not exist.
 #   ./.github/workflows/<file>            must exist in the checked-out repo
-#   dryvist/<repo>/.github/workflows/<file>@<ref>
+#   dryvist/.github or dryvist/ai-workflows, .github/workflows/<file>@<ref>
 #                                         must exist at <ref>, read via the API
-# Other `uses:` values (actions, non-dryvist workflows) are not checked here.
+# Other `uses:` values are not checked: other dryvist repos may be private,
+# and this run's token cannot read them, so a valid ref would false-fail.
+# Other dryvist refs print a notice instead, and actions are ignored.
 # actionlint does not resolve either form, so this check is the enforcement.
 #
 # Environment:
@@ -34,6 +36,10 @@ for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
       dryvist/*/.github/workflows/*@*)
         rest=${value#dryvist/}
         repo=${rest%%/*}
+        if [[ "$repo" != ".github" && "$repo" != "ai-workflows" ]]; then
+          echo "::notice::not checked (${value})"
+          continue
+        fi
         rest=${rest#*/}
         file=${rest%@*}
         ref=${value##*@}

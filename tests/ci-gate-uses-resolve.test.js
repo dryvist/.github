@@ -54,3 +54,14 @@ test('third-party action references are ignored', () => {
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
 });
+
+test('a dryvist ref outside the public shared repos is not checked, only noticed', () => {
+  // No GH_TOKEN is set, so reaching `gh api` would fail the run. A zero exit
+  // with the notice proves the reference was skipped, not looked up.
+  const ref = 'dryvist/private-thing/.github/workflows/x.yml@main';
+  const run = runInCaller(`jobs:\n  a:\n    uses: ${ref}\n`);
+
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.match(run.stdout, new RegExp(`::notice::not checked \\(${ref.replace(/[./]/g, '\\$&')}\\)`));
+  assert.doesNotMatch(run.stdout, /::error/);
+});
