@@ -16,7 +16,9 @@ function isCiInfraPath(file) {
   return file.startsWith('.github/');
 }
 
-function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs }) {
+// Returns a JSON array of scenario names, '[]' for no scenario, or '' for the full profile. An unmapped path
+// never fails: it calls warn() once with its path and selects the full profile.
+function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs, warn = () => {} }) {
   const reserved = new Set(['changed', 'contract_only', 'full_matrix']);
   const scenarios = matchedFilters.filter((name) => !reserved.has(name));
   const coveredFiles = new Set();
@@ -40,11 +42,8 @@ function selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs }
   const fullMatrixFiles = new Set(parseJson(filterOutputs.full_matrix_files, [], 'full_matrix_files'));
   const unclassifiedFiles = uncoveredFiles.filter((file) => !fullMatrixFiles.has(file) && !isCiInfraPath(file));
   if (unclassifiedFiles.length > 0) {
-    const message = [
-      'Changed Molecule paths have no scenario, caller-contract, or full-matrix mapping:',
-      ...unclassifiedFiles,
-    ].join(' ');
-    throw new Error(message);
+    for (const file of unclassifiedFiles) warn(`unmapped path ${file}, running full profile`);
+    return '';
   }
   if (scenarios.length > 0) return JSON.stringify(scenarios);
   if (matchedFilters.includes('contract_only')) return '[]';
@@ -58,9 +57,11 @@ if (require.main === module) {
       changedFiles: parseJson(process.env.CHANGED_FILES, [], 'CHANGED_FILES'),
       matchedFilters: parseJson(process.env.MATCHED_FILTERS, [], 'MATCHED_FILTERS'),
       filterOutputs: parseJson(process.env.FILTER_OUTPUTS, {}, 'FILTER_OUTPUTS'),
+      warn: (message) => console.log(`::warning::${message}`),
     });
     if (!process.env.GITHUB_OUTPUT) throw new Error('GITHUB_OUTPUT is required');
-    appendFileSync(process.env.GITHUB_OUTPUT, `scenarios=${scenarios}\n`);
+    const fullProfile = scenarios === '' ? 'full_profile=true\n' : '';
+    appendFileSync(process.env.GITHUB_OUTPUT, `scenarios=${scenarios}\n${fullProfile}`);
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

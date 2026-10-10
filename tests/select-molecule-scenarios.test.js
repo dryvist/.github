@@ -10,7 +10,7 @@ const selectorPath = require.resolve('../.github/scripts/select-molecule-scenari
 const workflowPath = require.resolve('../.github/workflows/_ansible-ci.yml');
 const { selectMoleculeScenarios } = require(selectorPath);
 
-function selection(changedFiles, scenarios = {}, contractFiles = [], fullMatrixFiles = []) {
+function selectionAndWarnings(changedFiles, scenarios = {}, contractFiles = [], fullMatrixFiles = []) {
   const filterOutputs = {
     changed_files: JSON.stringify(changedFiles),
     contract_only_files: JSON.stringify(contractFiles),
@@ -23,7 +23,18 @@ function selection(changedFiles, scenarios = {}, contractFiles = [], fullMatrixF
   }
   if (contractFiles.length > 0) matchedFilters.push('contract_only');
   if (fullMatrixFiles.length > 0) matchedFilters.push('full_matrix');
-  return selectMoleculeScenarios({ changedFiles, matchedFilters, filterOutputs });
+  const warnings = [];
+  const selected = selectMoleculeScenarios({
+    changedFiles,
+    matchedFilters,
+    filterOutputs,
+    warn: (message) => warnings.push(message),
+  });
+  return { selected, warnings };
+}
+
+function selection(changedFiles, scenarios = {}, contractFiles = [], fullMatrixFiles = []) {
+  return selectionAndWarnings(changedFiles, scenarios, contractFiles, fullMatrixFiles).selected;
 }
 
 test('selects all mapped scenarios when every relevant path is covered', () => {
@@ -67,13 +78,21 @@ test('accepts scenario names used by the repository scenario discovery contract'
   );
 });
 
-test('an unmapped path fails instead of widening a PR to the full matrix', () => {
-  assert.throws(
-    () =>
-      selection(['roles/a/tasks/main.yml', 'roles/new_role/tasks/main.yml'], {
-        a: ['roles/a/tasks/main.yml'],
-      }),
-    /no scenario, caller-contract, or full-matrix mapping: roles\/new_role\/tasks\/main.yml/,
+test('an unmapped path runs the full profile with a warning naming only that path', () => {
+  assert.deepEqual(
+    selectionAndWarnings(['roles/a/tasks/main.yml', 'roles/new_role/tasks/main.yml'], {
+      a: ['roles/a/tasks/main.yml'],
+    }),
+    { selected: '', warnings: ['unmapped path roles/new_role/tasks/main.yml, running full profile'] },
+  );
+});
+
+test('a path unmapped under configured mappings runs the full profile and is named, not failed', () => {
+  const unmapped = 'tests/verify_volume_capacity/test_mount_resolution.py';
+
+  assert.deepEqual(
+    selectionAndWarnings(['roles/a/tasks/main.yml', unmapped], { a: ['roles/a/tasks/main.yml'] }),
+    { selected: '', warnings: [`unmapped path ${unmapped}, running full profile`] },
   );
 });
 
@@ -105,11 +124,11 @@ test('uses contract coverage for a requirements-only change without widening the
   );
 });
 
-test('uncovered requirements paths still fail selection', () => {
-  assert.throws(
-    () => selection(['requirements.yml']),
-    /no scenario, caller-contract, or full-matrix mapping: requirements\.yml$/,
-  );
+test('uncovered requirements paths run the full profile with a warning', () => {
+  assert.deepEqual(selectionAndWarnings(['requirements.yml']), {
+    selected: '',
+    warnings: ['unmapped path requirements.yml, running full profile'],
+  });
 });
 
 test('unmapped CI harness paths select no scenario instead of failing', () => {
@@ -123,11 +142,11 @@ test('unmapped CI harness paths select no scenario instead of failing', () => {
   );
 });
 
-test('an unmapped role path still fails beside an unmapped CI harness path', () => {
-  assert.throws(
-    () => selection(['.github/workflows/new-ci.yml', 'roles/new_role/tasks/main.yml']),
-    /no scenario, caller-contract, or full-matrix mapping: roles\/new_role\/tasks\/main\.yml$/,
-  );
+test('an unmapped role path warns beside an unmapped CI harness path, which does not warn', () => {
+  assert.deepEqual(selectionAndWarnings(['.github/workflows/new-ci.yml', 'roles/new_role/tasks/main.yml']), {
+    selected: '',
+    warnings: ['unmapped path roles/new_role/tasks/main.yml, running full profile'],
+  });
 });
 
 test('a CI harness path runs the full set when the caller maps it into every scenario', () => {
@@ -167,25 +186,23 @@ test('uses the campaign contract for the observed playbook and telemetry fixture
   assert.equal(selection(changedFiles, {}, changedFiles), '[]');
 });
 
-test('an unrelated playbook path fails instead of widening the campaign contract selection', () => {
-  assert.throws(
-    () =>
-      selection(
-        ['playbooks/llm-model-campaign-target.yml', 'playbooks/site.yml'],
-        {},
-        ['playbooks/llm-model-campaign-target.yml'],
-      ),
-    /no scenario, caller-contract, or full-matrix mapping: playbooks\/site\.yml/,
+test('an unrelated playbook path runs the full profile with a warning instead of widening the contract', () => {
+  assert.deepEqual(
+    selectionAndWarnings(
+      ['playbooks/llm-model-campaign-target.yml', 'playbooks/site.yml'],
+      {},
+      ['playbooks/llm-model-campaign-target.yml'],
+    ),
+    { selected: '', warnings: ['unmapped path playbooks/site.yml, running full profile'] },
   );
 });
 
-test('an unmapped path fails for a mixed contract-only change', () => {
-  assert.throws(
-    () =>
-      selection(['roles/no_scenario/tasks/main.yml', 'roles/new_role/tasks/main.yml'], {}, [
-        'roles/no_scenario/tasks/main.yml',
-      ]),
-    /no scenario, caller-contract, or full-matrix mapping: roles\/new_role\/tasks\/main.yml/,
+test('an unmapped path in a mixed contract-only change runs the full profile with a warning', () => {
+  assert.deepEqual(
+    selectionAndWarnings(['roles/no_scenario/tasks/main.yml', 'roles/new_role/tasks/main.yml'], {}, [
+      'roles/no_scenario/tasks/main.yml',
+    ]),
+    { selected: '', warnings: ['unmapped path roles/new_role/tasks/main.yml, running full profile'] },
   );
 });
 
@@ -220,6 +237,27 @@ test('runs mapped scenarios while deferring shared paths to the main-merge suite
     ),
     '["a"]',
   );
+});
+
+test('writes the full-profile flag and names an unmapped path on stdout instead of exiting non-zero', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'molecule-selector-'));
+  const outputPath = join(directory, 'github-output');
+  try {
+    const stdout = execFileSync(process.execPath, [selectorPath], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        CHANGED_FILES: '["tests/x.py"]',
+        MATCHED_FILTERS: '["changed","a"]',
+        FILTER_OUTPUTS: '{"a_files":"[]"}',
+        GITHUB_OUTPUT: outputPath,
+      },
+    });
+    assert.equal(readFileSync(outputPath, 'utf8'), 'scenarios=\nfull_profile=true\n');
+    assert.match(stdout, /^::warning::unmapped path tests\/x\.py, running full profile$/m);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('writes the selected matrix to GITHUB_OUTPUT', () => {
