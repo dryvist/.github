@@ -313,7 +313,7 @@
       "pinDigests": true
     },
     {
-      "description": "First-party reusable workflows (dryvist / JacobPEvans / JacobPEvans-personal \u2014 the same owners the own-org rule above treats as first-party) ride @main and must NEVER be digest-pinned. They are self-owned; @main is the deliberate self-reference convention (SECURITY.md \u2192 Version Pinning). Without this, Renovate rewrites `uses: <first-party>/...@main` to a SHA and auto-merges it (own-org rule above), silently breaking the convention across every consumer. Mirrors the zizmor `dryvist/*: ref-pin` allowance; CodeQL code scanning is managed as IaC in tofu-github, not here. Untrusted/external actions are unaffected \u2014 they keep SHA digests.",
+      "description": "First-party reusable workflows (dryvist / JacobPEvans / JacobPEvans-personal \u2014 the same owners the own-org rule above treats as first-party) ride their floating major tag (@v1), which dryvist/.github's promote-major-tag.yml moves only after its canary passes (SECURITY.md \u2192 Version Pinning). They must NEVER be digest-pinned: a SHA pin bypasses that release channel. Mirrors the zizmor `dryvist/*: ref-pin` allowance; CodeQL code scanning is managed as IaC in tofu-github, not here. Untrusted/external actions are unaffected \u2014 they keep SHA digests.",
       "matchManagers": [
         "github-actions"
       ],
@@ -323,6 +323,22 @@
         "JacobPEvans-personal/**"
       ],
       "pinDigests": false
+    },
+    {
+      "description": "First-party MAJOR updates (dryvist/**, floating @v1 to @v2) open a review PR and never auto-merge. Overrides the own-org auto-merge rule above for majors only: a new major is a breaking release that consumers adopt deliberately.",
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchPackageNames": [
+        "dryvist/**"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "automerge": false,
+      "labels": [
+        "dep:review"
+      ]
     },
     {
       "description": "Trusted-org MAJOR updates: shorten the major-default 30-day hold to 3 days and open a review PR, but do NOT auto-merge \u2014 a trusted publisher is not proof of a compatible API (breaking majors can pass shallow CI yet break runtime behavior, infra convergence, provider schemas, or CLI flags). Same curated allowlist as the minor/patch rule above. Labelled dep:review so humans can find them; Fri ~15:00/Mon ~05:00 ET visibility. Non-trusted majors are unaffected and stay in the 30-day hold.",

@@ -1,0 +1,225 @@
+---
+# Caller-contract canary for the reusable workflows this repo publishes.
+#
+# Stack jobs call reusables through local paths, so the code under test is the
+# PR head (pull_request) or the pushed commit (push to main). The release
+# commit is never re-canaried. Fixtures under tests/canary/<stack>/ are reached
+# only through the directory inputs a reusable exposes; the rest run against
+# the repo root.
+#
+# The `promote` job at the end runs on push to main after this run's summary
+# succeeds. It moves the floating major tag when a release tag already names
+# this commit. When the release comes later, promote-major-tag.yml does it.
+# Both paths call scripts/promote-major-tag.sh.
+#
+# The job named `Canary` is the required check (ruleset, admin gate). It fails
+# when any caller job fails or is cancelled, and when a stack's change detection
+# did not match its fixture (a silent skip would otherwise read as a pass).
+# `ansible-direct` is the one exception: _ansible-ci.yml hard-codes its own
+# filter, so its lint runs only when the change touches Ansible paths. Its
+# coverage is printed to the job summary, not asserted.
+
+name: Canary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: canary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+jobs:
+  # Reusable-workflow caller jobs take no `timeout-minutes`; each inner job
+  # carries its own. The `actions: write` grant is what _ci-gate.yml's queue
+  # watchdog needs. dependency_review and zizmor are off: the repo's own gate
+  # already runs them once per PR, and the canary would repeat them per stack.
+  ansible:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/_ci-gate.yml
+    with:
+      filters: |
+        ansible:
+          - '**'
+      ansible_ci: true
+      # Scopes lint to the fixture.
+      ansible_lint_args: tests/canary/ansible
+      dependency_review: false
+      zizmor: false
+
+  nix:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/_ci-gate.yml
+    with:
+      filters: |
+        nix:
+          - '**'
+      nix_validate: true
+      all_systems: false
+      dependency_review: false
+      zizmor: false
+
+  tofu:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/_ci-gate.yml
+    with:
+      # The gate exports no `terraform` output, so `extra` mirrors the same
+      # pattern and gives the summary a change-detection value to read.
+      filters: |
+        terraform:
+          - '**'
+        extra:
+          - '**'
+      tofu_ci: true
+      tofu_working_directories: '["tests/canary/tofu"]'
+      dependency_review: false
+      zizmor: false
+
+  # python_ci is not canaried: _python-ci.yml runs `uv run` at the repo root and
+  # needs a root pyproject.toml this repo does not have. _python-security.yml
+  # takes a directory, so it exercises the fixture instead.
+  python:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/_ci-gate.yml
+    with:
+      filters: |
+        python:
+          - '**'
+      python_security: true
+      python_security_dirs: tests/canary/python
+      dependency_review: false
+      zizmor: false
+
+  docs:
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/_ci-gate.yml
+    with:
+      filters: |
+        markdown:
+          - '**'
+      markdown_lint: true
+      dependency_review: false
+      zizmor: false
+
+  # _ansible-ci.yml, with Molecule on. The contract_only map covers the
+  # Molecule-relevant paths on a PR, so a PR touching only workflows skips
+  # Molecule. A push to main runs the full scenario set.
+  ansible-direct:
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/_ansible-ci.yml
+    with:
+      emit_gate: false
+      molecule: true
+      lint_args: tests/canary/ansible
+      molecule_contract_filters: |
+        contract_only:
+          - 'roles/**'
+          - 'playbooks/**'
+          - 'inventory/**'
+          - 'group_vars/**'
+          - 'host_vars/**'
+          - 'molecule/**'
+          - '.config/molecule/**'
+          - 'requirements.yml'
+          - 'requirements-ci.txt'
+          - 'ansible.cfg'
+          - '.github/workflows/**'
+          - '.github/scripts/**'
+          - 'tests/**'
+
+  canary-summary:
+    name: Canary
+    needs: [ansible, nix, tofu, python, docs, ansible-direct]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Require every stack to pass and to have matched its fixture
+        env:
+          R_ANSIBLE: ${{ needs.ansible.result }}
+          R_NIX: ${{ needs.nix.result }}
+          R_TOFU: ${{ needs.tofu.result }}
+          R_PYTHON: ${{ needs.python.result }}
+          R_DOCS: ${{ needs.docs.result }}
+          R_ANSIBLE_DIRECT: ${{ needs.ansible-direct.result }}
+          C_ANSIBLE: ${{ needs.ansible.outputs.ansible }}
+          C_NIX: ${{ needs.nix.outputs.nix }}
+          C_TOFU: ${{ needs.tofu.outputs.extra }}
+          C_PYTHON: ${{ needs.python.outputs.python }}
+          C_DOCS: ${{ needs.docs.outputs.markdown }}
+          C_ANSIBLE_DIRECT: ${{ needs.ansible-direct.outputs.ansible }}
+        run: |
+          fail=0
+          result() {
+            if [[ "$2" == success ]]; then
+              echo "$1: result success"
+            else
+              echo "::error::$1 result is '$2'"
+              fail=1
+            fi
+          }
+          matched() {
+            if [[ "$2" == true ]]; then
+              echo "$1: change detection matched the fixture"
+            else
+              echo "::error::$1 change detection did not match the fixture ('$2')"
+              fail=1
+            fi
+          }
+          result ansible "$R_ANSIBLE"; matched ansible "$C_ANSIBLE"
+          result nix "$R_NIX"; matched nix "$C_NIX"
+          result tofu "$R_TOFU"; matched tofu "$C_TOFU"
+          result python "$R_PYTHON"; matched python "$C_PYTHON"
+          result docs "$R_DOCS"; matched docs "$C_DOCS"
+          result ansible-direct "$R_ANSIBLE_DIRECT"
+          echo "ansible-direct: lint ran=${C_ANSIBLE_DIRECT:-false} (not asserted; see header)"
+          exit "$fail"
+
+  # Second arrival for a release: this push-to-main run finished after the
+  # release tag named this commit. `needs` with `success()` means the summary
+  # above already concluded success, so the script skips the check-run lookup.
+  promote:
+    name: Move floating major tag
+    needs: [canary-summary]
+    if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      checks: read
+    concurrency:
+      group: promote-major-tag
+      cancel-in-progress: false
+    steps:
+      - name: Check out tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Promote if a release tag names this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: scripts/promote-major-tag.sh "$SHA" --gate-verified
