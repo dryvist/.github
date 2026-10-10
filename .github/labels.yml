@@ -208,7 +208,3 @@
 - name: "bump:major"
   color: "B91C1C"
   description: "First-party major release bump - never auto-merged; opens for human review"
-
-- name: "needs-human"
-  color: "B91C1C"
-  description: "Auto-merge withheld; a person must review and merge"
