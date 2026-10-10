@@ -14,7 +14,9 @@
 # completes. `waiting` (environment approval) is not a runner queue and is never
 # cancelled, but it keeps the watchdog polling until the job's timeout-minutes
 # ceiling. "Queue Watchdog" (this job) and "Merge Gate" (awaiting this job) are
-# exempt; their state here is intentional.
+# exempt; their state here is intentional. Inside a called workflow GitHub
+# prefixes job names ("nix / Merge Gate"), so the exemption matches the last
+# " / " segment, which also exempts sibling watchdogs from other gate calls.
 #
 # Required env:
 #   GH_TOKEN              — GitHub token with actions:write on the run
@@ -38,7 +40,7 @@ set -euo pipefail
 sibling_jobs() {
   gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" \
     --jq '.jobs[]
-      | select(.name != "Queue Watchdog" and .name != "Merge Gate")
+      | select(.name | test("(^| / )(Queue Watchdog|Merge Gate)$") | not)
       | "\(.id)\t\(.status)\t\(now - (.created_at | fromdateiso8601) | floor)\t\(.name)"'
 }
 

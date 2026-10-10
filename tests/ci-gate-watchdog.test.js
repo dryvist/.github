@@ -130,6 +130,20 @@ test('the exempt Queue Watchdog and Merge Gate jobs are ignored', (t) => {
   assert.equal(cancelled, '');
 });
 
+test('exempt names match after a called-workflow prefix, and only as the whole last segment', (t) => {
+  const { run, cancelled } = runWatchdog(t, [
+    [
+      job(8, 'nix / Queue Watchdog', 'in_progress', 3600),
+      job(9, 'ansible / Merge Gate', 'pending', 3600),
+      job(10, 'gate / AI Merge Gate', 'pending', 3600),
+    ],
+  ]);
+
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /gate \/ AI Merge Gate/);
+  assert.notEqual(cancelled, '');
+});
+
 test('all siblings completed exits 0 without cancelling', (t) => {
   const { run, cancelled } = runWatchdog(t, [
     [job(1, 'lint', 'completed', 600), job(2, 'test', 'completed', 600)],
