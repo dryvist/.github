@@ -53,6 +53,16 @@ test('docs and mapped paths produce no warning and full=false', () => {
   assert.equal(run1.written.trim(), 'full=false');
 });
 
+test('release-please metadata produces no warning and full=false', () => {
+  const run1 = run({
+    ALL: '["VERSION",".release-please-manifest.json","release-please-config.json","CHANGELOG.md"]',
+  });
+
+  assert.equal(run1.status, 0);
+  assert.doesNotMatch(run1.stdout, /::warning::/);
+  assert.equal(run1.written.trim(), 'full=false');
+});
+
 test('no changed files at all is not an error', () => {
   const run1 = run({});
 

@@ -541,7 +541,7 @@ jobs:
             - "**.py"
             - "pyproject.toml"
             - "uv.lock"
-            - "requirements*.txt"
+            - "**/requirements*.txt"
             - "setup.cfg"
             - "setup.py"' ;;
             docs) block="" ;;

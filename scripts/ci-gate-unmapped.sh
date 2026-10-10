@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Flags changed files that no profile filter covers (docs excepted).
+# Flags changed files that no profile filter covers (docs and release-please
+# metadata excepted).
 #
 # Reads dorny/paths-filter `list-files: json` output from the environment:
 #   ALL        every changed file (the resolve step's `changed-all` key)
@@ -21,7 +22,9 @@ unmapped=$(jq -r -n \
   --argjson terraform "${TERRAFORM:-[]}" \
   --argjson extra "${EXTRA:-[]}" \
   '($nix + $markdown + $python + $ansible + $terraform + $extra) as $mapped
-   | $all[] | select(endswith(".md") | not) | . as $f
+   | $all[] | select(endswith(".md") | not)
+   | select(IN("VERSION", ".release-please-manifest.json", "release-please-config.json") | not)
+   | . as $f
    | select(any($mapped[]; . == $f) | not)')
 
 full=false
