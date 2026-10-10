@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/dryvist/.github/compare/v1.9.1...v1.9.2) (2026-10-10)
+
+
+### CI
+
+* **canary:** check template callers against the candidate gate ([#296](https://github.com/dryvist/.github/issues/296)) ([9de5882](https://github.com/dryvist/.github/commit/9de58820288f49aca8eb0754027d9b174a880905))
+
 ## [1.9.1](https://github.com/dryvist/.github/compare/v1.9.0...v1.9.1) (2026-10-10)
 
 
