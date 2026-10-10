@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.7](https://github.com/dryvist/.github/compare/v1.9.6...v1.9.7) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** run molecule only when the repo has scenarios ([#306](https://github.com/dryvist/.github/issues/306)) ([5c526cc](https://github.com/dryvist/.github/commit/5c526cc8b05977905900a2df14d33bd397cb70c2))
+
 ## [1.9.6](https://github.com/dryvist/.github/compare/v1.9.5...v1.9.6) (2026-10-10)
 
 

@@ -100,3 +100,18 @@ test('lint roles path keeps the repo ansible.cfg roles_path between repo roles/ 
   assert.equal(resolve('[defaults]\nroles_path = ansible/roles\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:ansible/roles:/h/.ansible/roles');
   assert.equal(resolve('[defaults]\n# roles_path = nope\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:/h/.ansible/roles');
 });
+
+test('the molecule output is false when the caller repo has no Molecule scenario', () => {
+  assert.match(
+    ansibleCi,
+    /id: molecule_scenarios\n\s+if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) != '' \}\}\n\s+run: echo "present=true"/,
+  );
+  assert.match(
+    ansibleCi,
+    /if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) == '' \}\}\n\s+run: echo "::notice::no Molecule scenarios in this repository, Molecule job not applicable"/,
+  );
+  assert.match(
+    ansibleCi,
+    /molecule: >-\n\s+\$\{\{ steps\.molecule_scenarios\.outputs\.present == 'true'\n\s+&& \(steps\.filter\.outputs\.molecule == 'true'/,
+  );
+});
