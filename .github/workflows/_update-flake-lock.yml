@@ -119,11 +119,20 @@ jobs:
       # caller repository. Default scope of this token is the caller repository.
       - name: Generate read-only token for the caller repository
         id: caller-token
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ vars.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           permission-contents: read
+
+      - name: Explain a failed GitHub App token mint
+        if: steps.caller-token.outcome == 'failure'
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          echo "::error title=GitHub App token not minted::No token for $REPO. A 404 'get a repository installation' means the App is not installed on $REPO; install it there. A 401 'JSON web token could not be decoded' or a missing 'private-key' means vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; set both where this job can read them (repository, organization or the automation environment). The step above shows the API error."
+          exit 1
 
       - name: Checkout flake.lock
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -168,12 +177,21 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app-token
+        continue-on-error: true
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         with:
           client-id: ${{ vars.GH_APP_CLIENT_ID }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
+
+      - name: Explain a failed GitHub App token mint
+        if: steps.app-token.outcome == 'failure'
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          echo "::error title=GitHub App token not minted::No token for $REPO. A 404 'get a repository installation' means the App is not installed on $REPO; install it there. A 401 'JSON web token could not be decoded' or a missing 'private-key' means vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; set both where this job can read them (repository, organization or the automation environment). The step above shows the API error."
+          exit 1
 
       - name: Generate read-only token for private flake inputs
         id: private-input-token
