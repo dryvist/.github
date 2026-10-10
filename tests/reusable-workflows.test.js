@@ -14,14 +14,45 @@ test('the scan finds the shared gate among the reusable workflows', () => {
   assert.ok(reusables.includes('_ci-gate.yml'), `reusables found: ${reusables.join(', ')}`);
 });
 
-test('no reusable workflow declares a workflow-level concurrency block', () => {
-  // Callers own concurrency. A called run's group matches every sibling call in
-  // the same caller run, so a top-level block cancels its own siblings.
-  const offenders = reusables.filter((name) => /^concurrency:/m.test(readWorkflow(name)));
-  assert.deepEqual(
-    offenders,
-    [],
-    `remove the top-level concurrency block from: ${offenders.join(', ')}`,
+// The top-level concurrency block of a workflow, or null when it has none.
+function topLevelConcurrency(text) {
+  const match = text.match(/^concurrency:\n((?:  .*\n?)+)/m);
+  return match ? match[1] : null;
+}
+
+// Why a reusable's top-level concurrency block is unsafe, or null when allowed.
+// Allowed: a non-cancelling lock whose group does not reference github.workflow.
+function concurrencyProblem(block) {
+  const group = block.match(/^  group:\s*(.*)$/m)?.[1] ?? '';
+  const cancel = block.match(/^  cancel-in-progress:\s*(.*)$/m)?.[1]?.trim() ?? '';
+  if (cancel !== 'false') {
+    return `cancel-in-progress is "${cancel || 'unset'}", so a cancelling group cancels sibling calls in one caller run`;
+  }
+  if (group.includes('github.workflow')) {
+    return "the group references github.workflow, which collides with the caller's own group and deadlocks";
+  }
+  return null;
+}
+
+test('a reusable workflow carries a concurrency block only as a non-cancelling, repository-keyed lock', () => {
+  const offenders = [];
+  for (const name of reusables) {
+    const block = topLevelConcurrency(readWorkflow(name));
+    const problem = block === null ? null : concurrencyProblem(block);
+    if (problem) offenders.push(`${name}: ${problem}`);
+  }
+  assert.deepEqual(offenders, [], `top-level concurrency rejected:\n${offenders.join('\n')}`);
+});
+
+test('the concurrency rule rejects a cancelling group and a github.workflow group', () => {
+  assert.match(concurrencyProblem('  group: x\n  cancel-in-progress: true\n'), /cancels sibling calls/);
+  assert.match(
+    concurrencyProblem('  group: y-${{ github.workflow }}\n  cancel-in-progress: false\n'),
+    /deadlocks/,
+  );
+  assert.equal(
+    concurrencyProblem('  group: flake-lock-${{ github.repository }}\n  cancel-in-progress: false\n'),
+    null,
   );
 });
 
