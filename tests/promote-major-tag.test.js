@@ -116,3 +116,23 @@ test('refuses to move the floating tag backwards', () => {
   assert.match(r.stdout, /Refusing to move it backwards/);
   assert.equal(remoteTag(f.origin, 'v1'), f.b);
 });
+
+test('--no-canary moves the floating tag without reading the Canary check-run', () => {
+  const f = fixture();
+  // The check would fail if read; --no-canary means consumer repos have no Canary to read.
+  const r = promote(f, f.b, { check: 'completed failure', flags: ['--no-canary'] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(remoteTag(f.origin, 'v1'), f.b);
+});
+
+test('never moves the floating tag for a prerelease-only commit', () => {
+  const f = fixture();
+  git(f.work, 'commit', '-q', '--allow-empty', '-m', 'd');
+  const d = git(f.work, 'rev-parse', 'HEAD');
+  git(f.work, 'tag', 'v1.2.0-rc.1', d);
+  git(f.work, 'push', '-q', 'origin', 'HEAD', '--tags');
+  const r = promote(f, d, { flags: ['--no-canary'] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /::notice::.* has no vX\.Y\.Z tag/);
+  assert.equal(remoteTag(f.origin, 'v1'), f.a);
+});
