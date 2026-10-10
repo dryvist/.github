@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.4](https://github.com/dryvist/.github/compare/v1.9.3...v1.9.4) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** pin the shared workflows to ubuntu-24.04 ([#300](https://github.com/dryvist/.github/issues/300)) ([43fa7c7](https://github.com/dryvist/.github/commit/43fa7c7ac779bd2b9f62d1ede31cd1e3c0d36358))
+
 ## [1.9.3](https://github.com/dryvist/.github/compare/v1.9.2...v1.9.3) (2026-10-10)
 
 
