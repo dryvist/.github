@@ -29,14 +29,15 @@ jobs:
           persist-credentials: false
 
       - name: Checkout org markdownlint config
-        # An empty `github.job_workflow_sha` made the old raw-file fetch
-        # resolve to an empty ref, so this checks out the config instead of
-        # curling it. actions/checkout resolves dryvist/.github's default
-        # branch on its own, with no ref expression that can go empty.
+        # Pinned to the commit this reusable workflow was loaded from, so the
+        # config matches the workflow version. `job.workflow_sha` is used, not
+        # `github.job_workflow_sha`, which is empty when this workflow runs
+        # nested; an empty `ref` silently checks out the default branch.
         if: hashFiles('.markdownlint-cli2.jsonc', '.markdownlint-cli2.yaml', '.markdownlint-cli2.cjs', '.markdownlint-cli2.mjs', '.markdownlint.jsonc', '.markdownlint.json', '.markdownlint.yaml', '.markdownlint.yml', '.markdownlint.cjs', '.markdownlint.mjs') == ''
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
           sparse-checkout: .markdownlint-cli2.yaml
           sparse-checkout-cone-mode: false
           path: .org-markdownlint-checkout

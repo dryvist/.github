@@ -57,10 +57,11 @@ not a per-repo knob. Split large files rather than widening org defaults.
 
 ## Release-please (org-native)
 
-Release-please is **org-native** to this repo: every dryvist repo inherits the
-reusable `.github/workflows/_release-please.yml@main` here (not a cross-account
-JacobPEvans workflow). It opens the release PR and leaves it open for a person to
-merge, for every bump type (patch, minor, or major). A dryvist
+Release-please is **org-native** to this repo: every dryvist repo calls the
+reusable `.github/workflows/_release-please.yml` here, pinned to a commit SHA
+(`@<40-hex commit SHA> # vX.Y.Z`), not a cross-account JacobPEvans workflow. It
+opens the release PR and leaves it open for a person to merge, for every bump
+type (patch, minor, or major). A dryvist
 repo's `release-please.yml` caller forwards a single secret:
 
 | dryvist org secret | Reusable workflow secret |
@@ -103,7 +104,7 @@ Work through this in order when creating a dryvist repo.
    branching model you actually intend; the `org-gitflow-*` rulesets bind on
    that property, not on the default branch.
 2. **Add release automation.** A thin `.github/workflows/release-please.yml`
-   calling `dryvist/.github/.github/workflows/_release-please.yml@main` and
+   calling `dryvist/.github/.github/workflows/_release-please.yml@<40-hex commit SHA> # vX.Y.Z` and
    forwarding `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY`. Copy an existing caller
    verbatim rather than writing one. Manifest mode is the default and also
    needs `release-please-config.json` (copy `configs/release-please-config.json`
@@ -207,13 +208,12 @@ the test runs in that same gate.
 ### Adding a new reusable workflow
 
 A brand-new `_*.yml` lands in **its own PR first, with no wiring**. A
-`uses: .../_new-thing.yml@main` reference added in the *same* PR breaks CI
-on every head: this repo dogfoods its own gate (`ci-gate.yml` calls
-`./.github/workflows/_ci-gate.yml` locally), and `uses:` always resolves
-against `@main` regardless of branch — a file not yet on `main` fails
-workflow **graph validation** before any job runs ("workflow file issue",
-zero jobs, no `gate / Merge Gate` context at all — the PR looks stuck, not
-failed). Merge the new file first; wire it in a second PR after.
+`uses: dryvist/.github/.github/workflows/_new-thing.yml@<40-hex commit SHA>`
+reference names a commit that must already contain the file. A reference
+added in the same PR as the file fails workflow **graph validation** before
+any job runs ("workflow file issue", zero jobs, no `gate / Merge Gate` context
+at all). This repo's own gate calls `./.github/workflows/_ci-gate.yml` by local
+path. Merge the new file first, then pin the released commit in a second PR.
 
 ## When in doubt
 
