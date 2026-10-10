@@ -430,7 +430,8 @@ jobs:
           # top is the highest rank across first-party bumps: -1 none, 0 digest, 1 patch,
           # 2 minor, 3 major, 4 unresolved or moved backwards.
           top=-1
-          printf '%s\n%s\n' '| first-party input | from | to | bump |' '| --- | --- | --- | --- |' > summary.md
+          summary="$RUNNER_TEMP/flake-bump-summary.md"
+          printf '%s\n%s\n' '| first-party input | from | to | bump |' '| --- | --- | --- | --- |' > "$summary"
           while IFS=$'\t' read -r name repo old new; do
             old_out=$(nearest "$repo" "$old") || old_out=""
             new_out=$(nearest "$repo" "$new") || new_out=""
@@ -459,9 +460,9 @@ jobs:
               fi
             fi
             if [ "$(rank "$cls")" -gt "$top" ]; then top=$(rank "$cls"); fi
-            echo "| \`$name\` | \`${old_tag:-unresolved}\` | \`${new_tag:-unresolved}\` | $cls |" >> summary.md
+            echo "| \`$name\` | \`${old_tag:-unresolved}\` | \`${new_tag:-unresolved}\` | $cls |" >> "$summary"
           done < /tmp/first-party.tsv
-          if [ "$top" -lt 0 ]; then : > summary.md; fi
+          if [ "$top" -lt 0 ]; then : > "$summary"; fi
 
           # Auto-merge only when every first-party bump is digest or patch and no nixpkgs* input moved.
           automerge=false
@@ -482,7 +483,7 @@ jobs:
             echo "automerge=$automerge"
             echo "labels=$labels"
             echo "summary<<SUMMARY_EOF"
-            cat summary.md
+            cat "$summary"
             echo "SUMMARY_EOF"
           } >> "$GITHUB_OUTPUT"
 
