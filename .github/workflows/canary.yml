@@ -12,10 +12,6 @@
 # this commit. When the release comes later, promote-major-tag.yml does it.
 # Both paths call scripts/promote-major-tag.sh.
 #
-# Only the `nix` stack runs File Size, until _file-size.yml drops its
-# per-workflow concurrency group. Every call in one run shares that group, so a
-# second call cancels the first.
-#
 # The job named `Canary` is the required check (ruleset, admin gate). It fails
 # when any caller job fails or is cancelled, and when a stack's change detection
 # did not match its fixture (a silent skip would otherwise read as a pass).
@@ -52,8 +48,7 @@ jobs:
         ansible:
           - '**'
       ansible_ci: true
-      # Scopes lint to the fixture. Needs the `ansible_lint_args` input on
-      # _ci-gate.yml; until that lands, this caller fails on an unknown input.
+      # Scopes lint to the fixture.
       ansible_lint_args: tests/canary/ansible
       dependency_review: false
       zizmor: false
@@ -89,7 +84,6 @@ jobs:
           - '**'
       tofu_ci: true
       tofu_working_directories: '["tests/canary/tofu"]'
-      file_size: false
       dependency_review: false
       zizmor: false
 
@@ -122,7 +116,6 @@ jobs:
         markdown:
           - '**'
       markdown_lint: true
-      file_size: false
       dependency_review: false
       zizmor: false
 
