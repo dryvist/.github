@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.5](https://github.com/dryvist/.github/compare/v1.8.4...v1.8.5) (2026-10-10)
+
+
+### Performance
+
+* **pre-commit:** lint only staged files with ansible-lint ([#282](https://github.com/dryvist/.github/issues/282)) ([b2a262f](https://github.com/dryvist/.github/commit/b2a262ff415559c2794d35dde077f7bd5b3bcf94))
+
 ## [1.8.4](https://github.com/dryvist/.github/compare/v1.8.3...v1.8.4) (2026-10-09)
 
 
