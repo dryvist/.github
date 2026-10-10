@@ -99,6 +99,10 @@ while IFS= read -r -d '' f; do
   if [[ "$size" -gt "$limit" ]]; then
     echo "::error file=$f::$f is $((size / 1024))KB (exceeds $((limit / 1024))KB limit)"
     errors=$((errors + 1))
+  elif [[ $((size * 100)) -ge $((limit * 90)) ]]; then
+    # Band at 90% of the limit: a warning only, never a failure.
+    echo "::warning::$f is ${size}/${limit} (90%+)"
+    warnings=$((warnings + 1))
   elif [[ "$size" -gt "$warn_threshold" ]]; then
     echo "::warning file=$f::$f is $((size / 1024))KB (exceeds $((warn_threshold / 1024))KB recommended)"
     warnings=$((warnings + 1))
