@@ -149,7 +149,7 @@ on:
           repo shares ONE change-detection definition.
         value: ${{ jobs.changes.outputs.ansible }}
       molecule:
-        description: Whether molecule-relevant files changed (the standardized filter).
+        description: Whether molecule-relevant files changed and a Molecule scenario exists (the standardized filter).
         value: ${{ jobs.changes.outputs.molecule }}
       renovate_config:
         description: Whether the caller's Renovate config changed.
@@ -178,9 +178,10 @@ jobs:
             || (github.event_name == 'push'
             && github.ref == 'refs/heads/main') }}
       molecule: >-
-        ${{ steps.filter.outputs.molecule == 'true'
+        ${{ steps.molecule_scenarios.outputs.present == 'true'
+            && (steps.filter.outputs.molecule == 'true'
             || (github.event_name == 'push'
-            && github.ref == 'refs/heads/main') }}
+            && github.ref == 'refs/heads/main')) }}
       renovate_config: ${{ steps.filter.outputs.renovate_config }}
       # Normalize ONCE for every consumer: an empty string means all scenarios
       # only after a push to main; focused PRs and branch pushes use mapped
@@ -188,6 +189,15 @@ jobs:
       molecule_scenarios: ${{ steps.scenario_scope.outputs.scenarios }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # A repo without a Molecule scenario has nothing for the molecule job to
+      # run, so that job is skipped there rather than failing on a missing file.
+      - name: Detect Molecule scenarios
+        id: molecule_scenarios
+        if: ${{ hashFiles('**/molecule/*/molecule.yml') != '' }}
+        run: echo "present=true" >> "$GITHUB_OUTPUT"
+      - name: Note that no Molecule scenario exists
+        if: ${{ hashFiles('**/molecule/*/molecule.yml') == '' }}
+        run: echo "::notice::no Molecule scenarios in this repository, Molecule job not applicable"
       - name: Require a previous commit for focused branch pushes
         if: >-
           ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' &&
