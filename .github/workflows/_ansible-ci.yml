@@ -505,7 +505,7 @@ jobs:
     if: ${{ needs.changes.outputs.ansible == 'true' }}
     permissions:
       contents: read
-    uses: dryvist/.github/.github/workflows/_token-limits.yml@main
+    uses: ./.github/workflows/_token-limits.yml
     with:
       runner_label: ${{ inputs.runner_label }}
 
@@ -520,7 +520,7 @@ jobs:
     if: ${{ inputs.renovate_annotations && needs.changes.outputs.ansible == 'true' }}
     permissions:
       contents: read
-    uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
+    uses: ./.github/workflows/_renovate-annotations.yml
     with:
       runner_label: ${{ inputs.runner_label }}
 

@@ -674,13 +674,13 @@ jobs:
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
     if: ${{ !cancelled() && (inputs.nix_build || inputs.profile == 'nix') && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
-    uses: dryvist/.github/.github/workflows/_nix-build.yml@main
+    uses: ./.github/workflows/_nix-build.yml
 
   markdown-lint:
     name: Markdown Lint
     needs: changes
     if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
-    uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
+    uses: ./.github/workflows/_markdown-lint.yml
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -688,7 +688,7 @@ jobs:
     name: File Size
     needs: changes
     if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
-    uses: dryvist/.github/.github/workflows/_file-size.yml@main
+    uses: ./.github/workflows/_file-size.yml
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -696,7 +696,7 @@ jobs:
     name: Token Limits
     needs: [changes, scope]
     if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: dryvist/.github/.github/workflows/_token-limits.yml@main
+    uses: ./.github/workflows/_token-limits.yml
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -704,7 +704,7 @@ jobs:
     name: Python Security
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.python_security || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: dryvist/.github/.github/workflows/_python-security.yml@main
+    uses: ./.github/workflows/_python-security.yml
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
       ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
@@ -720,7 +720,7 @@ jobs:
     # a fast validate - only narrows when scope succeeded and said
     # something other than full.
     if: ${{ !cancelled() && (inputs.python_ci || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
-    uses: dryvist/.github/.github/workflows/_python-ci.yml@main
+    uses: ./.github/workflows/_python-ci.yml
     with:
       python_versions: ${{ inputs.python_ci_versions }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -756,7 +756,7 @@ jobs:
   zizmor:
     name: Workflow Security (zizmor)
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
-    uses: dryvist/.github/.github/workflows/_zizmor.yml@main
+    uses: ./.github/workflows/_zizmor.yml
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -765,7 +765,7 @@ jobs:
   agent-pr-body:
     name: Agent PR Body
     if: ${{ inputs.agent_pr_body && github.event_name == 'pull_request' }}
-    uses: dryvist/.github/.github/workflows/_agent-pr-body.yml@main
+    uses: ./.github/workflows/_agent-pr-body.yml
     with:
       block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -777,7 +777,7 @@ jobs:
     name: Ansible CI
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.ansible_ci || inputs.profile == 'ansible') && needs.changes.outputs.ansible == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
+    uses: ./.github/workflows/_ansible-ci.yml
     with:
       emit_gate: false
       lint_args: ${{ inputs.ansible_lint_args }}
@@ -798,7 +798,7 @@ jobs:
     name: Renovate Annotations
     needs: changes
     if: ${{ inputs.renovate_annotations }}
-    uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
+    uses: ./.github/workflows/_renovate-annotations.yml
     with:
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -806,7 +806,7 @@ jobs:
     name: OpenTofu CI
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.tofu_ci || inputs.profile == 'tofu') && needs.changes.outputs.terraform == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
+    uses: ./.github/workflows/_tofu-ci.yml
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -816,7 +816,7 @@ jobs:
   osv-scan:
     name: OSV Scanner
     if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
-    uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
+    uses: ./.github/workflows/_osv-scan.yml
     with:
       config_file: ${{ inputs.osv_config_file }}
       runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -860,7 +860,7 @@ jobs:
   flake-lock-fresh:
     name: Flake Lock Fresh
     if: ${{ !cancelled() && (github.event_name == 'pull_request' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref_name == github.event.repository.default_branch)) }}
-    uses: dryvist/.github/.github/workflows/_flake-lock-fresh.yml@main
+    uses: ./.github/workflows/_flake-lock-fresh.yml
     secrets:
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
