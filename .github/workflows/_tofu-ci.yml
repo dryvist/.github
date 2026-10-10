@@ -94,7 +94,7 @@ jobs:
         env:
           DIRS: ${{ inputs.working_directories }}
         run: |
-          config=.tflint.hcl
+          config="$GITHUB_WORKSPACE/.tflint.hcl"
           [ -f "$config" ] || config="$GITHUB_WORKSPACE/.gh-shared/precommit/configs/tflint.hcl"
           for dir in $(jq -r '.[]' <<<"$DIRS"); do
             echo "::group::$dir"
