@@ -364,7 +364,7 @@ on:
         required: false
         default: 0
 
-      ansible_lint_args:
+      ansible_lint_paths:
         description: >-
           Extra arguments for ansible-lint, forwarded to `_ansible-ci.yml`'s
           `lint_args`, for example `tests/canary/ansible` to lint one directory.
@@ -790,7 +790,7 @@ jobs:
     uses: ./.github/workflows/_ansible-ci.yml
     with:
       emit_gate: false
-      lint_args: ${{ inputs.ansible_lint_args }}
+      lint_args: ${{ inputs.ansible_lint_paths }}
       # scope's `molecule` output is a second layer on `_ansible-ci.yml`'s
       # own molecule toggle - only turns it off when scope definitively
       # said "none"; any other answer, or a scope failure, leaves it on.
