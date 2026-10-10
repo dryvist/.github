@@ -4,7 +4,7 @@
     "dryvist/.github master Renovate preset \u2014 the single source of truth for Renovate policy across ALL dryvist AND JacobPEvans repos. This is the MASTER: it extends no other repository\u2019s config. JacobPEvans/.github extends THIS (github>dryvist/.github:renovate-presets), never the reverse. Consumers extend it via local>dryvist/.github (the default preset, which extends this) or directly via github>dryvist/.github:renovate-presets.",
     "Architecture: this file holds global policy (auto-merge, trusted orgs, stability features, custom managers). Ecosystem grouping rules live in renovate-grouping.json and are pulled in via extends below. Inline description fields on each rule are the canonical documentation \u2014 keep them current.",
     "WARNING: platformAutomerge MUST stay false. GitHub\u2019s auto-merge queue has a known bug where PRs pass all checks but GitHub never executes the merge \u2014 PRs stall for days with no error. With false, Renovate merges directly via API with built-in retry logic. Do NOT set this to true.",
-    "Tiered freshness model (canonical: SECURITY.md \u2192 Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY \u2014 any package, any ecosystem (dryvist/** auto-merges patch and digest only) \u2014 after a 3-day release-age stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Lock-file maintenance cannot use Renovate's minimumReleaseAge because a package manager selects every changed version. Instead, Renovate creates the branch only in one of two fixed source windows and considers automerge only in a later fixed window at least 72 elapsed hours away; the branch is never refreshed outside its source window, so the policy is a real current-head soak without custom automation. The four-hour windows preserve the existing Monday 05:00 and Thursday 13:00 starts while matching Renovate's hosted scheduler guidance, preventing a once-per-four-hours scheduler from missing either run. Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows \u2014 Monday early morning and Thursday afternoon America/New_York; first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): JacobPEvans majors auto-merge immediately, dryvist majors never auto-merge, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
+    "Tiered freshness model (canonical: SECURITY.md \u2192 Dependency Trust, and docs.jacobpevans.com/infrastructure/cicd/dependency-automation). MINOR/PATCH updates auto-merge PUBLISHER-AGNOSTICALLY \u2014 any package, any ecosystem (dryvist/** auto-merges patch only) \u2014 after a 3-day release-age stabilization + green CI (the Merge Gate, plus the deterministic dependency-review supply-chain scan on public repos). Lock-file maintenance cannot use Renovate's minimumReleaseAge because a package manager selects every changed version. Instead, Renovate creates the branch only in one of two fixed source windows and considers automerge only in a later fixed window at least 72 elapsed hours away; the branch is never refreshed outside its source window, so the policy is a real current-head soak without custom automation. The four-hour windows preserve the existing Monday 05:00 and Thursday 13:00 starts while matching Renovate's hosted scheduler guidance, preventing a once-per-four-hours scheduler from missing either run. Trust tiers gate ONLY majors and PR-creation cadence, never minor/patch. PR-creation cadence: every non-daily tier (top-level default, the broad minor/patch rule, the trusted-org major rule, custom-regex managers, lockFileMaintenance) runs on exactly two weekly windows \u2014 Monday early morning and Thursday afternoon America/New_York; first-party (own-org) overrides to 'at any time' for immediate propagation, and repos with a genuinely daily cadence (e.g. nix-darwin's flake-input groups) keep that cadence locally rather than adopting the two-window default. MAJORS never auto-merge (a compatible-looking version is not a compatible API): JacobPEvans majors auto-merge immediately, dryvist majors never auto-merge, trusted-org majors open a review PR on the same two-window cadence, every other major is held 30 days for review. Security/CVE fixes bypass the schedule via the top-level vulnerabilityAlerts block (0-day PR); a security major, like any major, opens for review rather than auto-merging."
   ],
   "extends": [
     "local>dryvist/.github:renovate-grouping"
@@ -346,14 +346,13 @@
       "pinDigests": true
     },
     {
-      "description": "dryvist/** patch and digest updates, any package manager: auto-merge after green CI, no release-age hold, scheduled at any time.",
+      "description": "dryvist/** patch updates, any package manager: auto-merge after green CI, no release-age hold, scheduled at any time.",
       "matchPackageNames": [
         "dryvist/**",
         "https://github.com/dryvist/**"
       ],
       "matchUpdateTypes": [
-        "patch",
-        "digest"
+        "patch"
       ],
       "automerge": true,
       "minimumReleaseAge": "0 days",
@@ -362,21 +361,45 @@
       ]
     },
     {
-      "description": "dryvist/** minor, pin, pinDigest and major updates, any package manager: never auto-merge. Each opens a PR for human review.",
+      "description": "dryvist/** minor updates, any package manager: never auto-merge. The PR opens at any time with the bump:minor label, which the bot-PR sweep treats as a hold.",
       "matchPackageNames": [
         "dryvist/**",
         "https://github.com/dryvist/**"
       ],
       "matchUpdateTypes": [
-        "minor",
-        "pin",
-        "pinDigest",
-        "major"
+        "minor"
       ],
-      "automerge": false
+      "automerge": false,
+      "addLabels": [
+        "bump:minor"
+      ],
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
+      ]
     },
     {
-      "description": "dryvist/** major updates, any package manager: add the dep:review label for human review.",
+      "description": "dryvist/** digest, pin and pinDigest updates, any package manager: never auto-merge. A digest update means a ref or a version comment moved without a release, so each opens a PR with the needs-human label for review.",
+      "matchPackageNames": [
+        "dryvist/**",
+        "https://github.com/dryvist/**"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
+      "automerge": false,
+      "addLabels": [
+        "needs-human"
+      ],
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
+      ]
+    },
+    {
+      "description": "dryvist/** major updates, any package manager: never auto-merge. The PR opens at any time with the dep:review label for human review.",
       "matchPackageNames": [
         "dryvist/**",
         "https://github.com/dryvist/**"
@@ -384,8 +407,13 @@
       "matchUpdateTypes": [
         "major"
       ],
+      "automerge": false,
       "addLabels": [
         "dep:review"
+      ],
+      "minimumReleaseAge": "0 days",
+      "schedule": [
+        "at any time"
       ]
     },
     {
