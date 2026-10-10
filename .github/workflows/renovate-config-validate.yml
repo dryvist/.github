@@ -29,7 +29,7 @@ permissions:
 jobs:
   validate:
     name: Validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       RENOVATE_VERSION: "44.82.4"

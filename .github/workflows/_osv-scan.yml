@@ -13,11 +13,11 @@ on:
     inputs:
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04. Pass a
           self-hosted label to opt the calling repo into on-prem runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
       scan_args:
         description: >-
           Extra OSV Scanner arguments, one per line. Do not set --format or
