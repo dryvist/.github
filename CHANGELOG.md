@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.11](https://github.com/dryvist/.github/compare/v1.9.10...v1.9.11) (2026-10-10)
+
+
+### Bug Fixes
+
+* **watchdog:** cancel on any job queue age, including pending and late-created jobs ([#314](https://github.com/dryvist/.github/issues/314)) ([a13adf8](https://github.com/dryvist/.github/commit/a13adf816913fc036f9984b4d4ca35504acc880b))
+
 ## [1.9.10](https://github.com/dryvist/.github/compare/v1.9.9...v1.9.10) (2026-10-10)
 
 
