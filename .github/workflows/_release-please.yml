@@ -60,6 +60,13 @@ on:
         type: string
         required: false
         default: ubuntu-24.04
+      auto-merge:
+        description: >-
+          Deprecated and ignored. The release PR is never merged by this workflow;
+          a person merges it. The input stays declared so callers that still pass it
+          keep running.
+        type: boolean
+        default: false
       release-type:
         description: >-
           release-please release type (e.g. `simple`). Set this AND blank out
