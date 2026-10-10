@@ -4,8 +4,10 @@
 # inputs whose owner is the caller's owner are checked; third-party inputs are ignored.
 # Pull request: compared with the base branch's lock (--pr); fails on a pinned rev or
 # an owned input moved to a rev that does not descend from the base one.
-# Other events: compared with live branch heads; stale inputs are reported and an
-# update-flake-input repository_dispatch starts the caller's targeted relock.
+# Other events: compared with live ref heads; stale inputs are reported and an
+# update-flake-input repository_dispatch starts the caller's targeted relock. A
+# dryvist input must name a floating major tag (vN); its locked rev is fresh while
+# it is in that tag's history. A dryvist input naming no ref or a branch fails.
 # A repo without a flake.lock passes. Pass GH_APP_PRIVATE_KEY when the lock has
 # private inputs; without it, a private input cannot be resolved and fails the check.
 name: _flake-lock-fresh

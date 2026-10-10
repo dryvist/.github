@@ -73,7 +73,7 @@ test('fails an owned input pinned to a revision, without listing it for relock',
   pinned.original.rev = STALE;
   const r = run(lock({ p: pinned }));
   assert.equal(r.status, 1);
-  assert.match(r.stdout, /owned input p \(ours\/r\) is pinned to a rev; track a branch instead/);
+  assert.match(r.stdout, /owned input p \(ours\/r\) is pinned to a rev; track a ref instead/);
   assert.deepEqual(r.names, []);
 });
 

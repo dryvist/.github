@@ -231,7 +231,7 @@ jobs:
             state=$(jq -r '.mergeStateStatus // "UNKNOWN"' <<<"$pr")
             mergeable=$(jq -r '.mergeable // "UNKNOWN"' <<<"$pr")
             branch=$(jq -r '.headRefName // "?"' <<<"$pr")
-            is_major=$(jq -r 'any(.labels[]?; .name == "update:major")' <<<"$pr")
+            held=$(jq -r 'any(.labels[]?; .name == "update:major" or .name == "bump:minor" or .name == "bump:major" or .name == "needs-human")' <<<"$pr")
 
             if [ -z "$sha" ]; then
               skipped=$(( skipped + 1 ))
@@ -257,9 +257,11 @@ jobs:
             age=$(( now - $(date -u -d "$committed" +%s) ))
             reason=""
 
-            # Majors never auto-merge. The label is added deterministically by
-            # renovate-presets.json, so this needs no version parsing.
-            [ "$is_major" = "true" ] && reason="major"
+            # Majors and minors never auto-merge, and neither does a flake bump a human
+            # must review. The labels are read, never parsed for versions: update:major
+            # comes from renovate-presets.json; bump:minor, bump:major and needs-human
+            # come from _update-flake-lock.yml.
+            [ "$held" = "true" ] && reason="held-label"
             [ -z "$reason" ] && [ "$mergeable" != "MERGEABLE" ] && reason="not-mergeable"
             # BLOCKED covers unresolved review threads and missing required
             # checks; DIRTY is a conflict; BEHIND/DRAFT are Renovate's to fix.
@@ -315,8 +317,9 @@ jobs:
               rows="${rows}| \`${repo}#${num}\` | skipped | ${reason} |"$'\n'
               # A PR this sweep will not merge, and that has outlived the
               # policy, is a defect in the config above — not a backlog item.
-              # Counted only here: a PR merged on this run was never stuck.
-              if [ "$age" -gt "$stall_age" ]; then
+              # Counted only here: a PR merged on this run was never stuck. A label hold
+              # waits on a human by design, so only an unlabelled hold can be a defect.
+              if [ "$age" -gt "$stall_age" ] && [ "$reason" != "held-label" ]; then
                 stalled=$(( stalled + 1 ))
                 stall_rows="${stall_rows}| \`${repo}#${num}\` | ${reason} | $(( age / 86400 ))d |"$'\n'
               fi

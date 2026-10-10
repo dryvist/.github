@@ -200,3 +200,15 @@
 - name: "update:major"
   color: "B91C1C"
   description: "Major version update - never auto-merged; opens for human review"
+
+- name: "bump:minor"
+  color: "B45309"
+  description: "First-party minor release bump - never auto-merged; opens for human review"
+
+- name: "bump:major"
+  color: "B91C1C"
+  description: "First-party major release bump - never auto-merged; opens for human review"
+
+- name: "needs-human"
+  color: "B91C1C"
+  description: "Auto-merge withheld; a person must review and merge"
