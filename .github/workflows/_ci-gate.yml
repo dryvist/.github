@@ -842,13 +842,37 @@ jobs:
     secrets:
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
+  # Every reusable-workflow `uses:` in the caller must resolve: a missing local
+  # file, or a dryvist ref absent at its ref, fails the gate. Not filter-gated
+  # and never skipped, so a broken reference cannot merge green.
+  uses-resolve:
+    name: Uses Resolve
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Sparse-checkout the uses checker from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-uses-resolve.sh
+          sparse-checkout-cone-mode: false
+      - name: Check every reusable workflow reference resolves
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .gh-shared/scripts/ci-gate-uses-resolve.sh
+
   # ============================================================================
   # MERGE GATE — the only check that branch protection requires.
   # `name:` MUST stay "Merge Gate" (matches existing required_status_checks).
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh]
+    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh, uses-resolve]
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
