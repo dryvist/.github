@@ -356,6 +356,15 @@ on:
         required: false
         default: 0
 
+      ansible_lint_args:
+        description: >-
+          Extra arguments for ansible-lint, forwarded to `_ansible-ci.yml`'s
+          `lint_args`, for example `tests/canary/ansible` to lint one directory.
+          Empty (default) keeps the lint scope unchanged.
+        type: string
+        required: false
+        default: ''
+
       test_command:
         description: >-
           Shell command that runs this repo's own unit tests as the `Repo Tests`
@@ -762,6 +771,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
+      lint_args: ${{ inputs.ansible_lint_args }}
       # scope's `molecule` output is a second layer on `_ansible-ci.yml`'s
       # own molecule toggle - only turns it off when scope definitively
       # said "none"; any other answer, or a scope failure, leaves it on.
