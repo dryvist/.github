@@ -1,21 +1,30 @@
 ---
-# Moves the floating major tag (v1 for v1.x.y) to a release commit, and only
-# after the canary passes on that commit.
+# Moves the floating major tag (v1 for v1.x.y) to a release commit once the
+# Canary check on that commit has succeeded.
 #
-# Triggers: a published release (release-please cuts these), or a manual
-# dispatch naming the tag. The canary's reusable calls resolve at the run's own
-# commit, so a dispatch must run from the tag ref (`--ref vX.Y.Z`); the promote
-# job refuses to move the tag when the run's commit is not the tag's commit.
+# The canary is not re-run here. The push to main that carries a release
+# commit already ran canary.yml on it, and that run sees a non-empty change
+# set. This workflow reads that result:
+#   - release published and workflow_dispatch: the tag names the commit.
+#   - workflow_run (Canary completed on main): the commit is the run's
+#     head_sha, and the release tag is the highest vX.Y.Z tag on it.
+# Whichever trigger arrives second, with the Canary check already completed
+# and successful, promotes. Nothing polls. A Canary still running, or not yet
+# visible, exits this run with a notice; the Canary completion re-triggers it.
+# A Canary failure fails this run and leaves the floating tag where it was. A
+# dispatch whose commit has no Canary check-run fails.
 #
-# A failed canary leaves this run red and the floating tag where it was.
-# Only one promotion runs at a time; a queued promotion replaces an older
-# queued one. A promotion never moves the floating tag backwards.
+# Only one promotion runs at a time. The floating tag never moves backwards.
 
 name: Promote Major Tag
 
 on:
   release:
     types: [published]
+  workflow_run:
+    workflows: [Canary]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -31,41 +40,90 @@ concurrency:
 
 jobs:
   resolve:
-    name: Resolve release tag
-    runs-on: ubuntu-latest
+    name: Resolve release tag and Canary result
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
+      checks: read
     outputs:
-      tag: ${{ steps.tag.outputs.tag }}
-      major: ${{ steps.tag.outputs.major }}
+      tag: ${{ steps.decide.outputs.tag }}
+      major: ${{ steps.decide.outputs.major }}
+      sha: ${{ steps.decide.outputs.sha }}
+      decision: ${{ steps.decide.outputs.decision }}
     steps:
-      - name: Validate the release tag
-        id: tag
+      - name: Check out tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Decide whether to promote
+        id: decide
         env:
-          EVENT_TAG: ${{ github.event.release.tag_name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ inputs.tag }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          tag="${EVENT_TAG:-$INPUT_TAG}"
-          if [[ ! "$tag" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+          set -euo pipefail
+          tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          emit() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
+
+          case "$EVENT_NAME" in
+            release) tag="$RELEASE_TAG" ;;
+            workflow_dispatch) tag="$INPUT_TAG" ;;
+            workflow_run)
+              tag="$(git tag --points-at "$RUN_SHA" | grep -E "$tag_re" | sort -V | tail -n 1 || true)"
+              if [[ -z "$tag" ]]; then
+                echo "::notice::$RUN_SHA has no vX.Y.Z tag; nothing to promote."
+                emit decision skip
+                exit 0
+              fi
+              ;;
+            *) echo "::error::unexpected event '$EVENT_NAME'"; exit 1 ;;
+          esac
+
+          if [[ ! "$tag" =~ $tag_re ]]; then
             echo "::error::'$tag' is not a release tag (vMAJOR.MINOR.PATCH)"
             exit 1
           fi
-          printf 'tag=%s\nmajor=v%s\n' "$tag" "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          sha="$(git rev-parse "refs/tags/$tag^{commit}")"
+          emit tag "$tag"
+          emit major "${tag%%.*}"
+          emit sha "$sha"
 
-  canary:
-    name: Canary
-    needs: resolve
-    permissions:
-      contents: read
-      pull-requests: read
-      actions: write
-    uses: ./.github/workflows/canary.yml
+          check="$(gh api "repos/$GH_REPO/commits/$sha/check-runs?check_name=Canary" \
+            --jq '.check_runs | sort_by(.started_at) | last // empty | "\(.status) \(.conclusion)"')"
+          if [[ -z "$check" ]]; then
+            if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
+              echo "::error::No Canary check-run on $sha; refusing to promote $tag."
+              exit 1
+            fi
+            echo "::notice::No Canary check-run on $sha yet; the Canary completion re-triggers this workflow."
+            emit decision wait
+            exit 0
+          fi
+
+          read -r status conclusion <<<"$check"
+          if [[ "$status" != completed ]]; then
+            echo "::notice::Canary on $sha is $status; the Canary completion re-triggers this workflow."
+            emit decision wait
+          elif [[ "$conclusion" == success ]]; then
+            emit decision promote
+          else
+            echo "::error::Canary on $sha concluded '$conclusion'; not promoting $tag."
+            exit 1
+          fi
 
   promote:
     name: Move floating major tag
-    needs: [resolve, canary]
-    runs-on: ubuntu-latest
+    needs: resolve
+    if: ${{ needs.resolve.outputs.decision == 'promote' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -76,16 +134,6 @@ jobs:
           ref: refs/tags/${{ needs.resolve.outputs.tag }}
           fetch-depth: 0
           fetch-tags: true
-
-      - name: Require the canary to have run on the tag's commit
-        env:
-          TAG: ${{ needs.resolve.outputs.tag }}
-        run: |
-          tag_sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
-          if [[ "$GITHUB_SHA" != "$tag_sha" ]]; then
-            echo "::error::This run is on $GITHUB_SHA but $TAG is $tag_sha. Dispatch with --ref $TAG."
-            exit 1
-          fi
 
       - name: Move the floating major tag
         env:
