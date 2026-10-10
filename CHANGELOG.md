@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.8](https://github.com/dryvist/.github/compare/v1.9.7...v1.9.8) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** keep the repo ansible.cfg roles_path in the lint search path ([#307](https://github.com/dryvist/.github/issues/307)) ([9e9a260](https://github.com/dryvist/.github/commit/9e9a2600aaa99882debb0f4df92d9107c8205cdb))
+
 ## [1.9.7](https://github.com/dryvist/.github/compare/v1.9.6...v1.9.7) (2026-10-10)
 
 
