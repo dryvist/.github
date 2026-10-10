@@ -372,4 +372,6 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           PR=$(gh pr list --head chore/flake-lock --json number --jq '.[0].number')
-          [ -n "$PR" ] && gh pr merge "$PR" --auto --squash || true
+          if [ -n "$PR" ]; then
+            gh pr merge "$PR" --auto --squash || true
+          fi
