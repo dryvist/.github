@@ -178,12 +178,16 @@ jobs:
             && steps.nondocs.outputs.match == 'true')
             || (github.event_name == 'push'
             && github.ref == 'refs/heads/main') }}
+      # False when the selector mapped the change to no scenario ([]), so a
+      # caller that runs its own Molecule job on this output never starts an
+      # empty matrix.
       molecule: >-
         ${{ steps.molecule_scenarios.outputs.present == 'true'
             && ((steps.filter.outputs.molecule == 'true'
             && steps.nondocs.outputs.match == 'true')
             || (github.event_name == 'push'
-            && github.ref == 'refs/heads/main')) }}
+            && github.ref == 'refs/heads/main'))
+            && steps.scenario_scope.outputs.scenarios != '[]' }}
       renovate_config: ${{ steps.filter.outputs.renovate_config }}
       # Normalize ONCE for every consumer: an empty string means all scenarios
       # only after a push to main; focused PRs and branch pushes use mapped

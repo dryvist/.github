@@ -116,6 +116,13 @@ test('the molecule output is false when the caller repo has no Molecule scenario
   );
 });
 
+test('the molecule output is false when the selector maps the change to no scenario', () => {
+  assert.match(
+    ansibleCi,
+    /&& github\.ref == 'refs\/heads\/main'\)\)\n\s+&& steps\.scenario_scope\.outputs\.scenarios != '\[\]' \}\}/,
+  );
+});
+
 test('a Markdown-only change selects no lint or Molecule outside the push to main', () => {
   assert.match(
     ansibleCi,
