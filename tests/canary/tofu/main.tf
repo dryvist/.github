@@ -3,5 +3,6 @@ terraform {
 }
 
 output "canary" {
-  value = "ok"
+  description = "Canary fixture output; read by nothing."
+  value       = "ok"
 }
