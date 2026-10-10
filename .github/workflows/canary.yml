@@ -3,10 +3,18 @@
 #
 # Stack jobs call reusables through local paths, so the code under test is the
 # PR head (pull_request) or the pushed commit (push to main). The release
-# commit is never re-canaried; promote-major-tag.yml reads this run's result
-# for the commit it tags. Fixtures under
-# tests/canary/<stack>/ are reached only through the directory inputs a
-# reusable exposes; the rest run against the repo root.
+# commit is never re-canaried. Fixtures under tests/canary/<stack>/ are reached
+# only through the directory inputs a reusable exposes; the rest run against
+# the repo root.
+#
+# The `promote` job at the end runs on push to main after this run's summary
+# succeeds. It moves the floating major tag when a release tag already names
+# this commit. When the release comes later, promote-major-tag.yml does it.
+# Both paths call scripts/promote-major-tag.sh.
+#
+# Only the `nix` stack runs File Size, until _file-size.yml drops its
+# per-workflow concurrency group. Every call in one run shares that group, so a
+# second call cancels the first.
 #
 # The job named `Canary` is the required check (ruleset, admin gate). It fails
 # when any caller job fails or is cancelled, and when a stack's change detection
@@ -44,6 +52,9 @@ jobs:
         ansible:
           - '**'
       ansible_ci: true
+      # Scopes lint to the fixture. Needs the `ansible_lint_args` input on
+      # _ci-gate.yml; until that lands, this caller fails on an unknown input.
+      ansible_lint_args: tests/canary/ansible
       dependency_review: false
       zizmor: false
 
@@ -78,6 +89,7 @@ jobs:
           - '**'
       tofu_ci: true
       tofu_working_directories: '["tests/canary/tofu"]'
+      file_size: false
       dependency_review: false
       zizmor: false
 
@@ -110,12 +122,13 @@ jobs:
         markdown:
           - '**'
       markdown_lint: true
+      file_size: false
       dependency_review: false
       zizmor: false
 
-  # _ansible-ci.yml with molecule off. Its molecule-mapping step runs even when
-  # molecule is off, so the contract_only map covers every Molecule-relevant
-  # path; otherwise any PR touching .github/workflows or tests fails there.
+  # _ansible-ci.yml, with Molecule on. The contract_only map covers the
+  # Molecule-relevant paths on a PR, so a PR touching only workflows skips
+  # Molecule. A push to main runs the full scenario set.
   ansible-direct:
     permissions:
       contents: read
@@ -123,7 +136,7 @@ jobs:
     uses: ./.github/workflows/_ansible-ci.yml
     with:
       emit_gate: false
-      molecule: false
+      molecule: true
       lint_args: tests/canary/ansible
       molecule_contract_filters: |
         contract_only:
@@ -189,3 +202,31 @@ jobs:
           result ansible-direct "$R_ANSIBLE_DIRECT"
           echo "ansible-direct: lint ran=${C_ANSIBLE_DIRECT:-false} (not asserted; see header)"
           exit "$fail"
+
+  # Second arrival for a release: this push-to-main run finished after the
+  # release tag named this commit. `needs` with `success()` means the summary
+  # above already concluded success, so the script skips the check-run lookup.
+  promote:
+    name: Move floating major tag
+    needs: [canary-summary]
+    if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      checks: read
+    concurrency:
+      group: promote-major-tag
+      cancel-in-progress: false
+    steps:
+      - name: Check out tags
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Promote if a release tag names this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: scripts/promote-major-tag.sh "$SHA" --gate-verified
