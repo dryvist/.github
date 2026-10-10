@@ -174,12 +174,14 @@ jobs:
     timeout-minutes: 5
     outputs:
       ansible: >-
-        ${{ steps.filter.outputs.ansible == 'true'
+        ${{ (steps.filter.outputs.ansible == 'true'
+            && steps.nondocs.outputs.match == 'true')
             || (github.event_name == 'push'
             && github.ref == 'refs/heads/main') }}
       molecule: >-
         ${{ steps.molecule_scenarios.outputs.present == 'true'
-            && (steps.filter.outputs.molecule == 'true'
+            && ((steps.filter.outputs.molecule == 'true'
+            && steps.nondocs.outputs.match == 'true')
             || (github.event_name == 'push'
             && github.ref == 'refs/heads/main')) }}
       renovate_config: ${{ steps.filter.outputs.renovate_config }}
@@ -256,6 +258,18 @@ jobs:
               - 'tests/**'
             renovate_config:
               - 'renovate.json'
+      # A change made only of Markdown (a role README, for example) runs no
+      # lint or Molecule; `match` is true when any changed file is not .md/.mdx.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
+        id: nondocs
+        with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          predicate-quantifier: every
+          filters: |
+            match:
+              - '**'
+              - '!**/*.md'
+              - '!**/*.mdx'
       # Match all Molecule-relevant paths once. File lists let the selector
       # verify that every changed path is covered by a scenario or caller
       # contract before narrowing the matrix.
