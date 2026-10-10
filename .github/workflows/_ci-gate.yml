@@ -125,7 +125,7 @@
 # in this file resolves through
 #   (github.event_name != 'pull_request' ||
 #    github.event.pull_request.head.repo.full_name == github.repository)
-#     && inputs.runner_label || 'ubuntu-latest'
+#     && inputs.runner_label || 'ubuntu-24.04'
 # The orchestration jobs (`changes`, `watchdog`, `gate`) substitute
 # `inputs.orchestration_runner` for `inputs.runner_label` in that expression.
 # A fork PR must never execute fork-author-controlled code on a caller's
@@ -305,11 +305,11 @@ on:
           so a single input migrates the whole gate. The orchestration jobs
           (`Detect Changes`, `Queue Watchdog`, `Merge Gate`) use
           `orchestration_runner` instead.
-          Defaults to ubuntu-latest. Pass a RunsOn label
+          Defaults to ubuntu-24.04. Pass a RunsOn label
           (see runs-on.com/configuration/job-labels) to opt in.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
 
       orchestration_runner:
         description: >-
@@ -319,7 +319,7 @@ on:
           the gate queued. Subject to the same fork-PR guard as `runner_label`.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
 
       nix_validate_runner_label:
         description: >-
@@ -448,7 +448,7 @@ jobs:
   # ============================================================================
   changes:
     name: Detect Changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
@@ -537,7 +537,7 @@ jobs:
     with:
       all_systems: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.all_systems }}
       focused_checks: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-24.04' }}
       timeout_minutes: ${{ inputs.nix_validate_timeout_minutes }}
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
@@ -567,7 +567,7 @@ jobs:
     if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   file-size:
     name: File Size
@@ -575,7 +575,7 @@ jobs:
     if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   token-limits:
     name: Token Limits
@@ -583,7 +583,7 @@ jobs:
     if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   python-security:
     name: Python Security
@@ -593,7 +593,7 @@ jobs:
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
       ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     # No `secrets: inherit` — _python-security.yml declares and consumes no
     # secrets, and unconditional inheritance trips zizmor's secrets-inherit
     # audit. (Divergence from the JacobPEvans-personal original, on purpose.)
@@ -608,7 +608,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # dependency-review is intentionally NOT `needs: changes` / filter-gated —
   # a supply-chain scan must run on every pull_request regardless of which
@@ -619,7 +619,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: ${{ inputs.dependency_review && github.event_name == 'pull_request' && github.event.repository.private == false }}
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 10
     # contents:read ONLY — a called workflow's job may never request more than
     # the caller granted, or the whole run dies at graph validation
@@ -643,7 +643,7 @@ jobs:
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_zizmor.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # Deliberately NOT in `gate.needs` — advisory pilot, warns only (see
   # _agent-pr-body.yml); not gated on `changes` (no path filter applies).
@@ -653,7 +653,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_agent-pr-body.yml@main
     with:
       block: ${{ inputs.agent_pr_body_block }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # No caller currently sets `ansible_ci: true` here (ansible repos call
   # `_ansible-ci.yml` directly, with their own local molecule handling) -
@@ -669,7 +669,7 @@ jobs:
       # own molecule toggle - only turns it off when scope definitively
       # said "none"; any other answer, or a scope failure, leaves it on.
       molecule: ${{ needs.scope.result != 'success' || needs.scope.outputs.molecule != 'none' }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # NOT filter-gated (same convention as osv-scan/dependency-review below): a
   # caller's `filters` input may not define an `ansible:` key at all, in
@@ -684,7 +684,7 @@ jobs:
     if: ${{ inputs.renovate_annotations }}
     uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   tofu-ci:
     name: OpenTofu CI
@@ -693,7 +693,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # osv-scan is NOT filter-gated — a vulnerability scan must run on every
   # pull_request regardless of which paths a diff touches.
@@ -703,7 +703,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
     with:
       config_file: ${{ inputs.osv_config_file }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # ============================================================================
   # WATCHDOG
@@ -713,7 +713,7 @@ jobs:
   watchdog:
     name: Queue Watchdog
     needs: changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     permissions:
       actions: write   # required to cancel this run on a queue timeout
       contents: read   # required for actions/checkout sparse-checkout
@@ -758,7 +758,7 @@ jobs:
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       # `actions: read` lets the run-report step read this run's jobs (durations
