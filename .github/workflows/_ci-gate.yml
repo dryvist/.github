@@ -33,6 +33,8 @@
 # and `renovate-annotations` are deliberately NOT gated on `scope` - each
 # has its own documented reason a supply-chain/workflow-security scan must
 # never be skippable by ANY signal, deterministic or classified.
+# `markdown-lint` and `file-size` depend only on their path filters, never on
+# `scope`: the classifier may narrow optional jobs, not these two.
 # https://github.com/dryvist/ai-workflows/blob/main/.github/scope-rubric.md
 #
 # Why the watchdog exists:
@@ -125,7 +127,9 @@
 # in this file resolves through
 #   (github.event_name != 'pull_request' ||
 #    github.event.pull_request.head.repo.full_name == github.repository)
-#     && inputs.runner_label || 'ubuntu-latest'
+#     && inputs.runner_label || 'ubuntu-24.04'
+# The orchestration jobs (`changes`, `watchdog`, `gate`) substitute
+# `inputs.orchestration_runner` for `inputs.runner_label` in that expression.
 # A fork PR must never execute fork-author-controlled code on a caller's
 # self-hosted RunsOn runners; same-repo PRs and non-PR events keep the
 # caller's label. Centralized here so consumers (nix-ai, nix-darwin, ...) no
@@ -145,12 +149,23 @@ on:
         description: >-
           YAML body for dorny/paths-filter. Use the convention names listed
           in this file's header to enable the matching conditional check.
+          Empty (default) uses the `profile` block when a profile is set,
+          otherwise the markdown block. A non-empty value overrides the
+          profile's block.
         type: string
         required: false
-        default: |
-          markdown:
-            - '**.md'
-            - '.markdownlint*'
+        default: ''
+
+      profile:
+        description: >-
+          Preset that supplies a default `filters` block and enables its
+          matching toggles: ansible, nix, tofu, python or docs. Empty
+          (default) keeps the explicit-input behaviour. A profile toggle is
+          OR-ed with its explicit input, so `profile` enables a job but cannot
+          turn one off.
+        type: string
+        required: false
+        default: ''
 
       nix_validate:
         description: Enable `Nix Validate` (gated on `nix` filter)
@@ -297,16 +312,27 @@ on:
 
       runner_label:
         description: >-
-          GitHub Actions runner label for the orchestration jobs in this
-          workflow (`Detect Changes`, `Queue Watchdog`, `Merge Gate`). Also
-          passed through to every child reusable workflow this gate calls
+          GitHub Actions runner label for the check jobs in this workflow.
+          Also passed through to every child reusable workflow this gate calls
           (`Nix Validate`, `Markdown Lint`, `File Size`, `Python Security`),
-          so a single input migrates the whole gate.
-          Defaults to ubuntu-latest. Pass a RunsOn label
+          so a single input migrates the whole gate. The orchestration jobs
+          (`Detect Changes`, `Queue Watchdog`, `Merge Gate`) use
+          `orchestration_runner` instead.
+          Defaults to ubuntu-24.04. Pass a RunsOn label
           (see runs-on.com/configuration/job-labels) to opt in.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
+
+      orchestration_runner:
+        description: >-
+          GitHub Actions runner label for the orchestration jobs (`Detect
+          Changes`, `Queue Watchdog`, `Merge Gate`). Defaults to a
+          GitHub-hosted image, so an unavailable self-hosted pool cannot leave
+          the gate queued. Subject to the same fork-PR guard as `runner_label`.
+        type: string
+        required: false
+        default: ubuntu-24.04
 
       nix_validate_runner_label:
         description: >-
@@ -329,6 +355,25 @@ on:
         type: number
         required: false
         default: 0
+
+      ansible_lint_args:
+        description: >-
+          Extra arguments for ansible-lint, forwarded to `_ansible-ci.yml`'s
+          `lint_args`, for example `tests/canary/ansible` to lint one directory.
+          Empty (default) keeps the lint scope unchanged.
+        type: string
+        required: false
+        default: ''
+
+      test_command:
+        description: >-
+          Shell command that runs this repo's own unit tests as the `Repo Tests`
+          check, for example `bun test`. Empty (default) turns the check off.
+          Node 22 is always set up. When `bun.lock` or `bun.lockb` exists, bun
+          is installed with `bun install --frozen-lockfile` first.
+        type: string
+        required: false
+        default: ''
 
       queue_timeout_minutes:
         description: >-
@@ -428,20 +473,81 @@ jobs:
   # ============================================================================
   changes:
     name: Detect Changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
-      nix: ${{ steps.filter.outputs.nix }}
-      markdown: ${{ steps.filter.outputs.markdown }}
-      python: ${{ steps.filter.outputs.python }}
-      ansible: ${{ steps.filter.outputs.ansible }}
-      terraform: ${{ steps.filter.outputs.terraform }}
+      nix: ${{ steps.filter.outputs.nix == 'true' || (inputs.profile == 'nix' && steps.unmapped.outputs.full == 'true') }}
+      markdown: ${{ steps.filter.outputs.markdown == 'true' || (inputs.profile == 'docs' && steps.unmapped.outputs.full == 'true') }}
+      python: ${{ steps.filter.outputs.python == 'true' || (inputs.profile == 'python' && steps.unmapped.outputs.full == 'true') }}
+      ansible: ${{ steps.filter.outputs.ansible == 'true' || (inputs.profile == 'ansible' && steps.unmapped.outputs.full == 'true') }}
+      terraform: ${{ steps.filter.outputs.terraform == 'true' || (inputs.profile == 'tofu' && steps.unmapped.outputs.full == 'true') }}
       extra: ${{ steps.filter.outputs.extra }}
+      profile-unmapped: ${{ steps.unmapped.outputs.full == 'true' }}
       is-deps-only: ${{ steps.detect-deps.outputs.is-deps-only }}
       is-flake-lock-change: ${{ steps.lockfilter.outputs.flake-lock }}
       is-nix-source-change: ${{ steps.lockfilter.outputs.nix-source }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # One filter body: an explicit `filters` input wins, else the profile's
+      # block, else the markdown default (the behaviour with no profile set).
+      - name: Resolve filter body
+        id: resolve
+        env:
+          PROFILE: ${{ inputs.profile }}
+          CALLER_FILTERS: ${{ inputs.filters }}
+        run: |
+          set -euo pipefail
+          markdown='markdown:
+            - "**.md"
+            - ".markdownlint*"'
+          case "$PROFILE" in
+            "") block="" ;;
+            ansible) block='ansible:
+            - "ansible/**"
+            - "roles/**"
+            - "playbooks/**"
+            - "inventory/**"
+            - "**/molecule/**"
+            - "**/group_vars/**"
+            - "**/host_vars/**"
+            - "requirements.yml"
+            - ".ansible-lint*"' ;;
+            nix) block='nix:
+            - "**.nix"
+            - "flake.lock"' ;;
+            tofu) block='terraform:
+            - "**.tf"
+            - "**.tofu"
+            - ".tflint.hcl"
+            - "**/*.tfvars"' ;;
+            python) block='python:
+            - "**.py"
+            - "pyproject.toml"
+            - "uv.lock"
+            - "requirements*.txt"
+            - "setup.cfg"
+            - "setup.py"' ;;
+            docs) block="" ;;
+            *)
+              echo "::error::unknown profile '$PROFILE' (expected ansible, nix, tofu, python or docs)"
+              exit 1
+              ;;
+          esac
+          if [[ -n "$CALLER_FILTERS" ]]; then
+            body="$CALLER_FILTERS"
+          elif [[ -n "$block" ]]; then
+            body="$markdown"$'\n'"$block"
+          else
+            body="$markdown"
+          fi
+          if [[ -n "$PROFILE" ]]; then
+            body="$body"$'\n'"changed-all:"$'\n'"  - \"**\""
+          fi
+          {
+            echo "filters<<RESOLVED_FILTERS_EOF"
+            printf '%s\n' "$body"
+            echo "RESOLVED_FILTERS_EOF"
+          } >> "$GITHUB_OUTPUT"
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
@@ -449,7 +555,10 @@ jobs:
           # action use the commit immediately before the push as its base.
           # PR events continue to compare against their PR base branch.
           base: ${{ github.ref }}
-          filters: ${{ inputs.filters }}
+          filters: ${{ steps.resolve.outputs.filters }}
+          # Lists each filter's matched files; `changed-all` (appended by the
+          # resolve step under a profile) lists every changed file.
+          list-files: ${{ inputs.profile != '' && 'json' || 'none' }}
 
       # Static (not caller-supplied) so `is-flake-lock-change` and
       # `is-nix-source-change` are always available regardless of how a
@@ -483,8 +592,25 @@ jobs:
           # empty `ref` silently checks out the default branch instead.
           ref: ${{ job.workflow_sha }}
           path: .gh-shared
-          sparse-checkout: scripts/ci-gate-detect-deps-only.sh
+          sparse-checkout: |
+            scripts/ci-gate-detect-deps-only.sh
+            scripts/ci-gate-unmapped.sh
           sparse-checkout-cone-mode: false
+
+      # A profile must never skip a path it does not map: a changed file (docs
+      # excepted) that no filter covers runs the full profile with a warning.
+      - name: Flag paths no profile filter covers
+        id: unmapped
+        if: ${{ inputs.profile != '' }}
+        env:
+          ALL: ${{ steps.filter.outputs.changed-all_files }}
+          NIX: ${{ steps.filter.outputs.nix_files }}
+          MARKDOWN: ${{ steps.filter.outputs.markdown_files }}
+          PYTHON: ${{ steps.filter.outputs.python_files }}
+          ANSIBLE: ${{ steps.filter.outputs.ansible_files }}
+          TERRAFORM: ${{ steps.filter.outputs.terraform_files }}
+          EXTRA: ${{ steps.filter.outputs.extra_files }}
+        run: bash .gh-shared/scripts/ci-gate-unmapped.sh
 
       # Milliseconds, and it is the only thing standing between a stale author
       # literal and a detector that answers "false" forever without saying so.
@@ -510,14 +636,14 @@ jobs:
     # further when `scope` definitively succeeded and said "none" - a
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
-    if: ${{ !cancelled() && inputs.nix_validate && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.nix_validate || inputs.profile == 'nix') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     # Keep nested workflow calls on the same immutable source revision while
     # validating changes to this reusable workflow repository.
     uses: ./.github/workflows/_nix-validate.yml
     with:
       all_systems: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.all_systems }}
       focused_checks: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (inputs.nix_validate_runner_label || inputs.runner_label) || 'ubuntu-24.04' }}
       timeout_minutes: ${{ inputs.nix_validate_timeout_minutes }}
 
   # macos-latest is hardcoded in _nix-build.yml (no runner_label input), so
@@ -538,24 +664,24 @@ jobs:
     # something other than "full" (lint-only or none skip it); a scope
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
-    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && (inputs.nix_build || inputs.profile == 'nix') && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_nix-build.yml@main
 
   markdown-lint:
     name: Markdown Lint
-    needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    needs: changes
+    if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
     uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   file-size:
     name: File Size
-    needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    needs: changes
+    if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
     uses: dryvist/.github/.github/workflows/_file-size.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   token-limits:
     name: Token Limits
@@ -563,17 +689,17 @@ jobs:
     if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_token-limits.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   python-security:
     name: Python Security
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.python_security && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.python_security || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_python-security.yml@main
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
       ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     # No `secrets: inherit` — _python-security.yml declares and consumes no
     # secrets, and unconditional inheritance trips zizmor's secrets-inherit
     # audit. (Divergence from the JacobPEvans-personal original, on purpose.)
@@ -584,11 +710,11 @@ jobs:
     # Full-tier: this runs the full lint/format/type/test matrix, not just
     # a fast validate - only narrows when scope succeeded and said
     # something other than full.
-    if: ${{ !cancelled() && inputs.python_ci && needs.changes.outputs.python == 'true' && (needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && (inputs.python_ci || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: dryvist/.github/.github/workflows/_python-ci.yml@main
     with:
       python_versions: ${{ inputs.python_ci_versions }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # dependency-review is intentionally NOT `needs: changes` / filter-gated —
   # a supply-chain scan must run on every pull_request regardless of which
@@ -599,7 +725,7 @@ jobs:
   dependency-review:
     name: Dependency Review
     if: ${{ inputs.dependency_review && github.event_name == 'pull_request' && github.event.repository.private == false }}
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 10
     # contents:read ONLY — a called workflow's job may never request more than
     # the caller granted, or the whole run dies at graph validation
@@ -623,7 +749,7 @@ jobs:
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
     uses: dryvist/.github/.github/workflows/_zizmor.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # Deliberately NOT in `gate.needs` — advisory pilot, warns only (see
   # _agent-pr-body.yml); not gated on `changes` (no path filter applies).
@@ -633,7 +759,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_agent-pr-body.yml@main
     with:
       block: ${{ inputs.agent_pr_body_block }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # No caller currently sets `ansible_ci: true` here (ansible repos call
   # `_ansible-ci.yml` directly, with their own local molecule handling) -
@@ -641,15 +767,16 @@ jobs:
   ansible-ci:
     name: Ansible CI
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.ansible_ci && needs.changes.outputs.ansible == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.ansible_ci || inputs.profile == 'ansible') && needs.changes.outputs.ansible == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
     with:
       emit_gate: false
+      lint_args: ${{ inputs.ansible_lint_args }}
       # scope's `molecule` output is a second layer on `_ansible-ci.yml`'s
       # own molecule toggle - only turns it off when scope definitively
       # said "none"; any other answer, or a scope failure, leaves it on.
       molecule: ${{ needs.scope.result != 'success' || needs.scope.outputs.molecule != 'none' }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # NOT filter-gated (same convention as osv-scan/dependency-review below): a
   # caller's `filters` input may not define an `ansible:` key at all, in
@@ -664,16 +791,16 @@ jobs:
     if: ${{ inputs.renovate_annotations }}
     uses: dryvist/.github/.github/workflows/_renovate-annotations.yml@main
     with:
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   tofu-ci:
     name: OpenTofu CI
     needs: [changes, scope]
-    if: ${{ !cancelled() && inputs.tofu_ci && needs.changes.outputs.terraform == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
+    if: ${{ !cancelled() && (inputs.tofu_ci || inputs.profile == 'tofu') && needs.changes.outputs.terraform == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
     uses: dryvist/.github/.github/workflows/_tofu-ci.yml@main
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # osv-scan is NOT filter-gated — a vulnerability scan must run on every
   # pull_request regardless of which paths a diff touches.
@@ -683,7 +810,7 @@ jobs:
     uses: dryvist/.github/.github/workflows/_osv-scan.yml@main
     with:
       config_file: ${{ inputs.osv_config_file }}
-      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+      runner_label: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # ============================================================================
   # WATCHDOG
@@ -693,7 +820,7 @@ jobs:
   watchdog:
     name: Queue Watchdog
     needs: changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     permissions:
       actions: write   # required to cancel this run on a queue timeout
       contents: read   # required for actions/checkout sparse-checkout
@@ -728,17 +855,67 @@ jobs:
     secrets:
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
+  # Every reusable-workflow `uses:` in the caller must resolve: a missing local
+  # file, or a dryvist ref absent at its ref, fails the gate. Not filter-gated
+  # and never skipped, so a broken reference cannot merge green.
+  uses-resolve:
+    name: Uses Resolve
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Sparse-checkout the uses checker from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-uses-resolve.sh
+          sparse-checkout-cone-mode: false
+      - name: Check every reusable workflow reference resolves
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .gh-shared/scripts/ci-gate-uses-resolve.sh
+
+  # The caller's own unit tests, run as one gate check so they can block a
+  # merge. Set `test_command` to the exact command the repo runs locally. Not
+  # filter-gated: when set, it runs on every event, like renovate-annotations.
+  repo-tests:
+    name: Repo Tests
+    if: ${{ inputs.test_command != '' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: '22'
+      - name: Set up bun
+        if: ${{ hashFiles('bun.lock', 'bun.lockb') != '' }}
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Install bun dependencies
+        if: ${{ hashFiles('bun.lock', 'bun.lockb') != '' }}
+        run: bun install --frozen-lockfile
+      - name: Run repo tests
+        env:
+          TEST_COMMAND: ${{ inputs.test_command }}
+        run: bash -c "$TEST_COMMAND"
+
   # ============================================================================
   # MERGE GATE — the only check that branch protection requires.
   # `name:` MUST stay "Merge Gate" (matches existing required_status_checks).
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh]
+    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh, uses-resolve, repo-tests]
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-24.04' }}
     timeout-minutes: 5
     permissions:
       # `actions: read` lets the run-report step read this run's jobs (durations
@@ -772,7 +949,7 @@ jobs:
             nix-validate, nix-build, markdown-lint, file-size, token-limits,
             python-security, python-ci, ansible-ci, renovate-annotations,
             tofu-ci, osv-scan, dependency-review, zizmor, watchdog,
-            flake-lock-fresh
+            flake-lock-fresh, repo-tests
           CI_GATE_ALLOWED_FAILURES: scope
         run: node .gh-shared/scripts/ci-gate-aggregate.mts
       # Run after every sibling is terminal, when timestamps are final.
