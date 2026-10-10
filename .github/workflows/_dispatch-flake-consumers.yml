@@ -1,26 +1,24 @@
 # Reusable: Dispatch a repository_dispatch to downstream consumers
 #
-# Fans out a repository_dispatch (event_type=update-flake-input,
-# client_payload.input=<source_input>) to every repo in the caller's
-# DISPATCH_CONSUMERS variable. Each caller keeps its own trigger and its
-# own DISPATCH_CONSUMERS list; this workflow holds the shared token-mint
-# and cross-repo dispatch call so it lives in exactly one place.
+# Fans out a repository_dispatch (event_type=update-flake-input) to every repo in
+# the caller's DISPATCH_CONSUMERS variable. The client_payload carries
+#   input  = source_input   the flake input the releasing repo represents downstream
+#   repo   = the releasing repository's name
+#   tag    = release_tag   the release being announced (empty when none)
+# Each caller keeps its own trigger and its own DISPATCH_CONSUMERS list; this
+# workflow holds the shared token-mint and cross-repo dispatch call so it lives
+# in exactly one place.
 #
 # The event_type defaults to update-flake-input: every flake-consumer's
-# deps-flake-lock.yml listens for exactly that name, and the payload is
-# informational (see below). A caller with a different downstream listener
-# overrides it via the event_type input.
+# deps-flake-lock.yml listens for exactly that name. A caller with a different
+# downstream listener overrides it via the event_type input.
 #
-# WHAT THE FLAKE CONSUMER NOW DOES (changed 2026-08-05). The event_type name is
-# unchanged so no publisher needed editing, but the receiver no longer bumps the
-# single input named in client_payload.input. It relocks the WHOLE flake
-# (`nix flake update`) onto one shared branch, `chore/flake-lock`, so a repo
-# only ever has one open flake PR — see _update-flake-lock.yml. `source_input`
-# is therefore informational to the consumer rather than a command.
-#
-# Consequence worth knowing: client_payload.input is attacker-settable on any
-# repository_dispatch, and the consumer deliberately does not thread it into a
-# PR body or a run: step. Do not re-add that path.
+# WHAT THE FLAKE CONSUMER DOES. The receiver relocks the input named in
+# client_payload.input alone (`nix flake update <input>`) when that name is a root
+# input of its flake.lock, and otherwise relocks the whole lock except first-party
+# inputs — see _update-flake-lock.yml, which validates the name before use. The
+# consumer's PR branch is always chore/flake-lock, so a repo has one open flake PR.
+# client_payload.repo and client_payload.tag are informational: nothing acts on them.
 #
 # vars.DISPATCH_CONSUMERS, vars.GH_APP_CLIENT_ID, and the
 # GH_APP_PRIVATE_KEY secret all resolve in the caller's context
@@ -40,6 +38,13 @@ on:
         type: string
         required: false
         default: ${{ github.event.repository.name }}
+      release_tag:
+        description: >-
+          Release tag of the producer being announced, for example v1.2.0.
+          Sent as client_payload.tag. Empty when the caller has no release.
+        type: string
+        required: false
+        default: ""
       event_type:
         description: >-
           repository_dispatch event_type to send. Defaults to
@@ -90,8 +95,12 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TARGET_REPO: ${{ matrix.repo }}
           SOURCE_INPUT: ${{ inputs.source_input }}
+          PRODUCER_REPO: ${{ github.event.repository.name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
           EVENT_TYPE: ${{ inputs.event_type }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY_OWNER}/${TARGET_REPO}/dispatches" \
             -f event_type="${EVENT_TYPE}" \
-            -f "client_payload[input]=${SOURCE_INPUT}"
+            -f "client_payload[input]=${SOURCE_INPUT}" \
+            -f "client_payload[repo]=${PRODUCER_REPO}" \
+            -f "client_payload[tag]=${RELEASE_TAG}"
