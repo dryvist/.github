@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/dryvist/.github/compare/v1.8.7...v1.9.0) (2026-10-10)
+
+
+### Features
+
+* **release:** document the floating v1 channel for callers ([#289](https://github.com/dryvist/.github/issues/289)) ([5c022d1](https://github.com/dryvist/.github/commit/5c022d1fc26571f2c65c38bcb7f1dbe05bebc5e5))
+
 ## [1.8.7](https://github.com/dryvist/.github/compare/v1.8.6...v1.8.7) (2026-10-10)
 
 
