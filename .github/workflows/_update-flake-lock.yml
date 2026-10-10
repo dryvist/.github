@@ -85,12 +85,6 @@ on:
       GH_APP_PRIVATE_KEY:
         required: true
 
-concurrency:
-  group: flake-lock-${{ github.repository }}
-  # MUST stay false — see the header. A queued dispatch is correct; a cancelled
-  # sibling is the bug this workflow was created to fix.
-  cancel-in-progress: false
-
 permissions: {}
 
 jobs:

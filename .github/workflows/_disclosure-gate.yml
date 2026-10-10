@@ -44,10 +44,6 @@ on:
           workflow-graph startup failure with no logs.
         required: false
 
-concurrency:
-  group: disclosure-gate-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: read

@@ -119,10 +119,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: converge-${{ github.repository }}-${{ inputs.target }}
-  cancel-in-progress: false
-
 jobs:
   # 1. Classify scope — the same dorny/paths-filter shape _ci-gate.yml uses,
   # so a caller's existing `filters:` block works here unchanged. Runs on
