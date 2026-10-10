@@ -21,6 +21,9 @@
 #   QUEUE_TIMEOUT_MINUTES — minutes a job may wait for a runner before the run is cancelled
 #   REPO                  — owner/repo of the current workflow run
 #   RUN_ID                — workflow run id
+# Optional env:
+#   WATCH_MAX_MINUTES     — minutes after which the watchdog stops watching and exits 0
+#                           (default 55; keep it below the job's timeout-minutes)
 
 set -euo pipefail
 
@@ -43,6 +46,10 @@ sibling_jobs() {
 # instead of crashing bash arithmetic, which only handles integers.
 limit_seconds=$(awk "BEGIN{printf \"%d\", $QUEUE_TIMEOUT_MINUTES * 60}")
 poll_interval=30
+# Stop watching before the job's own timeout-minutes, so a long healthy run never
+# turns the watchdog red. $SECONDS is bash's elapsed-time builtin.
+watch_seconds=$(awk "BEGIN{printf \"%d\", ${WATCH_MAX_MINUTES:-55} * 60}")
+WATCH_MAX_MINUTES=${WATCH_MAX_MINUTES:-55}
 
 while :; do
   jobs=$(sibling_jobs)
@@ -55,6 +62,10 @@ while :; do
   unfinished=$(awk -F'\t' 'NF && $2 != "completed" { n++ } END { print n + 0 }' <<<"$jobs")
   if [ "$unfinished" -eq 0 ]; then
     echo "All sibling jobs completed. Nothing to cancel."
+    exit 0
+  fi
+  if [ "$SECONDS" -ge "$watch_seconds" ]; then
+    echo "::notice::Queue Watchdog stopped watching after ${WATCH_MAX_MINUTES}m; no job had waited for a runner longer than ${QUEUE_TIMEOUT_MINUTES}m."
     exit 0
   fi
   sleep "$poll_interval"

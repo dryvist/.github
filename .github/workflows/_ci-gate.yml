@@ -11,8 +11,8 @@
 #               it - see "Content-aware scope classifier" below
 #   changes  -> dorny/paths-filter on caller-supplied filters
 #   <check jobs> -> per-check reusable workflows, gated on (input toggle && filter)
-#   watchdog -> sleeps queue_timeout_minutes, cancels any sibling job still
-#               in `queued` state so the gate is never blocked indefinitely
+#   watchdog -> watches every sibling until it completes; cancels the run when
+#               any job waits for a runner longer than queue_timeout_minutes
 #   gate     -> name MUST stay "Merge Gate" (matches branch protection rulesets);
 #               aggregates results with the shared result script
 #
@@ -41,8 +41,8 @@
 #
 # GitHub Actions only schedules a `needs:` dependent once every upstream job
 # reaches a *terminal* state (success/failure/cancelled/skipped). A job stuck
-# in `queued` (e.g. self-hosted runner never picks it up) is NOT terminal. If a
-# sibling remains queued past the timeout, the watchdog cancels the run so an
+# waiting for a runner (e.g. a self-hosted runner never picks it up) is NOT
+# terminal. If any job waits past the timeout, the watchdog cancels the run so an
 # incomplete check set cannot pass the required `Merge Gate`.
 #
 # Caller requirements (thin consumer shape):
@@ -844,9 +844,9 @@ jobs:
       actions: write   # required to cancel this run on a queue timeout
       contents: read   # required for actions/checkout sparse-checkout
     # Hardcoded ceiling — GHA expressions don't support arithmetic so this
-    # can't be derived from `queue_timeout_minutes`. 30 min handles up to a
-    # ~25-minute queue_timeout with comfortable margin.
-    timeout-minutes: 30
+    # can't be derived from `queue_timeout_minutes`. The watchdog lives as long
+    # as the run and stops itself at WATCH_MAX_MINUTES (55), inside this ceiling.
+    timeout-minutes: 60
     steps:
       - name: Sparse-checkout watchdog script from this repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
