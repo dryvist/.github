@@ -111,8 +111,8 @@ jobs:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
 
-The reusable workflow eager-auto-merges every release PR (patch, minor, or
-major). Pass `with: { auto-merge: false }` to opt a repo out of auto-merge.
+The reusable workflow opens or updates the release PR and leaves it open. A
+person merges it, for every bump type (patch, minor, or major).
 
 Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 

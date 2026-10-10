@@ -59,8 +59,8 @@ not a per-repo knob. Split large files rather than widening org defaults.
 
 Release-please is **org-native** to this repo: every dryvist repo inherits the
 reusable `.github/workflows/_release-please.yml@main` here (not a cross-account
-JacobPEvans workflow). It eager-auto-merges **every** release PR (patch, minor,
-or major) once checks pass — there is no automated major-bump block. A dryvist
+JacobPEvans workflow). It opens the release PR and leaves it open for a person to
+merge, for every bump type (patch, minor, or major). A dryvist
 repo's `release-please.yml` caller forwards a single secret:
 
 | dryvist org secret | Reusable workflow secret |
