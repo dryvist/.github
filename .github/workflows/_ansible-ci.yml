@@ -30,8 +30,8 @@
 #       with: { emit_gate: true }
 # Scope policy (canonical): pull requests and non-main pushes use only the
 # Molecule scenarios mapped to their changed paths. An unmapped path never
-# fails the run. With no mapping configured, it runs the full profile (the
-# caller's `molecule_scenarios`) and emits one warning naming the path. Declared
+# fails the run. It runs the full profile (the caller's `molecule_scenarios`)
+# and emits one warning naming the path, with or without mappings. Declared
 # full-matrix inputs defer Molecule to the post-merge run on `main`. CI harness
 # files under `.github/` select no scenario once mappings are configured. Keep
 # every classifier inside the required Merge Gate. See the policy and history in
@@ -63,11 +63,10 @@ on:
         description: >-
           Optional YAML map of molecule scenario name -> paths, in
           dorny/paths-filter syntax. Pull requests and non-main pushes run only
-          the scenarios whose paths changed. With no mapping configured, an
-          unmapped Molecule path runs the full profile and warns. With mappings
-          configured, a changed path that matches no scenario, contract, or
-          full-matrix rule still fails classification. Full-matrix paths defer
-          all Molecule work to the push to main after merge.
+          the scenarios whose paths changed. An unmapped Molecule path runs the
+          full profile and warns, whether or not mappings are configured.
+          Full-matrix paths defer all Molecule work to the push to main after
+          merge.
         type: string
         default: ""
       molecule_contract_filters:
@@ -159,8 +158,7 @@ on:
         description: >-
           JSON array of scenarios mapped to changed paths, [] when a caller
           contract or full-matrix rule covers the change, and an empty string
-          for the full suite (a push to main, or an unmapped path with no mapping
-          configured). Callers
+          for the full suite (a push to main, or an unmapped path). Callers
           that own Molecule locally (`molecule: false`) read this output so
           every repo shares ONE change-detection definition.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
@@ -201,6 +199,7 @@ jobs:
         id: filter
         with:
           base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          list-files: json
           filters: |
             ansible:
               - '**.yml'
@@ -304,12 +303,12 @@ jobs:
           inputs.molecule_scenario_filters == '' &&
           inputs.molecule_contract_filters == '' }}
         env:
-          CHANGED_FILES: ${{ steps.classify.outputs.changed_files }}
+          MOLECULE_FILES: ${{ steps.filter.outputs.molecule_files }}
         run: |
           set -euo pipefail
           while IFS= read -r path; do
             echo "::warning::unmapped path $path, running full profile"
-          done < <(jq -r '.[]' <<<"${CHANGED_FILES:-[]}")
+          done < <(jq -r '.[]' <<<"${MOLECULE_FILES:-[]}")
           echo "full_profile=true" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: >-
@@ -342,7 +341,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           SELECTED_SCENARIOS: ${{ steps.scenario_selection.outputs.scenarios }}
-          FULL_PROFILE: ${{ steps.unmapped.outputs.full_profile }}
+          FULL_PROFILE: ${{ steps.unmapped.outputs.full_profile || steps.scenario_selection.outputs.full_profile }}
         run: |
           if [[ "$EVENT_NAME" == push && "$REF" == refs/heads/main ]]; then
             printf 'scenarios=\n' >> "$GITHUB_OUTPUT"

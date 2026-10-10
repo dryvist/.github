@@ -56,9 +56,19 @@ test('unmapped Molecule paths never fail the run; they select the full profile w
   assert.doesNotMatch(ansibleCi, /Add Molecule scenario or caller-contract path mappings/);
   assert.match(ansibleCi, /echo "::notice::molecule off, mapping not required"/);
   assert.match(ansibleCi, /echo "::warning::unmapped path \$path, running full profile"/);
-  assert.match(ansibleCi, /done < <\(jq -r '\.\[\]' <<<"\$\{CHANGED_FILES:-\[\]\}"\)/);
+  assert.match(ansibleCi, /done < <\(jq -r '\.\[\]' <<<"\$\{MOLECULE_FILES:-\[\]\}"\)/);
   assert.match(ansibleCi, /echo "full_profile=true" >> "\$GITHUB_OUTPUT"/);
   assert.match(ansibleCi, /elif \[\[ "\$FULL_PROFILE" == true \]\]; then\n\s+printf 'scenarios=\\n'/);
+});
+
+test('unmapped paths warn only on molecule-matched files and select the full profile whether or not mappings are set', () => {
+  assert.match(ansibleCi, /id: filter\n\s+with:\n\s+base: [^\n]*\n\s+list-files: json/);
+  assert.match(ansibleCi, /MOLECULE_FILES: \$\{\{ steps\.filter\.outputs\.molecule_files \}\}/);
+  assert.match(
+    ansibleCi,
+    /FULL_PROFILE: \$\{\{ steps\.unmapped\.outputs\.full_profile \|\| steps\.scenario_selection\.outputs\.full_profile \}\}/,
+  );
+  assert.doesNotMatch(ansibleCi, /still fails classification/);
 });
 
 test('Galaxy installs run only when requirements.yml exists and say so when it does not', () => {
