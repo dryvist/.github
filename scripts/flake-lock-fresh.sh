@@ -5,8 +5,10 @@
 #   default (freshness): fail when an owned input is not locked at its ref's commit.
 #   --pr BASE_LOCK: compare against the base branch's lock, with no live lookup of
 #                   refs. Fail when an owned input moved to a rev that does
-#                   not descend from the base lock's rev. A missing BASE_LOCK means
-#                   the lock is new and only the pinned-rev rule applies.
+#                   not descend from the base lock's rev. An input whose ref changed
+#                   is a deliberate re-pin and is not compared (the ref change shows in
+#                   flake.nix). A missing BASE_LOCK means the lock is new and only the
+#                   pinned-rev rule applies.
 # Env:   OWNERS                  space-separated input owners to check (case-insensitive);
 #                                inputs from any other owner are ignored. Defaults to OWNED below.
 #        GIT_TOKEN               optional token for private inputs
@@ -86,6 +88,13 @@ while IFS=$'\t' read -r name repo ref rev; do
       | $l.nodes[if type == "string" then . else last end].locked.rev // empty' "$base")
     if [ -z "$old" ] || [ "$old" = "$rev" ]; then
       echo "$name: unchanged from base"
+      continue
+    fi
+    oldref=$(jq -r --arg n "$name" '. as $l | ($l.nodes[$l.root].inputs // {})[$n] // empty
+      | $l.nodes[if type == "string" then . else last end].original
+      | if .rev then "PINNED" elif .ref then .ref else "HEAD" end' "$base")
+    if [ "$oldref" != "$ref" ]; then
+      echo "$name: ref changed from $oldref to $ref; the new rev is not compared with the base rev"
       continue
     fi
     # status is "ahead" when the new rev descends from the base rev.
