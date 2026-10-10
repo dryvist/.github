@@ -73,7 +73,7 @@
 #
 # Filter name convention (caller defines these in `filters:` input):
 #
-#   nix            -> gates `nix_validate` and `nix_build`
+#   nix            -> gates `nix_validate` (profile nix enables it); `nix_build` is opt-in
 #   markdown       -> gates `markdown_lint`, `file_size`, and `token_limits`
 #                     (`file_size` also fires on `nix` and `terraform`)
 #   python         -> gates `python_security`
@@ -190,6 +190,14 @@ on:
           when the PR targets `main` — see the job's own comment.
         type: boolean
         default: false
+      nix_build_command:
+        description: >-
+          Build command for `Nix Build`, passed to `_nix-build.yml` as
+          `build-command`. Empty (default) runs the home-manager
+          `homeConfigurations.$(whoami).activationPackage` build.
+        type: string
+        required: false
+        default: ''
       nix_skip_deps_only:
         description: >-
           Skip `nix-validate`/`nix-build` on dependency-only bot PRs (see
@@ -673,8 +681,10 @@ jobs:
     # something other than "full" (lint-only or none skip it); a scope
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
-    if: ${{ !cancelled() && (inputs.nix_build || inputs.profile == 'nix') && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
+    if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
     uses: ./.github/workflows/_nix-build.yml
+    with:
+      build-command: ${{ inputs.nix_build_command }}
 
   markdown-lint:
     name: Markdown Lint
