@@ -126,6 +126,8 @@
 #   (github.event_name != 'pull_request' ||
 #    github.event.pull_request.head.repo.full_name == github.repository)
 #     && inputs.runner_label || 'ubuntu-latest'
+# The orchestration jobs (`changes`, `watchdog`, `gate`) substitute
+# `inputs.orchestration_runner` for `inputs.runner_label` in that expression.
 # A fork PR must never execute fork-author-controlled code on a caller's
 # self-hosted RunsOn runners; same-repo PRs and non-PR events keep the
 # caller's label. Centralized here so consumers (nix-ai, nix-darwin, ...) no
@@ -297,13 +299,24 @@ on:
 
       runner_label:
         description: >-
-          GitHub Actions runner label for the orchestration jobs in this
-          workflow (`Detect Changes`, `Queue Watchdog`, `Merge Gate`). Also
-          passed through to every child reusable workflow this gate calls
+          GitHub Actions runner label for the check jobs in this workflow.
+          Also passed through to every child reusable workflow this gate calls
           (`Nix Validate`, `Markdown Lint`, `File Size`, `Python Security`),
-          so a single input migrates the whole gate.
+          so a single input migrates the whole gate. The orchestration jobs
+          (`Detect Changes`, `Queue Watchdog`, `Merge Gate`) use
+          `orchestration_runner` instead.
           Defaults to ubuntu-latest. Pass a RunsOn label
           (see runs-on.com/configuration/job-labels) to opt in.
+        type: string
+        required: false
+        default: ubuntu-latest
+
+      orchestration_runner:
+        description: >-
+          GitHub Actions runner label for the orchestration jobs (`Detect
+          Changes`, `Queue Watchdog`, `Merge Gate`). Defaults to a
+          GitHub-hosted image, so an unavailable self-hosted pool cannot leave
+          the gate queued. Subject to the same fork-PR guard as `runner_label`.
         type: string
         required: false
         default: ubuntu-latest
@@ -435,7 +448,7 @@ jobs:
   # ============================================================================
   changes:
     name: Detect Changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       nix: ${{ steps.filter.outputs.nix }}
@@ -700,7 +713,7 @@ jobs:
   watchdog:
     name: Queue Watchdog
     needs: changes
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
     permissions:
       actions: write   # required to cancel this run on a queue timeout
       contents: read   # required for actions/checkout sparse-checkout
@@ -745,7 +758,7 @@ jobs:
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-latest' }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.orchestration_runner || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       # `actions: read` lets the run-report step read this run's jobs (durations
