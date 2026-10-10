@@ -23,11 +23,11 @@ on:
     inputs:
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest; pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04; pass a
           self-hosted label to opt the calling repo into on-prem runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
     secrets:
       GITLEAKS_PRIVATE_CONFIG:
         description: Org gitleaks ruleset (dryvist org secret). Required.
@@ -43,10 +43,6 @@ on:
           failure from the scan step below instead of an opaque
           workflow-graph startup failure with no logs.
         required: false
-
-concurrency:
-  group: disclosure-gate-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -92,7 +88,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: dryvist/.github
-          ref: ${{ github.job_workflow_sha || 'main' }}
+          ref: ${{ job.workflow_sha }}
           path: .gh-shared
           sparse-checkout: |
             scripts/disclosure-denylist-scan.sh

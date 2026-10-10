@@ -50,3 +50,68 @@ test('Renovate custom managers track the validator tool and compatible Node pins
     assert.equal(match?.groups?.currentValue, version);
   }
 });
+
+test('unmapped Molecule paths never fail the run; they select the full profile with a warning per path', () => {
+  assert.doesNotMatch(ansibleCi, /Require focused Molecule path mappings/);
+  assert.doesNotMatch(ansibleCi, /Add Molecule scenario or caller-contract path mappings/);
+  assert.match(ansibleCi, /echo "::notice::molecule off, mapping not required"/);
+  assert.match(ansibleCi, /echo "::warning::unmapped path \$path, running full profile"/);
+  assert.match(ansibleCi, /done < <\(jq -r '\.\[\]' <<<"\$\{MOLECULE_FILES:-\[\]\}"\)/);
+  assert.match(ansibleCi, /echo "full_profile=true" >> "\$GITHUB_OUTPUT"/);
+  assert.match(ansibleCi, /elif \[\[ "\$FULL_PROFILE" == true \]\]; then\n\s+printf 'scenarios=\\n'/);
+});
+
+test('unmapped paths warn only on molecule-matched files and select the full profile whether or not mappings are set', () => {
+  assert.match(ansibleCi, /id: filter\n\s+with:\n\s+base: [^\n]*\n\s+list-files: json/);
+  assert.match(ansibleCi, /MOLECULE_FILES: \$\{\{ steps\.filter\.outputs\.molecule_files \}\}/);
+  assert.match(
+    ansibleCi,
+    /FULL_PROFILE: \$\{\{ steps\.unmapped\.outputs\.full_profile \|\| steps\.scenario_selection\.outputs\.full_profile \}\}/,
+  );
+  assert.doesNotMatch(ansibleCi, /still fails classification/);
+});
+
+test('Galaxy installs run only when requirements.yml exists and say so when it does not', () => {
+  assert.equal((ansibleCi.match(/hashFiles\('requirements\.yml'\) != ''/g) || []).length, 4);
+  assert.equal((ansibleCi.match(/echo "::notice::no requirements\.yml, nothing to install"/g) || []).length, 2);
+  assert.doesNotMatch(ansibleCi, /if: steps\.galaxy-cache\.outputs\.cache-hit != 'true'\n/);
+});
+
+test('mapped Molecule paths still go through the scenario selector', () => {
+  assert.match(ansibleCi, /Select scenarios only when every relevant path is covered/);
+  assert.match(ansibleCi, /run: node \.gh-shared\/\.github\/scripts\/select-molecule-scenarios\.js/);
+});
+
+test('lint roles path keeps the repo ansible.cfg roles_path between repo roles/ and Galaxy roles', () => {
+  const { execFileSync } = require('node:child_process');
+  const { mkdtempSync, writeFileSync } = require('node:fs');
+  const { join } = require('node:path');
+  const { tmpdir } = require('node:os');
+  const step = ansibleCi.match(/- name: Set Ansible roles path\n\s+run: (.*)\n/);
+  assert.ok(step, 'Set Ansible roles path step exists');
+  const resolve = (cfg) => {
+    const dir = mkdtempSync(join(tmpdir(), 'roles-path-'));
+    if (cfg !== null) writeFileSync(join(dir, 'ansible.cfg'), cfg);
+    const env = { PATH: process.env.PATH, GITHUB_WORKSPACE: '/ws', HOME: '/h', GITHUB_ENV: join(dir, 'env') };
+    execFileSync('bash', ['-ec', step[1]], { cwd: dir, env });
+    return readFileSync(env.GITHUB_ENV, 'utf8').trim();
+  };
+  assert.equal(resolve(null), 'ANSIBLE_ROLES_PATH=/ws/roles:/h/.ansible/roles');
+  assert.equal(resolve('[defaults]\nroles_path = ansible/roles\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:ansible/roles:/h/.ansible/roles');
+  assert.equal(resolve('[defaults]\n# roles_path = nope\n'), 'ANSIBLE_ROLES_PATH=/ws/roles:/h/.ansible/roles');
+});
+
+test('the molecule output is false when the caller repo has no Molecule scenario', () => {
+  assert.match(
+    ansibleCi,
+    /id: molecule_scenarios\n\s+if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) != '' \}\}\n\s+run: echo "present=true"/,
+  );
+  assert.match(
+    ansibleCi,
+    /if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) == '' \}\}\n\s+run: echo "::notice::no Molecule scenarios in this repository, Molecule job not applicable"/,
+  );
+  assert.match(
+    ansibleCi,
+    /molecule: >-\n\s+\$\{\{ steps\.molecule_scenarios\.outputs\.present == 'true'\n\s+&& \(steps\.filter\.outputs\.molecule == 'true'/,
+  );
+});

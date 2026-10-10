@@ -15,17 +15,13 @@ on:
     inputs:
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04. Pass a
           RunsOn label to opt the calling repo into self-hosted runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
 
 permissions: {}
-
-concurrency:
-  group: token-limits-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   check:
@@ -60,5 +56,13 @@ jobs:
       - name: Install tiktoken
         run: pip install --quiet tiktoken pyyaml
 
+      - name: Restore the tokenizer encoding cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/tiktoken
+          key: tiktoken-o200k_base-v1
+
       - name: Check token limits
+        env:
+          TIKTOKEN_CACHE_DIR: ${{ runner.temp }}/tiktoken
         run: python3 .gh-shared/scripts/check-token-limits.py

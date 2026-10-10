@@ -25,12 +25,12 @@ on:
         default: true
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04. Pass a
           RunsOn label (see runs-on.com/configuration/job-labels) to opt
           the calling repo into self-hosted runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
 
 permissions: {}
 
@@ -94,7 +94,7 @@ jobs:
         env:
           DIRS: ${{ inputs.working_directories }}
         run: |
-          config=.tflint.hcl
+          config="$GITHUB_WORKSPACE/.tflint.hcl"
           [ -f "$config" ] || config="$GITHUB_WORKSPACE/.gh-shared/precommit/configs/tflint.hcl"
           for dir in $(jq -r '.[]' <<<"$DIRS"); do
             echo "::group::$dir"

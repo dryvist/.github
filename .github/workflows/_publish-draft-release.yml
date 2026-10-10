@@ -54,11 +54,11 @@ on:
         default: false
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest; pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04; pass a
           self-hosted label to match the rest of the calling workflow.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
     secrets:
       GH_APP_PRIVATE_KEY:
         required: true

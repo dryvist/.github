@@ -1,5 +1,96 @@
 # Changelog
 
+## [1.9.8](https://github.com/dryvist/.github/compare/v1.9.7...v1.9.8) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** keep the repo ansible.cfg roles_path in the lint search path ([#307](https://github.com/dryvist/.github/issues/307)) ([9e9a260](https://github.com/dryvist/.github/commit/9e9a2600aaa99882debb0f4df92d9107c8205cdb))
+
+## [1.9.7](https://github.com/dryvist/.github/compare/v1.9.6...v1.9.7) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** run molecule only when the repo has scenarios ([#306](https://github.com/dryvist/.github/issues/306)) ([5c526cc](https://github.com/dryvist/.github/commit/5c526cc8b05977905900a2df14d33bd397cb70c2))
+
+## [1.9.6](https://github.com/dryvist/.github/compare/v1.9.5...v1.9.6) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci-gate:** make nix build opt-in and accept a build command ([#304](https://github.com/dryvist/.github/issues/304)) ([6d4f09f](https://github.com/dryvist/.github/commit/6d4f09f073c33255fcc9ad663a64505abb9d0697))
+
+## [1.9.5](https://github.com/dryvist/.github/compare/v1.9.4...v1.9.5) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** call nested shared workflows at the same commit ([#302](https://github.com/dryvist/.github/issues/302)) ([1f0ae85](https://github.com/dryvist/.github/commit/1f0ae8593ce7fcbcdc044bf8b1b52a2937f81d16))
+
+## [1.9.4](https://github.com/dryvist/.github/compare/v1.9.3...v1.9.4) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** pin the shared workflows to ubuntu-24.04 ([#300](https://github.com/dryvist/.github/issues/300)) ([43fa7c7](https://github.com/dryvist/.github/commit/43fa7c7ac779bd2b9f62d1ede31cd1e3c0d36358))
+
+## [1.9.3](https://github.com/dryvist/.github/compare/v1.9.2...v1.9.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci-gate:** pass the path-filter base only on push events ([#298](https://github.com/dryvist/.github/issues/298)) ([697be72](https://github.com/dryvist/.github/commit/697be72d8577892d602ea02d1c366e50950fa76f))
+
+## [1.9.2](https://github.com/dryvist/.github/compare/v1.9.1...v1.9.2) (2026-10-10)
+
+
+### CI
+
+* **canary:** check template callers against the candidate gate ([#296](https://github.com/dryvist/.github/issues/296)) ([9de5882](https://github.com/dryvist/.github/commit/9de58820288f49aca8eb0754027d9b174a880905))
+
+## [1.9.1](https://github.com/dryvist/.github/compare/v1.9.0...v1.9.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **release:** cut a release for ci commits ([#292](https://github.com/dryvist/.github/issues/292)) ([e007628](https://github.com/dryvist/.github/commit/e00762844e843283c52743b59a6b3bed08f8c940))
+* **tofu-ci:** resolve the repo tflint config from the workspace root ([#294](https://github.com/dryvist/.github/issues/294)) ([e53ac3a](https://github.com/dryvist/.github/commit/e53ac3a72ccf2b0453193e9be0a82b447d390909))
+* **token-limits:** cache the tokenizer encoding ([#293](https://github.com/dryvist/.github/issues/293)) ([c9205ed](https://github.com/dryvist/.github/commit/c9205ed30b3e79a864c5a5afa34887c70f3a16cb))
+
+
+### CI
+
+* **gate:** add a pinned actionlint Workflow Lint job ([#290](https://github.com/dryvist/.github/issues/290)) ([c62f847](https://github.com/dryvist/.github/commit/c62f847752d49d19f3bc38f5f5855f4b7a1dfb80))
+
+## [1.9.0](https://github.com/dryvist/.github/compare/v1.8.7...v1.9.0) (2026-10-10)
+
+
+### Features
+
+* **release:** document the floating v1 channel for callers ([#289](https://github.com/dryvist/.github/issues/289)) ([5c022d1](https://github.com/dryvist/.github/commit/5c022d1fc26571f2c65c38bcb7f1dbe05bebc5e5))
+
+## [1.8.7](https://github.com/dryvist/.github/compare/v1.8.6...v1.8.7) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** run the full Molecule profile for unmapped paths ([#281](https://github.com/dryvist/.github/issues/281)) ([ae4556d](https://github.com/dryvist/.github/commit/ae4556d734eedb98a78a8cb8b38ee83097d25f15))
+
+## [1.8.6](https://github.com/dryvist/.github/compare/v1.8.5...v1.8.6) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** runner inputs, App-token errors, cancel-on-close via gh ([#279](https://github.com/dryvist/.github/issues/279)) ([8d020df](https://github.com/dryvist/.github/commit/8d020df837279436f2e45ed939659702c0e17416))
+
+## [1.8.5](https://github.com/dryvist/.github/compare/v1.8.4...v1.8.5) (2026-10-10)
+
+
+### Performance
+
+* **pre-commit:** lint only staged files with ansible-lint ([#282](https://github.com/dryvist/.github/issues/282)) ([b2a262f](https://github.com/dryvist/.github/commit/b2a262ff415559c2794d35dde077f7bd5b3bcf94))
+
 ## [1.8.4](https://github.com/dryvist/.github/compare/v1.8.3...v1.8.4) (2026-10-09)
 
 

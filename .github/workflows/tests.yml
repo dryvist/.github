@@ -1,5 +1,5 @@
 # Runs the unit tests for the scripts this repo ships. Repo-local; the
-# ubuntu-latest image's Node (22) has `node --test` built in; the glob form is
+# ubuntu-24.04 image's Node (22) has `node --test` built in; the glob form is
 # required there — a bare directory argument only works on Node 24+.
 name: Tests
 
@@ -24,7 +24,7 @@ permissions: {}
 jobs:
   node:
     name: node --test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -37,7 +37,7 @@ jobs:
 
   python:
     name: python -m unittest
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

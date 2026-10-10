@@ -76,7 +76,7 @@ on:
 jobs:
   gate:
     permissions: { contents: read, pull-requests: read, actions: write }
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
 ```
 
 `markdown_lint` and `file_size` are on by default and `filters` defaults to
@@ -106,7 +106,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dryvist/.github/.github/workflows/_release-please.yml@main
+    uses: dryvist/.github/.github/workflows/_release-please.yml@v1
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
@@ -138,6 +138,18 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
    Or via UI at <https://github.com/organizations/dryvist/settings/secrets/actions>.
 
+## Calling the shared workflows
+
+Callers reference the reusable workflows at the floating major tag:
+
+```yaml
+uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
+```
+
+- `v1` moves to a release commit only after the Canary check on that commit succeeds.
+- Breaking changes ship as `v2`. `v1` callers are unaffected until they move.
+- Third-party actions in these workflows are pinned to full commit SHAs.
+
 ## API
 
 This repo exposes the following inheritance surfaces:
@@ -154,7 +166,7 @@ This repo exposes the following inheritance surfaces:
 | `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
-| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@main` |
+| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@v1` |
 | `.github/workflows/{markdownlint,conventions-check,ai-review}.yml` | Org-wide Required Workflows; `tofu-github` rulesets inject them into every repo's PRs |
 | `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
 | `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |

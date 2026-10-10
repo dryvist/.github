@@ -7,21 +7,26 @@ on:
   workflow_call:
     inputs:
       build-command:
-        description: "Build command to run (default: home-manager build)"
+        description: "Build command to run; empty (default) runs the home-manager build"
         required: false
         type: string
-        default: "nix build .#homeConfigurations.$(whoami).activationPackage --print-build-logs"
+        default: ""
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to the GitHub-hosted macOS 26
+          arm64 image (`macos-26`, which `macos-latest` resolves to). Pass a
+          self-hosted macOS label to build elsewhere. The RunsOn Linux pattern
+          used by _update-flake-lock.yml does not apply to macOS builds.
+        type: string
+        required: false
+        default: macos-26
 
 permissions: {}
-
-concurrency:
-  group: nix-build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
     name: Build
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner_label }}
     # Intentionally non-negotiable: exceeding this cap signals a dependency,
     # cache, or closure regression, not a reason to spend more CI time. Do not
     # raise it; remove the source-build cause so this required check keeps
@@ -82,4 +87,9 @@ jobs:
       - name: Build
         env:
           BUILD_COMMAND: ${{ inputs.build-command }}
-        run: eval "$BUILD_COMMAND"
+        run: |
+          # Empty build-command (the default) runs the home-manager build.
+          if [ -z "$BUILD_COMMAND" ]; then
+            BUILD_COMMAND="nix build .#homeConfigurations.$(whoami).activationPackage --print-build-logs"
+          fi
+          eval "$BUILD_COMMAND"

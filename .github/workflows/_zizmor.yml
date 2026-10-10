@@ -16,15 +16,11 @@ on:
         default: "1.26.1"
       runner_label:
         description: >-
-          Runner label. Defaults to ubuntu-latest; pass a RunsOn label to opt
+          Runner label. Defaults to ubuntu-24.04; pass a RunsOn label to opt
           into self-hosted runners.
         type: string
         required: false
-        default: ubuntu-latest
-
-concurrency:
-  group: zizmor-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+        default: ubuntu-24.04
 
 permissions:
   contents: read

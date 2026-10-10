@@ -189,7 +189,10 @@ jobs:
             '{username: $user, password: $pass}')"
           jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
             -H 'Content-Type: application/json' -d "$login_body" | jq -r '.token')"
-          [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
+          if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+            echo "::error::Vikunja login returned no token"
+            exit 1
+          fi
           due="$(date -u -d "+${MINUTES} minutes" +%Y-%m-%dT%H:%M:%SZ)"
           desc="Opened by _converge.yml (target ${TARGET_INPUT}) for ${RUN_URL}"
           body="$(jq -n --arg title "$WINDOW_TITLE" --arg due "$due" --arg desc "$desc" --argjson label "$LABEL_ID" \
@@ -197,7 +200,10 @@ jobs:
           resp="$(curl -fsS --max-time 10 -X PUT "${VIKUNJA_URL}/projects/${PROJECT_ID}/tasks" \
             -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' -d "$body")"
           id="$(printf '%s' "$resp" | jq -r '.id')"
-          [ -n "$id" ] && [ "$id" != "null" ] || { echo "::error::Vikunja task creation returned no id"; exit 1; }
+          if [ -z "$id" ] || [ "$id" = "null" ]; then
+            echo "::error::Vikunja task creation returned no id"
+            exit 1
+          fi
           echo "task_id=$id" >> "$GITHUB_OUTPUT"
 
   # 3. Trade this job's OIDC token for a scoped OpenBao token, bound to this
@@ -329,7 +335,10 @@ jobs:
             '{username: $user, password: $pass}')"
           jwt="$(curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/login" \
             -H 'Content-Type: application/json' -d "$login_body" | jq -r '.token')"
-          [ -n "$jwt" ] && [ "$jwt" != "null" ] || { echo "::error::Vikunja login returned no token"; exit 1; }
+          if [ -z "$jwt" ] || [ "$jwt" = "null" ]; then
+            echo "::error::Vikunja login returned no token"
+            exit 1
+          fi
           curl -fsS --max-time 10 -X POST "${VIKUNJA_URL}/tasks/${TASK_ID}" \
             -H "Authorization: Bearer ${jwt}" -H 'Content-Type: application/json' \
             -d '{"done": true}' >/dev/null

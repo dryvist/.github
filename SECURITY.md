@@ -54,16 +54,20 @@ gate minor/patch; they gate only majors and PR-creation cadence.
   auto-merge.
 
 All third-party GitHub Actions — trusted orgs included — are pinned to SHA
-digests, not tags; dryvist self-references ride `@main` (see Version Pinning
-below).
+digests, not tags; dryvist self-references ride the floating major tag (see
+Version Pinning below).
 
 ## Version Pinning
 
 | Source | Strategy |
 | --- | --- |
-| dryvist self-references | `@main` — never SHA or minor/patch pins |
+| dryvist self-references | `@v1` floating major tag (see the note below the table) |
 | All third-party GitHub Actions | SHA commit hash pins + released version tag as a trailing comment (`# v4.2.2`); Renovate bumps both together |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
+
+dryvist self-references ride the floating major tag (`@v1`), moved only by
+`promote-major-tag.yml` after the canary passes; breaking changes ship as a
+new major.
 
 Trust tiers govern *review cadence for majors* (above), never the pin style:
 there is no semver-tag allowance for trusted actions. Non-`uses:` pins that
