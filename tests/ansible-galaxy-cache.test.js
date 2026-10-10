@@ -19,6 +19,23 @@ assert.notEqual(tokenLimitsStart, -1, 'Token limits job follows Molecule');
 const ansibleLint = workflow.slice(ansibleLintStart, moleculeStart);
 const molecule = workflow.slice(moleculeStart, tokenLimitsStart);
 
+// Evaluates a Galaxy install step's `if:` for a cache state and a
+// requirements.yml digest, so the tests assert when the step runs rather than
+// how the expression is spelled.
+function runsWhen(slice, { cacheHit, requirements }) {
+  const expr = slice
+    .match(/^\s*if: \$\{\{ (.*) \}\}\s*$/m)[1]
+    .replace('steps.galaxy-cache.outputs.cache-hit', JSON.stringify(cacheHit))
+    .replace("hashFiles('requirements.yml')", JSON.stringify(requirements));
+  return new Function(`return (${expr});`)();
+}
+
+const GALAXY_STATES = [
+  { cacheHit: 'false', requirements: 'digest', runs: true },
+  { cacheHit: 'true', requirements: 'digest', runs: false },
+  { cacheHit: 'false', requirements: '', runs: false },
+];
+
 test('reconciles a restored Galaxy cache against current requirements before lint', () => {
   const cacheStart = ansibleLint.indexOf('- name: Cache Ansible Galaxy content');
   const collectionsStart = ansibleLint.indexOf('- name: Install Ansible collections');
@@ -37,7 +54,9 @@ test('reconciles a restored Galaxy cache against current requirements before lin
     [rolesStart, lintActionStart, 'ansible-galaxy role install'],
   ]) {
     const step = ansibleLint.slice(start, end);
-    assert.match(step, /if: steps\.galaxy-cache\.outputs\.cache-hit != 'true'/);
+    for (const state of GALAXY_STATES) {
+      assert.equal(runsWhen(step, state), state.runs, JSON.stringify(state));
+    }
     assert.ok(step.includes(`run: ${command} -r requirements.yml --force`));
   }
 });
@@ -66,7 +85,9 @@ test('installs current Galaxy dependencies after a Molecule cache miss', () => {
     [rolesStart, moleculeTestStart, 'ansible-galaxy role install'],
   ]) {
     const step = molecule.slice(start, end);
-    assert.match(step, /if: steps\.galaxy-cache\.outputs\.cache-hit != 'true'/);
+    for (const state of GALAXY_STATES) {
+      assert.equal(runsWhen(step, state), state.runs, JSON.stringify(state));
+    }
     assert.ok(step.includes(`run: ${command} -r requirements.yml --force`));
   }
 });

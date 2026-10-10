@@ -11,6 +11,15 @@ on:
         required: false
         type: string
         default: "nix build .#homeConfigurations.$(whoami).activationPackage --print-build-logs"
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to the GitHub-hosted macOS 26
+          arm64 image (`macos-26`, which `macos-latest` resolves to). Pass a
+          self-hosted macOS label to build elsewhere. The RunsOn Linux pattern
+          used by _update-flake-lock.yml does not apply to macOS builds.
+        type: string
+        required: false
+        default: macos-26
 
 permissions: {}
 
@@ -21,7 +30,7 @@ concurrency:
 jobs:
   build:
     name: Build
-    runs-on: macos-latest
+    runs-on: ${{ inputs.runner_label }}
     # Intentionally non-negotiable: exceeding this cap signals a dependency,
     # cache, or closure regression, not a reason to spend more CI time. Do not
     # raise it; remove the source-build cause so this required check keeps

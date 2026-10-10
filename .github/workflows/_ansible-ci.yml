@@ -29,11 +29,13 @@
 #       uses: dryvist/.github/.github/workflows/_ansible-ci.yml@main
 #       with: { emit_gate: true }
 # Scope policy (canonical): pull requests and non-main pushes use only the
-# Molecule scenarios mapped to their changed paths. Unmapped paths fail unless
-# they are declared full-matrix inputs, which defer Molecule to the post-merge
-# run on `main`, or are CI harness files under `.github/`, which select no
-# scenario. Keep every classifier inside the required Merge Gate. See the
-# policy and history in README.md.
+# Molecule scenarios mapped to their changed paths. An unmapped path never
+# fails the run. It runs the full profile (the caller's `molecule_scenarios`)
+# and emits one warning naming the path, with or without mappings. Declared
+# full-matrix inputs defer Molecule to the post-merge run on `main`. CI harness
+# files under `.github/` select no scenario once mappings are configured. Keep
+# every classifier inside the required Merge Gate. See the policy and history in
+# README.md.
 #
 
 name: _ansible-ci
@@ -61,10 +63,10 @@ on:
         description: >-
           Optional YAML map of molecule scenario name -> paths, in
           dorny/paths-filter syntax. Pull requests and non-main pushes run only
-          the scenarios whose paths changed. Every changed Molecule path must
-          match a scenario, caller contract, or full-matrix rule; otherwise
-          classification fails. Full-matrix paths defer all Molecule work to
-          the push to main after merge.
+          the scenarios whose paths changed. An unmapped Molecule path runs the
+          full profile and warns, whether or not mappings are configured.
+          Full-matrix paths defer all Molecule work to the push to main after
+          merge.
         type: string
         default: ""
       molecule_contract_filters:
@@ -156,7 +158,7 @@ on:
         description: >-
           JSON array of scenarios mapped to changed paths, [] when a caller
           contract or full-matrix rule covers the change, and an empty string
-          only for the full suite on a push to main. Callers
+          for the full suite (a push to main, or an unmapped path). Callers
           that own Molecule locally (`molecule: false`) read this output so
           every repo shares ONE change-detection definition.
         value: ${{ jobs.changes.outputs.molecule_scenarios }}
@@ -197,6 +199,7 @@ jobs:
         id: filter
         with:
           base: ${{ github.event_name == 'push' && github.event.before || '' }}
+          list-files: json
           filters: |
             ansible:
               - '**.yml'
@@ -282,17 +285,31 @@ jobs:
               - 'ansible.cfg'
             ${{ inputs.molecule_scenario_filters }}
             ${{ inputs.molecule_contract_filters }}
-      - name: Require focused Molecule path mappings
+      - name: Note that mapping is not required when Molecule is off
         if: >-
           ${{ (github.event_name == 'pull_request' ||
           (github.event_name == 'push' && github.ref != 'refs/heads/main')) &&
           steps.filter.outputs.molecule == 'true' &&
+          !inputs.molecule }}
+        run: echo "::notice::molecule off, mapping not required"
+      - name: Name each unmapped Molecule path and run the full profile
+        id: unmapped
+        if: >-
+          ${{ (github.event_name == 'pull_request' ||
+          (github.event_name == 'push' && github.ref != 'refs/heads/main')) &&
+          inputs.molecule &&
+          steps.filter.outputs.molecule == 'true' &&
           steps.classify.outputs.full_matrix != 'true' &&
           inputs.molecule_scenario_filters == '' &&
           inputs.molecule_contract_filters == '' }}
+        env:
+          MOLECULE_FILES: ${{ steps.filter.outputs.molecule_files }}
         run: |
-          echo "Add Molecule scenario or caller-contract path mappings." >&2
-          exit 1
+          set -euo pipefail
+          while IFS= read -r path; do
+            echo "::warning::unmapped path $path, running full profile"
+          done < <(jq -r '.[]' <<<"${MOLECULE_FILES:-[]}")
+          echo "full_profile=true" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         if: >-
           ${{ (github.event_name == 'pull_request' ||
@@ -324,8 +341,11 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           SELECTED_SCENARIOS: ${{ steps.scenario_selection.outputs.scenarios }}
+          FULL_PROFILE: ${{ steps.unmapped.outputs.full_profile || steps.scenario_selection.outputs.full_profile }}
         run: |
           if [[ "$EVENT_NAME" == push && "$REF" == refs/heads/main ]]; then
+            printf 'scenarios=\n' >> "$GITHUB_OUTPUT"
+          elif [[ "$FULL_PROFILE" == true ]]; then
             printf 'scenarios=\n' >> "$GITHUB_OUTPUT"
           elif [[ -n "$SELECTED_SCENARIOS" ]]; then
             printf 'scenarios=%s\n' "$SELECTED_SCENARIOS" >> "$GITHUB_OUTPUT"
@@ -376,14 +396,17 @@ jobs:
           # below force-reconciles restored content against the current pins.
           restore-keys: |
             ansible-galaxy-v2-${{ runner.os }}-
+      - name: Note when there is nothing to install
+        if: ${{ hashFiles('requirements.yml') == '' }}
+        run: echo "::notice::no requirements.yml, nothing to install"
       - name: Install Ansible collections
-        if: steps.galaxy-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.galaxy-cache.outputs.cache-hit != 'true' && hashFiles('requirements.yml') != '' }}
         run: ansible-galaxy collection install -r requirements.yml --force
       # Roles install to ~/.ansible/roles, outside the checkout, so ansible-lint
       # never lints vendored Galaxy role code. Without -p, ansible-galaxy writes
       # to the first roles_path in ansible.cfg (roles/), inside the linted tree.
       - name: Install Ansible roles
-        if: steps.galaxy-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.galaxy-cache.outputs.cache-hit != 'true' && hashFiles('requirements.yml') != '' }}
         run: ansible-galaxy role install -r requirements.yml --force -p "$HOME/.ansible/roles"
       # Runs on every hit or miss: ansible.cfg's roles_path would otherwise
       # hide ~/.ansible/roles. Repo roles/ stays first in the search path.
@@ -440,14 +463,17 @@ jobs:
             ~/.ansible/collections
             ~/.ansible/roles
           key: ansible-galaxy-v2-${{ runner.os }}-${{ hashFiles('requirements.yml') }}
+      - name: Note when there is nothing to install
+        if: ${{ hashFiles('requirements.yml') == '' }}
+        run: echo "::notice::no requirements.yml, nothing to install"
       - name: Install Ansible collections
-        if: steps.galaxy-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.galaxy-cache.outputs.cache-hit != 'true' && hashFiles('requirements.yml') != '' }}
         run: ansible-galaxy collection install -r requirements.yml --force
       # `collection install` ignores a `roles:` key, so any role a repo pins in
       # requirements.yml (e.g. splunk.splunk, the shared inventory_resolve) was
       # never installed. Skips cleanly when the file has no `roles:` entries.
       - name: Install Ansible roles
-        if: steps.galaxy-cache.outputs.cache-hit != 'true'
+        if: ${{ steps.galaxy-cache.outputs.cache-hit != 'true' && hashFiles('requirements.yml') != '' }}
         run: ansible-galaxy role install -r requirements.yml --force -p "$HOME/.ansible/roles"
       - name: Set Ansible roles path
         run: echo "ANSIBLE_ROLES_PATH=$GITHUB_WORKSPACE/roles:$HOME/.ansible/roles" >> "$GITHUB_ENV"

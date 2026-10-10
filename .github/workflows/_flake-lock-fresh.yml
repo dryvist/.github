@@ -12,6 +12,16 @@ name: _flake-lock-fresh
 
 on:
   workflow_call:
+    inputs:
+      runner_label:
+        description: >-
+          GitHub Actions runner label. Defaults to the GitHub-hosted ubuntu-24.04
+          image. Pass a self-hosted label, or a RunsOn label in the pattern
+          _update-flake-lock.yml uses (`runs-on=<run id>/runner=2cpu-linux-x64`,
+          with the caller's run id), to run the check elsewhere.
+        type: string
+        required: false
+        default: ubuntu-24.04
     secrets:
       GH_APP_PRIVATE_KEY:
         required: false
@@ -21,7 +31,7 @@ permissions: {}
 jobs:
   fresh:
     name: Flake inputs at branch head
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 5
     permissions:
       contents: read
