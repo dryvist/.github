@@ -149,6 +149,16 @@ test('--pr: an input moved from a branch to a floating tag is a deliberate re-pi
   assert.match(r.stdout, /^in: ref changed from main to v1; the new rev is not compared with the base rev$/m);
 });
 
+test('--pr: a base lock file that does not exist means the lock is new and passes', () => {
+  const dir = fs.mkdtempSync(path.join(root, 'pr-'));
+  fs.writeFileSync(path.join(dir, 'flake.lock'), JSON.stringify(lockWith('r', 'v1', commits.c2)));
+  const env = { ...process.env, OWNERS: 'dryvist', FLAKE_REF_POLICY: 'fail' };
+  delete env.GIT_TOKEN;
+  const r = spawnSync('bash', [script, '--pr', path.join(dir, 'absent.lock'), path.join(dir, 'flake.lock')], { env, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^in: unchanged from base$/m);
+});
+
 test('--pr: an input whose ref and rev are unchanged passes', () => {
   const r = runPr(lockWith('r', 'v1', commits.c2), lockWith('r', 'v1', commits.c2));
   assert.equal(r.status, 0, r.stdout + r.stderr);

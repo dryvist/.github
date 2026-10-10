@@ -84,7 +84,7 @@ while IFS=$'\t' read -r name repo ref rev; do
     echo "::warning::dryvist input $name ($repo) names $named; name a floating major tag (vN) instead"
   fi
   if [ -n "$base" ]; then
-    old=$([ -f "$base" ] && jq -r --arg n "$name" '. as $l | ($l.nodes[$l.root].inputs // {})[$n] // empty
+    old=$([ ! -f "$base" ] || jq -r --arg n "$name" '. as $l | ($l.nodes[$l.root].inputs // {})[$n] // empty
       | $l.nodes[if type == "string" then . else last end].locked.rev // empty' "$base")
     if [ -z "$old" ] || [ "$old" = "$rev" ]; then
       echo "$name: unchanged from base"
