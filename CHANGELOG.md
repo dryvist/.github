@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.0](https://github.com/dryvist/.github/compare/v1.9.13...v1.10.0) (2026-10-10)
+
+
+### Features
+
+* **ci:** check the first-party pin policy in the uses-resolve gate ([#321](https://github.com/dryvist/.github/issues/321)) ([64aafbe](https://github.com/dryvist/.github/commit/64aafbebc024c908dcdc3198b2ef68da79a7ab09))
+* **ci:** classify first-party flake bumps; patch-only auto-merge ([#320](https://github.com/dryvist/.github/issues/320)) ([4763e22](https://github.com/dryvist/.github/commit/4763e22a9e4113977cc368731e18cbdf5d9e7be5))
+* **release:** leave release PRs open; callable promote-major-tag ([#317](https://github.com/dryvist/.github/issues/317)) ([062a61f](https://github.com/dryvist/.github/commit/062a61f08890dd03dedb604f4273d37b6042d2ba))
+
 ## [1.9.13](https://github.com/dryvist/.github/compare/v1.9.12...v1.9.13) (2026-10-10)
 
 
