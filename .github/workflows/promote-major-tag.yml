@@ -1,0 +1,104 @@
+---
+# Moves the floating major tag (v1 for v1.x.y) to a release commit, and only
+# after the canary passes on that commit.
+#
+# Triggers: a published release (release-please cuts these), or a manual
+# dispatch naming the tag. The canary's reusable calls resolve at the run's own
+# commit, so a dispatch must run from the tag ref (`--ref vX.Y.Z`); the promote
+# job refuses to move the tag when the run's commit is not the tag's commit.
+#
+# A failed canary leaves this run red and the floating tag where it was.
+# Only one promotion runs at a time; a queued promotion replaces an older
+# queued one. A promotion never moves the floating tag backwards.
+
+name: Promote Major Tag
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to promote, for example v1.8.5
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: promote-major-tag
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      major: ${{ steps.tag.outputs.major }}
+    steps:
+      - name: Validate the release tag
+        id: tag
+        env:
+          EVENT_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${EVENT_TAG:-$INPUT_TAG}"
+          if [[ ! "$tag" =~ ^v([0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::'$tag' is not a release tag (vMAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          printf 'tag=%s\nmajor=v%s\n' "$tag" "${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+
+  canary:
+    name: Canary
+    needs: resolve
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    uses: ./.github/workflows/canary.yml
+
+  promote:
+    name: Move floating major tag
+    needs: [resolve, canary]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ needs.resolve.outputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Require the canary to have run on the tag's commit
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          tag_sha="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          if [[ "$GITHUB_SHA" != "$tag_sha" ]]; then
+            echo "::error::This run is on $GITHUB_SHA but $TAG is $tag_sha. Dispatch with --ref $TAG."
+            exit 1
+          fi
+
+      - name: Move the floating major tag
+        env:
+          TAG: ${{ needs.resolve.outputs.tag }}
+          MAJOR: ${{ needs.resolve.outputs.major }}
+        run: |
+          target="$(git rev-parse "refs/tags/$TAG^{commit}")"
+          if current="$(git rev-parse -q --verify "refs/tags/$MAJOR^{commit}")"; then
+            if ! git merge-base --is-ancestor "$current" "$target"; then
+              echo "::error::$MAJOR is $current, which is not an ancestor of $TAG ($target). Refusing to move it backwards."
+              exit 1
+            fi
+          fi
+          git tag -f "$MAJOR" "$target"
+          git push -f origin "refs/tags/$MAJOR"
+          echo "::notice::$MAJOR -> $target ($TAG)"
