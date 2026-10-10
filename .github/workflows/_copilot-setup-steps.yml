@@ -9,7 +9,7 @@
 # Non-Nix repos: define your own copilot-setup-steps.yml with repo-specific tooling.
 #
 # Usage:
-#   uses: dryvist/.github/.github/workflows/_copilot-setup-steps.yml@main
+#   uses: dryvist/.github/.github/workflows/_copilot-setup-steps.yml@v1
 name: _copilot-setup-steps
 
 on:

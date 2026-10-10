@@ -57,7 +57,7 @@
 #                          # the caller's token grant — omitting this fails the
 #                          # entire run at workflow-graph validation
 #                          # (startup_failure, 0s, no jobs, UI-only error).
-#       uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+#       uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
 #
 # That is the whole caller for a markdown-only repo: `markdown_lint` and
 # `file_size` default on, and `filters` defaults to the `markdown` block
