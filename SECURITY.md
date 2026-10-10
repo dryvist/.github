@@ -30,9 +30,9 @@ majors and PR-creation cadence. Canonical, fuller documentation:
 any publisher — after a 3-day stabilization window and green CI. Trust tiers do not
 gate minor/patch; they gate only majors and PR-creation cadence.
 
-- **First-party** — our own published packages. release-please cuts and auto-merges
-  every release, so changes propagate to consumers at once (0-day auto-merge, all
-  update types including major).
+- **First-party** — our own published packages. release-please opens a release PR and
+  a person merges it. Consumers receive a first-party release as a bump PR: patch
+  releases auto-merge after green CI; minor and major releases wait for a person.
 - **Trusted** — the curated org allowlist in `renovate-presets.json` (actions, google,
   github, hashicorp, astral-sh, NixOS, …). Trust here shortens the major-default
   30-day hold to a 3-day review PR (`dep:review` label); it has no effect on

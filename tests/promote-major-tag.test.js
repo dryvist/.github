@@ -116,3 +116,55 @@ test('refuses to move the floating tag backwards', () => {
   assert.match(r.stdout, /Refusing to move it backwards/);
   assert.equal(remoteTag(f.origin, 'v1'), f.b);
 });
+
+test('--no-canary moves the floating tag without reading the Canary check-run', () => {
+  const f = fixture();
+  // The check would fail if read; --no-canary means consumer repos have no Canary to read.
+  const r = promote(f, f.b, { check: 'completed failure', flags: ['--no-canary'] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(remoteTag(f.origin, 'v1'), f.b);
+});
+
+test('never moves the floating tag for a prerelease-only commit', () => {
+  const f = fixture();
+  git(f.work, 'commit', '-q', '--allow-empty', '-m', 'd');
+  const d = git(f.work, 'rev-parse', 'HEAD');
+  git(f.work, 'tag', 'v1.2.0-rc.1', d);
+  git(f.work, 'push', '-q', 'origin', 'HEAD', '--tags');
+  const r = promote(f, d, { flags: ['--no-canary'] });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /::notice::.* has no vX\.Y\.Z tag/);
+  assert.equal(remoteTag(f.origin, 'v1'), f.a);
+});
+
+const RELEASE = path.join(__dirname, '../scripts/promote-major-release.sh');
+
+function release({ work, bin }, tag, mode = '') {
+  return spawnSync('bash', [RELEASE, tag, mode], {
+    cwd: work,
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, GH_TOKEN: 'test', GITHUB_REPOSITORY: 'example/repo', FAKE_CHECK: '' },
+  });
+}
+
+test('promote-major-release moves the floating tag for a stable tag with --no-canary', () => {
+  const f = fixture();
+  const r = release(f, 'v1.1.0', '--no-canary');
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(remoteTag(f.origin, 'v1'), f.b);
+});
+
+test('promote-major-release fails on a non-release tag when the Canary gate applies', () => {
+  const f = fixture();
+  const r = release(f, 'name-v1.1.0');
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /::error::'name-v1\.1\.0' is not a release tag/);
+});
+
+test('promote-major-release skips a component-prefixed tag with --no-canary', () => {
+  const f = fixture();
+  const r = release(f, 'name-v1.1.0', '--no-canary');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /::notice::'name-v1\.1\.0' is not a vMAJOR\.MINOR\.PATCH release tag/);
+  assert.equal(remoteTag(f.origin, 'v1'), f.a);
+});

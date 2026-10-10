@@ -1,3 +1,4 @@
+---
 # Reusable: Release Please (org-native).
 #
 # Canonical release-please workflow for the org, hosted once here so every repo
@@ -12,11 +13,10 @@
 # GITHUB_TOKEN) lets the release PR trigger `pull_request` CI gates.
 #
 # Behavior:
-#   - Eager auto-merge: enables `--auto --squash` on the release PR so it lands
-#     once checks pass, for every version bump (patch, minor, or major). Disable
-#     with `auto-merge: false` from the caller. Major bumps are NOT special-cased
-#     — release-please computes the bump from conventional commits and the result
-#     auto-merges like any other.
+#   - Opens or updates the release PR on main and leaves it open. The workflow
+#     does not approve or merge the release PR, and never queues it to merge; a
+#     human merges it. Every version bump (patch, minor, or major) takes the same
+#     path. Bumps are computed by release-please from conventional commits.
 #
 # Config modes (selected by inputs):
 #   - Manifest mode (default): the caller's repo holds `release-please-config.json`
@@ -62,10 +62,11 @@ on:
         default: ubuntu-24.04
       auto-merge:
         description: >-
-          Enable eager auto-merge of the release PR once checks pass. Set to
-          false to leave the release PR open for manual merge.
+          Deprecated and ignored. The release PR is never merged by this workflow;
+          a person merges it. The input stays declared so callers that still pass it
+          keep running.
         type: boolean
-        default: true
+        default: false
       release-type:
         description: >-
           release-please release type (e.g. `simple`). Set this AND blank out
@@ -145,40 +146,6 @@ jobs:
           manifest-file: ${{ inputs.manifest-file }}
           include-component-in-tag: ${{ inputs.include-component-in-tag }}
 
-      # Take the PR number from the action's own `pr` output (a JSON PullRequest
-      # object) rather than re-querying by branch name — release branch names vary
-      # (component suffixes), and an exact `gh pr list --head` match silently
-      # misses them. The raw JSON is passed as a string and parsed with jq in the
-      # script: `fromJSON()` in an `env:` value is evaluated even when the step's
-      # `if` is false, so on a release-CUTTING run (no PR opened, `pr` is empty)
-      # `fromJSON('')` would throw a template error and fail the whole workflow.
-      # Disable+re-enable handles GitHub's stale auto-merge queue; the retry loop
-      # handles transient GraphQL errors from `gh pr merge --auto`.
-      - name: Enable auto-merge for the release PR (with re-poke + retry)
-        if: ${{ !cancelled() && inputs.auto-merge && steps.release.outputs.pr != '' }}
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          # This job has no checkout, so gh cannot infer the repo from a local
-          # git remote — set it explicitly, or `gh pr merge` fails with
-          # "fatal: not a git repository".
-          GH_REPO: ${{ github.repository }}
-          PR_JSON: ${{ steps.release.outputs.pr }}
-        run: |
-          PR_NUMBER=$(jq -r '.number' <<<"$PR_JSON")
-          # The release PR targets main. main's allowed merge method differs by
-          # repo model: trunk repos are squash-only on main; git-flow repos
-          # (default branch develop) are merge-commit-only on main (the
-          # org-gitflow-main ruleset bans squash there). Pick by default branch —
-          # a fixed --squash would fail auto-merge on every git-flow release PR.
-          if [ "$(gh api "repos/${GH_REPO}" --jq .default_branch)" = "main" ]; then
-            METHOD=--squash
-          else
-            METHOD=--merge
-          fi
-          gh pr merge "$PR_NUMBER" --disable-auto 2>/dev/null || true
-          for _ in 1 2 3; do gh pr merge "$PR_NUMBER" --auto "$METHOD" && exit 0; sleep 15; done
-          exit 1
-
   # Back-merge the release commit main -> develop on git-flow repos, so develop's
   # manifest and CHANGELOG track released versions instead of drifting behind
   # main after every release. Runs only when a release was actually cut
@@ -189,8 +156,8 @@ jobs:
     if: ${{ needs.release-please.outputs.release_created == 'true' }}
     runs-on: ${{ inputs.runner_label }}
     timeout-minutes: 10
-    # pull-requests: write is required — the back-merge now opens a PR and enables
-    # auto-merge (develop's ruleset rejects a direct merge), not a direct merge.
+    # pull-requests: write is required — the back-merge opens a PR and queues it to
+    # merge (develop's ruleset rejects a direct merge), not a direct merge.
     permissions:
       contents: write
       pull-requests: write
