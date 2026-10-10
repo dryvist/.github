@@ -1,18 +1,14 @@
 ---
 # Moves the floating major tag (v1 for v1.x.y) to a release commit once the
-# Canary check on that commit has succeeded.
+# Canary check on that commit has succeeded. The decision and the move are in
+# scripts/promote-major-tag.sh.
 #
-# The canary is not re-run here. The push to main that carries a release
-# commit already ran canary.yml on it, and that run sees a non-empty change
-# set. This workflow reads that result:
-#   - release published and workflow_dispatch: the tag names the commit.
-#   - workflow_run (Canary completed on main): the commit is the run's
-#     head_sha, and the release tag is the highest vX.Y.Z tag on it.
-# Whichever trigger arrives second, with the Canary check already completed
-# and successful, promotes. Nothing polls. A Canary still running, or not yet
-# visible, exits this run with a notice; the Canary completion re-triggers it.
-# A Canary failure fails this run and leaves the floating tag where it was. A
-# dispatch whose commit has no Canary check-run fails.
+# The canary is not re-run here. Release published and workflow_dispatch name
+# the commit. If the Canary check on it is still running or not yet visible,
+# this run exits with a notice, and the `promote` job in canary.yml promotes
+# when the Canary run on main finishes. Whichever arrives second promotes.
+# Nothing polls. A Canary failure fails this run and leaves the floating tag
+# where it was.
 #
 # Only one promotion runs at a time. The floating tag never moves backwards.
 
@@ -21,10 +17,6 @@ name: Promote Major Tag
 on:
   release:
     types: [published]
-  workflow_run:
-    workflows: [Canary]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -39,114 +31,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  resolve:
-    name: Resolve release tag and Canary result
+  promote:
+    name: Move floating major tag
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write
       checks: read
-    outputs:
-      tag: ${{ steps.decide.outputs.tag }}
-      major: ${{ steps.decide.outputs.major }}
-      sha: ${{ steps.decide.outputs.sha }}
-      decision: ${{ steps.decide.outputs.decision }}
     steps:
       - name: Check out tags
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           fetch-tags: true
-          persist-credentials: false
 
-      - name: Decide whether to promote
-        id: decide
+      - name: Promote the release commit
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ inputs.tag }}
-          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
-          emit() { printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"; }
-
-          case "$EVENT_NAME" in
-            release) tag="$RELEASE_TAG" ;;
-            workflow_dispatch) tag="$INPUT_TAG" ;;
-            workflow_run)
-              tag="$(git tag --points-at "$RUN_SHA" | grep -E "$tag_re" | sort -V | tail -n 1 || true)"
-              if [[ -z "$tag" ]]; then
-                echo "::notice::$RUN_SHA has no vX.Y.Z tag; nothing to promote."
-                emit decision skip
-                exit 0
-              fi
-              ;;
-            *) echo "::error::unexpected event '$EVENT_NAME'"; exit 1 ;;
-          esac
-
+          tag="${RELEASE_TAG:-$INPUT_TAG}"
           if [[ ! "$tag" =~ $tag_re ]]; then
             echo "::error::'$tag' is not a release tag (vMAJOR.MINOR.PATCH)"
             exit 1
           fi
-          sha="$(git rev-parse "refs/tags/$tag^{commit}")"
-          emit tag "$tag"
-          emit major "${tag%%.*}"
-          emit sha "$sha"
-
-          check="$(gh api "repos/$GH_REPO/commits/$sha/check-runs?check_name=Canary" \
-            --jq '.check_runs | sort_by(.started_at) | last // empty | "\(.status) \(.conclusion)"')"
-          if [[ -z "$check" ]]; then
-            if [[ "$EVENT_NAME" == workflow_dispatch ]]; then
-              echo "::error::No Canary check-run on $sha; refusing to promote $tag."
-              exit 1
-            fi
-            echo "::notice::No Canary check-run on $sha yet; the Canary completion re-triggers this workflow."
-            emit decision wait
-            exit 0
-          fi
-
-          read -r status conclusion <<<"$check"
-          if [[ "$status" != completed ]]; then
-            echo "::notice::Canary on $sha is $status; the Canary completion re-triggers this workflow."
-            emit decision wait
-          elif [[ "$conclusion" == success ]]; then
-            emit decision promote
-          else
-            echo "::error::Canary on $sha concluded '$conclusion'; not promoting $tag."
-            exit 1
-          fi
-
-  promote:
-    name: Move floating major tag
-    needs: resolve
-    if: ${{ needs.resolve.outputs.decision == 'promote' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    steps:
-      - name: Check out the release tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: refs/tags/${{ needs.resolve.outputs.tag }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Move the floating major tag
-        env:
-          TAG: ${{ needs.resolve.outputs.tag }}
-          MAJOR: ${{ needs.resolve.outputs.major }}
-        run: |
-          target="$(git rev-parse "refs/tags/$TAG^{commit}")"
-          if current="$(git rev-parse -q --verify "refs/tags/$MAJOR^{commit}")"; then
-            if ! git merge-base --is-ancestor "$current" "$target"; then
-              echo "::error::$MAJOR is $current, which is not an ancestor of $TAG ($target). Refusing to move it backwards."
-              exit 1
-            fi
-          fi
-          git tag -f "$MAJOR" "$target"
-          git push -f origin "refs/tags/$MAJOR"
-          echo "::notice::$MAJOR -> $target ($TAG)"
+          scripts/promote-major-tag.sh "$(git rev-parse "refs/tags/$tag^{commit}")"
