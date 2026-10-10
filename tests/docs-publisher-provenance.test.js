@@ -11,6 +11,7 @@ test('separates generated output from repository control plane', () => {
   assert.equal(isGeneratedPath('guides/example.mdx'), true);
   assert.equal(isGeneratedPath('images/example.svg'), true);
   assert.equal(isGeneratedPath('.github/workflows/ci.yml'), false);
+  assert.equal(isGeneratedPath('.claude/skills/example/SKILL.md'), false);
   assert.equal(isGeneratedPath('AGENTS.md'), false);
   assert.equal(isGeneratedPath('scripts/validate-mermaid.sh'), false);
 });
