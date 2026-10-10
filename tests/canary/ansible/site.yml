@@ -1,0 +1,9 @@
+---
+- name: Canary fixture for the ansible reusable
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Report the canary marker
+      ansible.builtin.debug:
+        msg: canary
