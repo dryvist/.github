@@ -76,7 +76,7 @@ on:
 jobs:
   gate:
     permissions: { contents: read, pull-requests: read, actions: write }
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@main
+    uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
 ```
 
 `markdown_lint` and `file_size` are on by default and `filters` defaults to
