@@ -399,6 +399,13 @@ on:
           inputs; public inputs resolve without it.
         required: false
 
+# The group carries a `ci-gate-` prefix so it can never equal a caller's own
+# group (callers use `${{ github.workflow }}-...`). Sharing a name with the
+# caller would make the called run contend with the caller's own run.
+concurrency:
+  group: ci-gate-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
   pull-requests: read
