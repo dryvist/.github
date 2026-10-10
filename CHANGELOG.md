@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.7](https://github.com/dryvist/.github/compare/v1.8.6...v1.8.7) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ansible-ci:** run the full Molecule profile for unmapped paths ([#281](https://github.com/dryvist/.github/issues/281)) ([ae4556d](https://github.com/dryvist/.github/commit/ae4556d734eedb98a78a8cb8b38ee83097d25f15))
+
 ## [1.8.6](https://github.com/dryvist/.github/compare/v1.8.5...v1.8.6) (2026-10-10)
 
 
