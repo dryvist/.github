@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.6](https://github.com/dryvist/.github/compare/v1.8.5...v1.8.6) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** runner inputs, App-token errors, cancel-on-close via gh ([#279](https://github.com/dryvist/.github/issues/279)) ([8d020df](https://github.com/dryvist/.github/commit/8d020df837279436f2e45ed939659702c0e17416))
+
 ## [1.8.5](https://github.com/dryvist/.github/compare/v1.8.4...v1.8.5) (2026-10-10)
 
 
