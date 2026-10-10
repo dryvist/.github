@@ -563,7 +563,7 @@ jobs:
           # On a push, comparing to the same long-lived branch makes the
           # action use the commit immediately before the push as its base.
           # PR events continue to compare against their PR base branch.
-          base: ${{ github.ref }}
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
           filters: ${{ steps.resolve.outputs.filters }}
           # Lists each filter's matched files; `changed-all` (appended by the
           # resolve step under a profile) lists every changed file.
@@ -577,7 +577,7 @@ jobs:
         with:
           # Keep static lock/source classification aligned with the caller's
           # push range; PR events continue to use their PR base branch.
-          base: ${{ github.ref }}
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
           filters: |
             flake-lock:
               - 'flake.lock'
