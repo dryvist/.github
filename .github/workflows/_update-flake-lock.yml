@@ -188,6 +188,16 @@ jobs:
     # No job-level permissions: every caller sets `permissions: {}`, and a
     # called workflow may only downgrade. Checkout, PR creation and auto-merge
     # use the minted App token, never GITHUB_TOKEN.
+    env:
+      # jq definitions shared by the steps below. A lock node is first-party when its
+      # owner is dryvist or one of the legacy JacobPEvans owners, or when its url (a
+      # git input has no owner) points at one of them. fp_repo is the repository name.
+      FIRST_PARTY_JQ: >-
+        def fp: (.original // {}) as $o
+        | ((($o.owner // "") | ascii_downcase) as $w
+        | ($w == "dryvist" or $w == "jacobpevans" or $w == "jacobpevans-personal"))
+        or (($o.url // "") | test("github[.]com[/:](dryvist|JacobPEvans)"; "i"));
+        def fp_repo: .original.repo // (.original.url | capture("github[.]com[/:][^/]+/(?<r>[^/.?]+)").r);
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -254,14 +264,14 @@ jobs:
         run: |
           if [ -n "$INPUT" ]; then
             # One named root input. The name must match a root input of this lock,
-            # so no other value reaches nix.
-            if ! [[ $INPUT =~ ^[A-Za-z0-9_.-]+$ ]] ||
-               ! jq -e --arg n "$INPUT" '.nodes[.root].inputs | has($n)' flake.lock > /dev/null; then
-              echo "::error::input '$INPUT' is not a root input of flake.lock"
-              exit 1
+            # so no other value reaches nix. Any other name falls through to the
+            # targeted or whole-lock mode below.
+            if [[ $INPUT =~ ^[A-Za-z0-9_.-]+$ ]] &&
+               jq -e --arg n "$INPUT" '.nodes[.root].inputs | has($n)' flake.lock > /dev/null; then
+              nix flake update "$INPUT"
+              exit 0
             fi
-            nix flake update "$INPUT"
-            exit 0
+            echo "::notice::input name is not a root input of flake.lock; using the targeted or whole-lock mode"
           fi
           if [ -n "$STALE_INPUTS" ]; then
             # Targeted: only the owned inputs the stale job listed.
@@ -276,10 +286,11 @@ jobs:
           fi
           # Whole lock: every root input except first-party (dryvist) ones. Those
           # move only by their own release, never by a bare update.
-          mapfile -t third_party < <(jq -r '. as $l | $l.nodes[$l.root].inputs | to_entries[]
+          mapfile -t third_party < <(jq -r "$FIRST_PARTY_JQ"'
+            . as $l | $l.nodes[$l.root].inputs | to_entries[]
             | .value as $v
             | ($l.nodes[if ($v | type) == "string" then $v else ($v | last) end]) as $n
-            | select((($n.original.owner // "") | ascii_downcase) != "dryvist") | .key' flake.lock)
+            | select(($n | fp) | not) | .key' flake.lock)
           if [ "${#third_party[@]}" -gt 0 ]; then
             nix flake update "${third_party[@]}"
           fi
@@ -352,14 +363,15 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           # First-party (dryvist) inputs whose locked rev changed: "name repo old new" per line.
-          jq -r -s '.[0] as $b | .[1] as $l | $l.nodes[$l.root].inputs | to_entries[]
+          jq -r -s "$FIRST_PARTY_JQ"'
+            .[0] as $b | .[1] as $l | $l.nodes[$l.root].inputs | to_entries[]
             | .value as $v
             | ($l.nodes[if ($v | type) == "string" then $v else ($v | last) end]) as $n
-            | select((($n.original.owner // "") | ascii_downcase) == "dryvist")
+            | select($n | fp)
             | ($b[.key] // "unlocked") as $old
             | ($n.locked.rev // "unlocked") as $new
             | select($old != $new)
-            | [.key, $n.original.repo, $old, $new] | @tsv' \
+            | [.key, ($n | fp_repo), $old, $new] | @tsv' \
             /tmp/lock-before.json flake.lock > /tmp/first-party.tsv
           echo "first_party_repos=$(cut -f2 /tmp/first-party.tsv | sort -u | paste -sd, -)" >> "$GITHUB_OUTPUT"
 
@@ -396,9 +408,9 @@ jobs:
           GH_TOKEN: ${{ steps.first-party-token.outputs.token }}
           NIXPKGS_MOVED: ${{ steps.moved.outputs.nixpkgs_moved }}
         run: |
-          # nearest <repo> <rev>: the highest vX.Y.Z tag whose commit is <rev> or one of its
-          # ancestors. Tags are tried highest first; the first one the compare API reports as
-          # an ancestor wins. Nothing found prints nothing and returns non-zero.
+          # nearest <repo> <rev>: "<tag> <commit>" for the highest vX.Y.Z tag whose commit is <rev>
+          # or one of its ancestors. Tags are tried highest first; the first one the compare API
+          # reports as an ancestor wins. Nothing found prints nothing and returns non-zero.
           nearest() {
             local repo=$1 rev=$2 tag commit status
             for tag in $(gh api --paginate "repos/dryvist/$repo/tags" --jq '.[].name' 2>/dev/null |
@@ -406,7 +418,7 @@ jobs:
               commit=$(gh api "repos/dryvist/$repo/commits/$tag" --jq .sha 2>/dev/null) || continue
               status=$(gh api "repos/dryvist/$repo/compare/$commit...$rev" --jq .status 2>/dev/null) || continue
               case $status in
-                identical | ahead) echo "$tag"; return 0 ;;
+                identical | ahead) echo "$tag $commit"; return 0 ;;
               esac
             done
             return 1
@@ -420,12 +432,19 @@ jobs:
           top=-1
           printf '%s\n%s\n' '| first-party input | from | to | bump |' '| --- | --- | --- | --- |' > summary.md
           while IFS=$'\t' read -r name repo old new; do
-            old_tag=$(nearest "$repo" "$old") || old_tag=""
-            new_tag=$(nearest "$repo" "$new") || new_tag=""
+            old_out=$(nearest "$repo" "$old") || old_out=""
+            new_out=$(nearest "$repo" "$new") || new_out=""
+            old_tag=${old_out%% *}
+            new_tag=${new_out%% *}
+            new_commit=${new_out#* }
+            # A first-party input must land exactly on a release commit. A rev past the
+            # latest release (unreleased commits) is held, whatever tag it descends from.
             if [ -z "$old_tag" ] || [ -z "$new_tag" ]; then
               cls="unknown"
+            elif [ "$new_commit" != "$new" ]; then
+              cls="unreleased"
             elif [ "$old_tag" = "$new_tag" ]; then
-              cls="digest"
+              cls="unknown"
             elif [ "$(printf '%s\n%s\n' "$old_tag" "$new_tag" | sort -V | tail -n 1)" != "$new_tag" ]; then
               cls="unknown"
             else
@@ -468,6 +487,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Create Pull Request
+        id: pr
         if: steps.moved.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
@@ -479,7 +499,7 @@ jobs:
           title: "chore(deps): update flake.lock"
           body: |
             ${{ inputs.input != ''
-              && format('Automated relock of `{0}` alone (`nix flake update {0}`), triggered by', inputs.input)
+              && 'Automated relock requested for one named input (`nix flake update <input>`), triggered by'
               || needs.stale.outputs.inputs != ''
               && format('Automated targeted relock of owned inputs behind their branch head (`nix flake update {0}`), triggered by', needs.stale.outputs.inputs)
               || 'Automated relock of every third-party input (`nix flake update`), triggered by' }}
@@ -510,5 +530,20 @@ jobs:
         run: |
           PR=$(gh pr list --head chore/flake-lock --json number --jq '.[0].number')
           if [ -n "$PR" ]; then
+            # The PR on chore/flake-lock is amended in place, so labels from an earlier,
+            # held run are removed before the PR is queued to merge.
+            gh pr edit "$PR" --remove-label needs-human --remove-label bump:minor --remove-label bump:major 2>/dev/null || true
             gh pr merge "$PR" --auto --squash
+          fi
+
+      - name: Withhold auto-merge
+        # The PR on chore/flake-lock is amended in place, so an earlier run may have queued
+        # it to merge. A held run cancels that queue; labels alone only stop the sweep.
+        if: steps.moved.outputs.changed == 'true' && steps.classify.outputs.automerge != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+        run: |
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge "$PR_NUMBER" --disable-auto || true
           fi
