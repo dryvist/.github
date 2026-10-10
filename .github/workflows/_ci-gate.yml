@@ -365,6 +365,15 @@ on:
         required: false
         default: ''
 
+      workflow_lint:
+        description: >-
+          Enable `Workflow Lint`: actionlint over the caller's `.github/workflows/`,
+          so a broken reusable-workflow contract (an unknown input, a missing
+          file) fails the gate instead of making the run a missing check. Not
+          filter-gated. Off by default during rollout.
+        type: boolean
+        default: false
+
       test_command:
         description: >-
           Shell command that runs this repo's own unit tests as the `Repo Tests`
@@ -905,13 +914,36 @@ jobs:
           TEST_COMMAND: ${{ inputs.test_command }}
         run: bash -c "$TEST_COMMAND"
 
+  # actionlint over the caller's workflows, so a broken reusable-workflow
+  # contract fails here instead of making the run a missing check. Not
+  # filter-gated. The binary is a pinned release, checksum-verified by the script.
+  workflow-lint:
+    name: Workflow Lint
+    if: ${{ inputs.workflow_lint }}
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Sparse-checkout the actionlint runner from this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: scripts/ci-gate-workflow-lint.sh
+          sparse-checkout-cone-mode: false
+      - name: Lint caller workflows with the pinned actionlint
+        run: bash .gh-shared/scripts/ci-gate-workflow-lint.sh
+
   # ============================================================================
   # MERGE GATE — the only check that branch protection requires.
   # `name:` MUST stay "Merge Gate" (matches existing required_status_checks).
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh, uses-resolve, repo-tests]
+    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh, uses-resolve, repo-tests, workflow-lint]
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
@@ -949,7 +981,7 @@ jobs:
             nix-validate, nix-build, markdown-lint, file-size, token-limits,
             python-security, python-ci, ansible-ci, renovate-annotations,
             tofu-ci, osv-scan, dependency-review, zizmor, watchdog,
-            flake-lock-fresh, repo-tests
+            flake-lock-fresh, repo-tests, workflow-lint
           CI_GATE_ALLOWED_FAILURES: scope
         run: node .gh-shared/scripts/ci-gate-aggregate.mts
       # Run after every sibling is terminal, when timestamps are final.

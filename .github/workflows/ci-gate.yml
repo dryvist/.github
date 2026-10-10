@@ -32,6 +32,7 @@ jobs:
     uses: ./.github/workflows/_ci-gate.yml
     with:
       nix_validate: true
+      workflow_lint: true
       test_command: "node --test 'tests/**/*.test.js' tests/ci-gate-aggregate.test.mts"
       filters: |
         markdown:
