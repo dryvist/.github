@@ -110,11 +110,12 @@ while IFS= read -r file; do
     if [[ ! $text =~ $flake_ref ]]; then
       policy "$file" "$lineno" "dryvist flake input has no ?ref=v<major>"
     fi
-  done < <(grep -nE 'github:dryvist/' "$file" || true)
+  done < <(grep -nE 'github:(dryvist|JacobPEvans)/|git[+][a-z]+://(git@)?github[.]com/(dryvist|JacobPEvans)/' "$file" || true)
 done < <(find_named flake.nix)
 
-# `use flake` of a remote flake whose address names the dryvist org.
-envrc_remote='^[[:space:]]*use[[:space:]]+flake[[:space:]]+["'\'']?[a-zA-Z+]+[:@][^[:space:]]*dryvist/'
+# `use flake` of a remote flake whose address names the dryvist org, or the legacy
+# JacobPEvans owner that redirects to it.
+envrc_remote='^[[:space:]]*use[[:space:]]+flake[[:space:]]+["'\'']?[a-zA-Z+]+[:@][^[:space:]]*(dryvist|JacobPEvans)/'
 while IFS= read -r file; do
   file=${file#./}
   while IFS= read -r hit; do

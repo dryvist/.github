@@ -107,6 +107,24 @@ test('pin policy: a flake input without ?ref=v<major> is a warning in warn mode'
   assert.match(run.stdout, /^::warning file=flake\.nix,line=2::dryvist flake input has no \?ref=v<major>/m);
 });
 
+test('pin policy: legacy JacobPEvans owner and git+https dryvist flake inputs are checked too', () => {
+  const run = runInCaller(clean, {
+    'flake.nix': [
+      '{',
+      '  inputs.a.url = "github:JacobPEvans/nix-devenv";',
+      '  inputs.b.url = "git+https://github.com/dryvist/nix-devenv.git?ref=develop";',
+      '  inputs.c.url = "github:JacobPEvans/nix-devenv?ref=v1";',
+      '}',
+      '',
+    ].join('\n'),
+  });
+
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.match(run.stdout, /^::warning file=flake\.nix,line=2::dryvist flake input has no \?ref=v<major>/m);
+  assert.match(run.stdout, /^::warning file=flake\.nix,line=3::dryvist flake input has no \?ref=v<major>/m);
+  assert.doesNotMatch(run.stdout, /line=4::/);
+});
+
 test('pin policy: a flake input without ?ref=v<major> is an error and exits 1 in fail mode', () => {
   const run = runInCaller(clean, { 'flake.nix': '{\n  inputs.tool.url = "github:dryvist/nix-tool";\n}\n' }, {
     PIN_POLICY_MODE: 'fail',
