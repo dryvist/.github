@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.9.1](https://github.com/dryvist/.github/compare/v1.9.0...v1.9.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **release:** cut a release for ci commits ([#292](https://github.com/dryvist/.github/issues/292)) ([e007628](https://github.com/dryvist/.github/commit/e00762844e843283c52743b59a6b3bed08f8c940))
+* **tofu-ci:** resolve the repo tflint config from the workspace root ([#294](https://github.com/dryvist/.github/issues/294)) ([e53ac3a](https://github.com/dryvist/.github/commit/e53ac3a72ccf2b0453193e9be0a82b447d390909))
+* **token-limits:** cache the tokenizer encoding ([#293](https://github.com/dryvist/.github/issues/293)) ([c9205ed](https://github.com/dryvist/.github/commit/c9205ed30b3e79a864c5a5afa34887c70f3a16cb))
+
+
+### CI
+
+* **gate:** add a pinned actionlint Workflow Lint job ([#290](https://github.com/dryvist/.github/issues/290)) ([c62f847](https://github.com/dryvist/.github/commit/c62f847752d49d19f3bc38f5f5855f4b7a1dfb80))
+
 ## [1.9.0](https://github.com/dryvist/.github/compare/v1.8.7...v1.9.0) (2026-10-10)
 
 
