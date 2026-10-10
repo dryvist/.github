@@ -81,3 +81,18 @@ test('mapped Molecule paths still go through the scenario selector', () => {
   assert.match(ansibleCi, /Select scenarios only when every relevant path is covered/);
   assert.match(ansibleCi, /run: node \.gh-shared\/\.github\/scripts\/select-molecule-scenarios\.js/);
 });
+
+test('the molecule output is false when the caller repo has no Molecule scenario', () => {
+  assert.match(
+    ansibleCi,
+    /id: molecule_scenarios\n\s+if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) != '' \}\}\n\s+run: echo "present=true"/,
+  );
+  assert.match(
+    ansibleCi,
+    /if: \$\{\{ hashFiles\('\*\*\/molecule\/\*\/molecule\.yml'\) == '' \}\}\n\s+run: echo "::notice::no Molecule scenarios in this repository, Molecule job not applicable"/,
+  );
+  assert.match(
+    ansibleCi,
+    /molecule: >-\n\s+\$\{\{ steps\.molecule_scenarios\.outputs\.present == 'true'\n\s+&& \(steps\.filter\.outputs\.molecule == 'true'/,
+  );
+});
