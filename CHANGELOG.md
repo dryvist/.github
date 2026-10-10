@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.9](https://github.com/dryvist/.github/compare/v1.9.8...v1.9.9) (2026-10-10)
+
+
+### Bug Fixes
+
+* **pre-commit:** report when the ansible-lint lock tools are missing ([#284](https://github.com/dryvist/.github/issues/284)) ([29d6b8e](https://github.com/dryvist/.github/commit/29d6b8eb90ed3d282764de4427246216a273e116))
+
 ## [1.9.8](https://github.com/dryvist/.github/compare/v1.9.7...v1.9.8) (2026-10-10)
 
 
