@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.13](https://github.com/dryvist/.github/compare/v1.9.12...v1.9.13) (2026-10-10)
+
+
+### Bug Fixes
+
+* **provenance:** treat agent tooling under .claude as control plane ([#322](https://github.com/dryvist/.github/issues/322)) ([72cab94](https://github.com/dryvist/.github/commit/72cab94668517f90e369381006f252493838551d))
+
 ## [1.9.12](https://github.com/dryvist/.github/compare/v1.9.11...v1.9.12) (2026-10-10)
 
 
