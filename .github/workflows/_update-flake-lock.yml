@@ -373,5 +373,5 @@ jobs:
         run: |
           PR=$(gh pr list --head chore/flake-lock --json number --jq '.[0].number')
           if [ -n "$PR" ]; then
-            gh pr merge "$PR" --auto --squash || true
+            gh pr merge "$PR" --auto --squash
           fi
