@@ -16,6 +16,12 @@ ACTIONLINT_VERSION=1.7.12
 ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
 IGNORE='property "workflow_sha" is not defined'
 
+# Fails on a uses: ref that looks like a commit SHA (39+ hex characters) but is not exactly 40.
+if grep -rnE 'uses:[[:space:]]*[^[:space:]]+/[^[:space:]@]+@([0-9a-fA-F]{39}|[0-9a-fA-F]{41,})([^0-9a-fA-F]|$)' .github/workflows; then
+  echo "::error::uses: ref looks like a commit SHA but is not 40 hex characters (matches above)" >&2
+  exit 1
+fi
+
 if [[ -z "${ACTIONLINT_BIN:-}" ]]; then
   scratch="${RUNNER_TEMP:-$(mktemp -d)}"
   archive="${scratch}/actionlint.tar.gz"
