@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.3](https://github.com/dryvist/.github/compare/v1.9.2...v1.9.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci-gate:** pass the path-filter base only on push events ([#298](https://github.com/dryvist/.github/issues/298)) ([697be72](https://github.com/dryvist/.github/commit/697be72d8577892d602ea02d1c366e50950fa76f))
+
 ## [1.9.2](https://github.com/dryvist/.github/compare/v1.9.1...v1.9.2) (2026-10-10)
 
 
