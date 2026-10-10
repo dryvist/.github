@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.10](https://github.com/dryvist/.github/compare/v1.9.9...v1.9.10) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** guard caller-selected runners on every pull request event ([#311](https://github.com/dryvist/.github/issues/311)) ([9370b6b](https://github.com/dryvist/.github/commit/9370b6b459d792c0533cd4a71a833d77ad33e217))
+
 ## [1.9.9](https://github.com/dryvist/.github/compare/v1.9.8...v1.9.9) (2026-10-10)
 
 
