@@ -2,8 +2,9 @@
 # Caller-contract canary for the reusable workflows this repo publishes.
 #
 # Stack jobs call reusables through local paths, so the code under test is the
-# PR head (pull_request), the pushed commit (push to main), or the release
-# commit (workflow_call from promote-major-tag.yml). Fixtures under
+# PR head (pull_request) or the pushed commit (push to main). The release
+# commit is never re-canaried; promote-major-tag.yml reads this run's result
+# for the commit it tags. Fixtures under
 # tests/canary/<stack>/ are reached only through the directory inputs a
 # reusable exposes; the rest run against the repo root.
 #
@@ -20,7 +21,6 @@ on:
   pull_request:
   push:
     branches: [main]
-  workflow_call:
 
 concurrency:
   group: canary-${{ github.event.pull_request.number || github.ref }}
@@ -145,7 +145,7 @@ jobs:
     name: Canary
     needs: [ansible, nix, tofu, python, docs, ansible-direct]
     if: ${{ always() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
     steps:
