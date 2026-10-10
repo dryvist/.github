@@ -12,7 +12,8 @@
 # lock is relocked except first-party (dryvist) inputs, which move only by their
 # own release. Each changed first-party input is classified patch, minor or major
 # from its nearest vX.Y.Z tags. Only patch and digest bumps with no nixpkgs* move
-# auto-merge; every other PR is left open with the `needs-human` label.
+# auto-merge; every other PR is left open, held from the sweep by its bump or
+# `needs-review` label.
 #
 # WHY THIS REPLACED TWO WORKFLOWS (2026-08-05)
 #
@@ -475,9 +476,8 @@ jobs:
           esac
 
           labels=dependencies
-          if [ "$NIXPKGS_MOVED" = true ]; then labels="$labels,needs-review"; fi
+          if [ "$NIXPKGS_MOVED" = true ] || [ "$top" -ge 4 ]; then labels="$labels,needs-review"; fi
           if [ -n "$bump" ]; then labels="$labels,bump:$bump"; fi
-          if [ "$automerge" != true ]; then labels="$labels,needs-human"; fi
 
           {
             echo "automerge=$automerge"
@@ -524,7 +524,7 @@ jobs:
 
       - name: Enable auto-merge
         # Gated: only patch-level first-party bumps with no nixpkgs* move auto-merge.
-        # Everything else stays open for a human, labelled needs-human.
+        # Everything else stays open, held from the sweep by its bump or needs-review label.
         if: steps.classify.outputs.automerge == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -533,7 +533,7 @@ jobs:
           if [ -n "$PR" ]; then
             # The PR on chore/flake-lock is amended in place, so labels from an earlier,
             # held run are removed before the PR is queued to merge.
-            gh pr edit "$PR" --remove-label needs-human --remove-label bump:minor --remove-label bump:major 2>/dev/null || true
+            gh pr edit "$PR" --remove-label needs-review --remove-label bump:minor --remove-label bump:major 2>/dev/null || true
             gh pr merge "$PR" --auto --squash
           fi
 
