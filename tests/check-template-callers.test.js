@@ -30,7 +30,9 @@ ${withBlock}`;
 
 // Copies the script and the workflows into a throwaway root, applies an optional
 // edit to the copied gate, writes the callers under callers/, and runs the checker.
-function run({ gateEdit, callers }) {
+// With `hooks`, writes a template's pre-commit config and its shared template and
+// adds --hooks for the python-template pair.
+function run({ gateEdit, callers, hooks }) {
   const root = mkdtempSync(join(tmpdir(), 'template-callers-'));
   try {
     mkdirSync(join(root, 'scripts'));
@@ -44,7 +46,16 @@ function run({ gateEdit, callers }) {
       writeFileSync(path, text);
       return path;
     });
-    return spawnSync('bash', [join(root, 'scripts/check-template-callers.sh'), ...paths], {
+    const args = [];
+    if (hooks) {
+      mkdirSync(join(root, 'hooks'));
+      const config = join(root, 'hooks', 'python-template.pre-commit-config.yaml');
+      const shared = join(root, 'hooks', 'python.yaml');
+      writeFileSync(config, hooks.config);
+      writeFileSync(shared, hooks.shared);
+      args.push('--hooks', config, shared);
+    }
+    return spawnSync('bash', [join(root, 'scripts/check-template-callers.sh'), ...args, ...paths], {
       cwd: root,
       encoding: 'utf8',
     });
@@ -114,4 +125,47 @@ test('a profile the gate does not accept fails, naming the value', () => {
   const r = run({ callers: { 'python-template': caller({ withBlock: '    with:\n      profile: java\n' }) } });
   assert.equal(r.status, 1);
   assert.match(r.stdout, /python-template: job 'gate' passes profile 'java'/);
+});
+
+const SHARED_HOOKS = `repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.18
+    hooks:
+      - id: ruff-check
+      - id: pyright
+`;
+
+test('a shared hook id missing from the template pre-commit config fails, naming the hook', () => {
+  const r = run({
+    callers: { 'python-template': caller() },
+    hooks: {
+      shared: SHARED_HOOKS,
+      config: `repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.18
+    hooks:
+      - id: ruff-check
+`,
+    },
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /python-template: pre-commit config has no 'pyright' hook from python.yaml/);
+});
+
+test('repo-local hooks beyond the shared set pass', () => {
+  const r = run({
+    callers: { 'python-template': caller() },
+    hooks: {
+      shared: SHARED_HOOKS,
+      config: `${SHARED_HOOKS}  - repo: local
+    hooks:
+      - id: local-check
+        name: local check
+        entry: true
+        language: system
+        pass_filenames: false
+`,
+    },
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
 });

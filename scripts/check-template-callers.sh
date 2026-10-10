@@ -10,20 +10,35 @@
 #   4. the calling job uses dryvist/.github/.github/workflows/_ci-gate.yml@v1 and
 #      its `profile:` input is one of the presets the gate accepts.
 #
-# A caller is named in messages by its file name without .yml. Needs mikefarah
+# With --hooks, a template's .pre-commit-config.yaml must declare a hook for every
+# hook id of the shared template (repo-local hooks beyond those are allowed).
+#
+# A caller is named in messages by its file name without .yml, and a pre-commit
+# config by its file name without .pre-commit-config.yaml. Needs mikefarah
 # yq v4 (preinstalled on ubuntu-24.04). Shorthand permissions (read-all) are not
 # supported: yq fails on them, and a failed query fails the check.
 #
-# Usage: scripts/check-template-callers.sh <caller.yml>...
+# Usage: scripts/check-template-callers.sh [--hooks <pre-commit-config.yaml> <shared.yaml>] <caller.yml>...
 # Exit codes:
-#   0 — every caller matches the gate
+#   0 — every caller matches the gate and the hooks
 #   1 — a mismatch, or a caller with no job that calls _ci-gate.yml
 
 set -euo pipefail
 
-if [[ $# -eq 0 ]]; then
-  echo "usage: $0 <caller.yml>..." >&2
+usage() {
+  echo "usage: $0 [--hooks <pre-commit-config.yaml> <shared.yaml>] <caller.yml>..." >&2
   exit 2
+}
+hooks_config=""
+hooks_shared=""
+if [[ ${1:-} == --hooks ]]; then
+  [[ $# -ge 3 ]] || usage
+  hooks_config=$2
+  hooks_shared=$3
+  shift 3
+fi
+if [[ $# -eq 0 ]]; then
+  usage
 fi
 if ! yq --version 2>&1 | grep -q mikefarah; then
   echo "::error::needs mikefarah yq v4 on PATH" >&2
@@ -120,11 +135,27 @@ check_caller() {
   done <<< "$jobs"
 }
 
+# Every hook id of the shared template must be declared by the template's
+# pre-commit config. A config that cannot be parsed fails the check.
+check_hooks() {
+  local config=$1 shared=$2 name id
+  name=$(basename "$config" .pre-commit-config.yaml)
+  yq -r '.repos[].hooks[].id' "$config" | sort -u > "$work/hooks.have"
+  yq -r '.repos[].hooks[].id' "$shared" | sort -u > "$work/hooks.shared"
+  while read -r id; do
+    [[ -n $id ]] || continue
+    err "${name}: pre-commit config has no '${id}' hook from $(basename "$shared")"
+  done < <(comm -23 "$work/hooks.shared" "$work/hooks.have")
+}
+
 yq -r '(.on.workflow_call.inputs // {}) | keys | .[]' "$gate" > "$work/inputs"
 yq -r '(.on.workflow_call.inputs // {}) | to_entries[] | select(.value.required == true) | .key' "$gate" > "$work/required"
 requested "$gate" 0 > "$work/need.raw"
 highest < "$work/need.raw" > "$work/need"
 
+if [[ -n $hooks_config ]]; then
+  check_hooks "$hooks_config" "$hooks_shared"
+fi
 for caller in "$@"; do
   check_caller "$caller"
 done

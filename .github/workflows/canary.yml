@@ -19,10 +19,11 @@
 # filter, so its lint runs only when the change touches Ansible paths. Its
 # coverage is printed to the job summary, not asserted.
 #
-# `template-callers` is static: it reads each template's ci-gate.yml caller from
-# the template's default branch and checks it against this commit's gate
-# (inputs, required inputs, permissions). It has no fixture, so it is required
-# like the other caller jobs.
+# `template-callers` is static: each matrix leg reads one template's ci-gate.yml
+# caller and .pre-commit-config.yaml from the template's default branch, checks
+# the caller against this commit's gate (inputs, required inputs, permissions,
+# ref, profile) and the config against its shared template. It has no fixture,
+# so it is required like the other caller jobs.
 
 name: Canary
 
@@ -152,12 +153,23 @@ jobs:
           - '.github/scripts/**'
           - 'tests/**'
 
+  # One leg per template. `shared` names the template's file in precommit/templates/.
   template-callers:
-    name: Template Callers
+    name: Template Callers (${{ matrix.template }})
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - template: python-template
+            shared: python.yaml
+          - template: cc-edge-pack-template
+            shared: base.yaml
+          - template: tofu-aws-templates
+            shared: terraform.yaml
     steps:
       - name: Check out the candidate commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -165,18 +177,25 @@ jobs:
           persist-credentials: false
 
       # Unauthenticated: the templates are public. Any failed fetch fails the job.
-      - name: Fetch the template caller workflows from their default branch
+      - name: Fetch the template caller and pre-commit config from their default branch
+        env:
+          TEMPLATE: ${{ matrix.template }}
         run: |
           mkdir -p "$RUNNER_TEMP/template-callers"
-          for template in python-template cc-edge-pack-template tofu-aws-templates; do
-            curl -fsSL "https://raw.githubusercontent.com/dryvist/${template}/main/.github/workflows/ci-gate.yml" \
-              -o "$RUNNER_TEMP/template-callers/${template}.yml"
-          done
+          curl -fsSL "https://raw.githubusercontent.com/dryvist/${TEMPLATE}/main/.github/workflows/ci-gate.yml" \
+            -o "$RUNNER_TEMP/template-callers/${TEMPLATE}.yml"
+          curl -fsSL "https://raw.githubusercontent.com/dryvist/${TEMPLATE}/main/.pre-commit-config.yaml" \
+            -o "$RUNNER_TEMP/template-callers/${TEMPLATE}.pre-commit-config.yaml"
 
-      - name: Check the callers against the candidate gate
+      - name: Check the callers and hooks against the candidate gate and shared templates
+        env:
+          TEMPLATE: ${{ matrix.template }}
+          SHARED: ${{ matrix.shared }}
         run: |
           yq --version
-          scripts/check-template-callers.sh "$RUNNER_TEMP"/template-callers/*.yml
+          scripts/check-template-callers.sh \
+            --hooks "$RUNNER_TEMP/template-callers/${TEMPLATE}.pre-commit-config.yaml" "precommit/templates/${SHARED}" \
+            "$RUNNER_TEMP/template-callers/${TEMPLATE}.yml"
 
   canary-summary:
     name: Canary
