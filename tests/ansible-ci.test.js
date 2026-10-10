@@ -61,6 +61,12 @@ test('unmapped Molecule paths never fail the run; they select the full profile w
   assert.match(ansibleCi, /elif \[\[ "\$FULL_PROFILE" == true \]\]; then\n\s+printf 'scenarios=\\n'/);
 });
 
+test('Galaxy installs run only when requirements.yml exists and say so when it does not', () => {
+  assert.equal((ansibleCi.match(/hashFiles\('requirements\.yml'\) != ''/g) || []).length, 4);
+  assert.equal((ansibleCi.match(/echo "::notice::no requirements\.yml, nothing to install"/g) || []).length, 2);
+  assert.doesNotMatch(ansibleCi, /if: steps\.galaxy-cache\.outputs\.cache-hit != 'true'\n/);
+});
+
 test('mapped Molecule paths still go through the scenario selector', () => {
   assert.match(ansibleCi, /Select scenarios only when every relevant path is covered/);
   assert.match(ansibleCi, /run: node \.gh-shared\/\.github\/scripts\/select-molecule-scenarios\.js/);
