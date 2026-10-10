@@ -409,9 +409,10 @@ jobs:
         if: ${{ steps.galaxy-cache.outputs.cache-hit != 'true' && hashFiles('requirements.yml') != '' }}
         run: ansible-galaxy role install -r requirements.yml --force -p "$HOME/.ansible/roles"
       # Runs on every hit or miss: ansible.cfg's roles_path would otherwise
-      # hide ~/.ansible/roles. Repo roles/ stays first in the search path.
+      # hide ~/.ansible/roles. Repo roles/ stays first in the search path,
+      # then the repo's own ansible.cfg roles_path (if any), then Galaxy roles.
       - name: Set Ansible roles path
-        run: echo "ANSIBLE_ROLES_PATH=$GITHUB_WORKSPACE/roles:$HOME/.ansible/roles" >> "$GITHUB_ENV"
+        run: echo "ANSIBLE_ROLES_PATH=$GITHUB_WORKSPACE/roles:$(sed -n 's/^[[:space:]]*roles_path[[:space:]]*=[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$/\1:/p' ansible.cfg 2>/dev/null | head -n 1)$HOME/.ansible/roles" >> "$GITHUB_ENV"
       - uses: ansible/ansible-lint@e7f397ad6dfa20d274afa17cd7bbedd84ed136f5 # v26
         with:
           args: ${{ inputs.lint_args }}
