@@ -20,12 +20,12 @@ on:
         type: string
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
+          GitHub Actions runner label. Defaults to ubuntu-24.04. Pass a
           RunsOn label (see runs-on.com/configuration/job-labels) to opt
           the calling repo into self-hosted runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
 
 permissions:
   contents: read

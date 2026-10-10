@@ -9,11 +9,11 @@ on:
       runner_label:
         description: >-
           GitHub Actions runner label to run the validate job on. Defaults to
-          ubuntu-latest. Pass a RunsOn label (see runs-on.com job labels docs)
+          ubuntu-24.04. Pass a RunsOn label (see runs-on.com job labels docs)
           to opt the calling repo into self-hosted runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
       all_systems:
         description: >-
           Pass --all-systems to nix flake check to evaluate outputs for every
@@ -78,7 +78,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      # Free ~30GB on the ubuntu-latest runner so `nix flake check --all-systems`
+      # Free ~30GB on the ubuntu-24.04 runner so `nix flake check --all-systems`
       # has space to substitute darwin source paths (rustc-src, cctools,
       # apple-sdk, etc.) without hitting "No space left on device". Only needed
       # when all_systems is true; gated to ubuntu-* runners so self-hosted
