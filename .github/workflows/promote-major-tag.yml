@@ -1,16 +1,34 @@
 ---
-# Moves the floating major tag (v1 for v1.x.y) to a release commit once the
-# Canary check on that commit has succeeded. The decision and the move are in
-# scripts/promote-major-tag.sh.
+# Moves the floating major tag (v1 for v1.x.y) to a release commit. The decision
+# and the move are in scripts/promote-major-tag.sh. A calling repo runs the same
+# script from a checkout of this repo at the called workflow's commit.
 #
-# The canary is not re-run here. Release published and workflow_dispatch name
-# the commit. If the Canary check on it is still running or not yet visible,
-# this run exits with a notice, and the `promote` job in canary.yml promotes
-# when the Canary run on main finishes. Whichever arrives second promotes.
-# Nothing polls. A Canary failure fails this run and leaves the floating tag
-# where it was.
+# In this repo (release published and workflow_dispatch), the Canary check on the
+# commit gates the move. The canary is not re-run here. If that check is still
+# running or not yet visible, this run exits with a notice, and the `promote` job
+# in canary.yml promotes when the Canary run on main finishes. Whichever arrives
+# second promotes. Nothing polls. A Canary failure fails this run and leaves the
+# floating tag where it was.
 #
-# Only one promotion runs at a time. The floating tag never moves backwards.
+# As a reusable workflow (workflow_call), a dryvist repo calls this after its own
+# release is published. Those repos have no Canary check, so the move needs only
+# the release tag, and the script runs with --no-canary.
+#
+# Caller shape. The called job requests `checks: read`, so the caller grants it:
+#   on:
+#     release:
+#       types: [published]
+#   jobs:
+#     promote-major-tag:
+#       permissions:
+#         contents: write
+#         checks: read
+#       uses: dryvist/.github/.github/workflows/promote-major-tag.yml@main
+#       with:
+#         tag: ${{ github.event.release.tag_name }}
+#
+# Only stable tags (vMAJOR.MINOR.PATCH) move the floating tag. Only one promotion
+# runs at a time. The floating tag never moves backwards.
 
 name: Promote Major Tag
 
@@ -22,6 +40,14 @@ on:
       tag:
         description: Release tag to promote, for example v1.8.5
         required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: >-
+          Release tag to promote, for example v1.8.5. Empty falls back to the
+          triggering release event.
+        required: false
         type: string
 
 permissions: {}
@@ -45,11 +71,24 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Check out the promotion script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: scripts/promote-major-tag.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Promote the release commit
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
           INPUT_TAG: ${{ inputs.tag }}
+          # Only this repo has a Canary check. Called runs (workflow_call) and
+          # other repos pass --no-canary; the script ignores an empty second argument.
+          NO_CANARY: ${{ (github.event_name == 'workflow_call' || github.repository != 'dryvist/.github') && '--no-canary' || '' }}
         run: |
           set -euo pipefail
           tag_re='^v[0-9]+\.[0-9]+\.[0-9]+$'
@@ -58,4 +97,4 @@ jobs:
             echo "::error::'$tag' is not a release tag (vMAJOR.MINOR.PATCH)"
             exit 1
           fi
-          scripts/promote-major-tag.sh "$(git rev-parse "refs/tags/$tag^{commit}")"
+          .gh-shared/scripts/promote-major-tag.sh "$(git rev-parse "refs/tags/$tag^{commit}")" "$NO_CANARY"
