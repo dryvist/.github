@@ -138,6 +138,18 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
    Or via UI at <https://github.com/organizations/dryvist/settings/secrets/actions>.
 
+## Calling the shared workflows
+
+Callers reference the reusable workflows at the floating major tag:
+
+```yaml
+uses: dryvist/.github/.github/workflows/_ci-gate.yml@v1
+```
+
+- `v1` moves to a release commit only after the Canary check on that commit succeeds.
+- Breaking changes ship as `v2`. `v1` callers are unaffected until they move.
+- Third-party actions in these workflows are pinned to full commit SHAs.
+
 ## API
 
 This repo exposes the following inheritance surfaces:
