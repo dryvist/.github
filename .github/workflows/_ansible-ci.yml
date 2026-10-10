@@ -170,7 +170,7 @@ permissions:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       ansible: >-
@@ -366,7 +366,7 @@ jobs:
     name: Ansible Lint
     needs: changes
     if: ${{ needs.changes.outputs.ansible == 'true' }}
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -439,7 +439,7 @@ jobs:
     # self-hosted (molecule_runner_label) only for a private repo's own PRs.
     runs-on: >-
       ${{ (github.event.repository.private == true &&
-      (github.event_name != 'pull_request' ||
+      (!github.event.pull_request ||
       github.event.pull_request.head.repo.full_name == github.repository)) &&
       inputs.molecule_runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 45
@@ -518,7 +518,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/_token-limits.yml
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   # Reachability: every Ansible repo in the org calls THIS workflow directly,
   # not `_ci-gate.yml` — so `_renovate-annotations.yml` is otherwise
@@ -533,7 +533,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/_renovate-annotations.yml
     with:
-      runner_label: ${{ inputs.runner_label }}
+      runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
   renovate_config:
     name: Renovate Config Validate
@@ -547,7 +547,7 @@ jobs:
     name: ${{ inputs.emit_gate && 'Merge Gate' || 'Result Validation' }}
     needs: [changes, ansible-lint, molecule, token-limits, renovate-annotations, renovate_config]
     if: ${{ always() && !cancelled() }}
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
