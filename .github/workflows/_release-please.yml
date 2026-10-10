@@ -55,11 +55,11 @@ on:
     inputs:
       runner_label:
         description: >-
-          GitHub Actions runner label. Defaults to ubuntu-latest. Pass a
-          self-hosted label to opt the calling repo into on-prem runners.
+          GitHub Actions runner label. Defaults to the GitHub-hosted ubuntu-24.04
+          image. Pass a self-hosted label to opt the calling repo into on-prem runners.
         type: string
         required: false
-        default: ubuntu-latest
+        default: ubuntu-24.04
       auto-merge:
         description: >-
           Enable eager auto-merge of the release PR once checks pass. Set to
