@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.5](https://github.com/dryvist/.github/compare/v1.9.4...v1.9.5) (2026-10-10)
+
+
+### Bug Fixes
+
+* **ci:** call nested shared workflows at the same commit ([#302](https://github.com/dryvist/.github/issues/302)) ([1f0ae85](https://github.com/dryvist/.github/commit/1f0ae8593ce7fcbcdc044bf8b1b52a2937f81d16))
+
 ## [1.9.4](https://github.com/dryvist/.github/compare/v1.9.3...v1.9.4) (2026-10-10)
 
 
