@@ -13,7 +13,7 @@
 #                                inputs from any other owner are ignored. Defaults to OWNED below.
 #        GIT_TOKEN               optional token for private inputs
 #        STALE_NAMES_FILE        optional; the stale input names are written there, one per line
-#        FLAKE_REF_POLICY        warn (default) | fail; fail makes a dryvist input that names no
+#        FLAKE_REF_POLICY        fail (default) | warn; fail makes a dryvist input that names no
 #                                floating major tag an error, warn reports it and keeps the branch check
 #        FLAKE_LOCK_REMOTE_BASE  optional; URL prefix that <owner>/<repo>.git is read from
 #                                (default https://github.com)
@@ -76,7 +76,7 @@ while IFS=$'\t' read -r name repo ref rev; do
   owner=$(printf '%s' "${repo%%/*}" | tr '[:upper:]' '[:lower:]')
   if [ "$owner" = dryvist ] && ! [[ $ref =~ ^v[0-9]+$ ]]; then
     case $ref in HEAD) named="no ref" ;; *) named="ref $ref" ;; esac
-    if [ "${FLAKE_REF_POLICY:-warn}" = fail ]; then
+    if [ "${FLAKE_REF_POLICY:-fail}" = fail ]; then
       echo "::error::dryvist input $name ($repo) names $named; name a floating major tag (vN) instead"
       stale=1
       continue

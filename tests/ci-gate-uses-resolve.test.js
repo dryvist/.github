@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
@@ -17,6 +17,7 @@ function runInCaller(callerYaml, extraFiles = {}, env = {}) {
     mkdirSync(join(root, '.github', 'workflows'), { recursive: true });
     writeFileSync(join(root, '.github', 'workflows', 'caller.yml'), callerYaml);
     for (const [path, body] of Object.entries(extraFiles)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
       writeFileSync(join(root, path), body);
     }
     return spawnSync('bash', [script], {
@@ -61,7 +62,7 @@ test('a dryvist ref outside the public shared repos is not checked, only noticed
   // No GH_TOKEN is set, so reaching `gh api` would fail the run. A zero exit
   // with the notice proves the reference was skipped, not looked up.
   const ref = 'dryvist/private-thing/.github/workflows/x.yml@main';
-  const run = runInCaller(`jobs:\n  a:\n    uses: ${ref}\n`);
+  const run = runInCaller(`jobs:\n  a:\n    uses: ${ref}\n`, {}, { PIN_POLICY_MODE: 'warn' });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, new RegExp(`::notice::not checked \\(${ref.replace(/[./]/g, '\\$&')}\\)`));
@@ -78,7 +79,7 @@ test('pin policy: a dryvist ref pinned to a commit SHA passes in fail mode', () 
 });
 
 test('pin policy: a dryvist ref not pinned to a SHA is a warning and exits 0 in warn mode', () => {
-  const run = runInCaller('jobs:\n  a:\n    uses: dryvist/tool/action@main\n');
+  const run = runInCaller('jobs:\n  a:\n    uses: dryvist/tool/action@main\n', {}, { PIN_POLICY_MODE: 'warn' });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(
@@ -100,8 +101,17 @@ test('pin policy: a dryvist ref not pinned to a SHA is an error and exits 1 in f
   );
 });
 
+test('pin policy: with no mode set a dryvist ref not pinned to a SHA is an error and exits 1', () => {
+  const run = runInCaller('jobs:\n  a:\n    uses: dryvist/tool/action@main\n');
+
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.match(run.stdout, /^::error file=\.github\/workflows\/caller\.yml,line=3::/m);
+});
+
 test('pin policy: a flake input without ?ref=v<major> is a warning in warn mode', () => {
-  const run = runInCaller(clean, { 'flake.nix': '{\n  inputs.tool.url = "github:dryvist/nix-tool";\n}\n' });
+  const run = runInCaller(clean, { 'flake.nix': '{\n  inputs.tool.url = "github:dryvist/nix-tool";\n}\n' }, {
+    PIN_POLICY_MODE: 'warn',
+  });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /^::warning file=flake\.nix,line=2::dryvist flake input has no \?ref=v<major>/m);
@@ -117,7 +127,7 @@ test('pin policy: legacy JacobPEvans owner and git+https dryvist flake inputs ar
       '}',
       '',
     ].join('\n'),
-  });
+  }, { PIN_POLICY_MODE: 'warn' });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /^::warning file=flake\.nix,line=2::dryvist flake input has no \?ref=v<major>/m);
@@ -148,7 +158,7 @@ test('pin policy: a flake input with a floating major ref passes, and a full ver
 });
 
 test('pin policy: a remote dryvist flake in .envrc is a warning in warn mode', () => {
-  const run = runInCaller(clean, { '.envrc': 'use flake github:dryvist/nix-tool\n' });
+  const run = runInCaller(clean, { '.envrc': 'use flake github:dryvist/nix-tool\n' }, { PIN_POLICY_MODE: 'warn' });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(run.stdout, /^::warning file=\.envrc,line=1::use flake loads a remote dryvist flake/m);
@@ -178,7 +188,7 @@ test('pin policy: a dryvist git source on main is a warning in warn mode', () =>
     '    version: main',
     '',
   ].join('\n');
-  const run = runInCaller(clean, { 'requirements.yml': requirements });
+  const run = runInCaller(clean, { 'requirements.yml': requirements }, { PIN_POLICY_MODE: 'warn' });
 
   assert.equal(run.status, 0, run.stdout + run.stderr);
   assert.match(
@@ -229,4 +239,20 @@ test('pin policy: an unknown PIN_POLICY_MODE is rejected with exit 2', () => {
 
   assert.equal(run.status, 2, run.stdout + run.stderr);
   assert.match(run.stdout, /PIN_POLICY_MODE must be warn or fail/);
+});
+
+test('pin policy: a branch ref in a composite action file fails in fail mode', () => {
+  const run = runInCaller(clean, {
+    '.github/actions/local/action.yml': 'runs:\n  using: composite\n  steps:\n    - uses: dryvist/tool/action@main\n',
+  });
+
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.match(run.stdout, /::error file=\.github\/actions\/local\/action\.yml,line=4::dryvist\/tool\/action@main is not pinned/);
+});
+
+test('pin policy: the org name is matched without case', () => {
+  const run = runInCaller(`jobs:\n  a:\n    uses: Dryvist/tool/action@main\n`);
+
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  assert.match(run.stdout, /::error file=\.github\/workflows\/caller\.yml,line=3::Dryvist\/tool\/action@main is not pinned/);
 });

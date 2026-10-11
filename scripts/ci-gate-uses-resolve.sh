@@ -19,10 +19,10 @@
 #
 # Environment:
 #   GH_TOKEN         token for `gh api` (dryvist remote refs only)
-#   PIN_POLICY_MODE  warn (default) or fail
+#   PIN_POLICY_MODE  fail (default) or warn
 set -euo pipefail
 
-mode=${PIN_POLICY_MODE:-warn}
+mode=${PIN_POLICY_MODE:-fail}
 case "$mode" in
   warn | fail) ;;
   *)
@@ -53,29 +53,35 @@ find_named() {
 }
 
 shopt -s nullglob
-for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
+uses_files=(.github/workflows/*.yml .github/workflows/*.yaml)
+while IFS= read -r action; do
+  uses_files+=("${action#./}")
+done < <(find_named action.yml; find_named action.yaml)
+for wf in "${uses_files[@]}"; do
   while IFS= read -r hit; do
     lineno=${hit%%:*}
     line=${hit#*:}
     value=${line#*uses:}
     value=${value%%#*}
     value=$(printf '%s' "$value" | tr -d "\"' \t")
+    # The org name is matched without case; the original text is kept for messages.
+    lower=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
 
-    if [[ "$value" == dryvist/*@* ]]; then
+    if [[ "$lower" == dryvist/*@* ]]; then
       sha=${value##*@}
       if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
         policy "$wf" "$lineno" "${value} is not pinned to a 40-character commit SHA"
       fi
     fi
 
-    case "$value" in
+    case "$lower" in
       ./.github/workflows/*)
         if [[ ! -f "${value#./}" ]]; then
           fail "$wf" "$value" "local file missing"
         fi
         ;;
       dryvist/*/.github/workflows/*@*)
-        rest=${value#dryvist/}
+        rest=${value#*/}
         repo=${rest%%/*}
         if [[ "$repo" != ".github" && "$repo" != "ai-workflows" ]]; then
           echo "::notice::not checked (${value})"
