@@ -60,8 +60,8 @@ scan_added() {
   local f="$1" content numbers n
   content="$(mktemp)"; numbers="$(mktemp)"
   git diff -U0 --no-color --no-ext-diff "$BASE_REF"...HEAD -- "$f" | awk -v c="$content" -v l="$numbers" '
-    /^@@/ { split($3, a, ","); line = substr(a[1], 2) + 0; next }
-    /^\+\+\+ / { next }
+    /^@@/ { inhunk = 1; split($3, a, ","); line = substr(a[1], 2) + 0; next }
+    !inhunk { next }
     /^\+/ { print substr($0, 2) > c; print line > l; line++ }
   '
   while IFS=: read -r n _; do
