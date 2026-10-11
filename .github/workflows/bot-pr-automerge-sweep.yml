@@ -249,6 +249,16 @@ jobs:
               continue
             fi
 
+            # A repo whose `automerge` custom property is "manual" needs a
+            # person's approval on bot PRs (org-automerge-manual ruleset).
+            manual=$(gh api "repos/${ORG}/${repo}/properties/values" \
+              --jq 'any(.[]; .property_name == "automerge" and .value == "manual")' 2>/dev/null || echo false)
+            if [ "$manual" = "true" ]; then
+              skipped=$(( skipped + 1 ))
+              rows="${rows}| \`${repo}#${num}\` | skipped | automerge-manual |"$'\n'
+              continue
+            fi
+
             # Anchor the soak on the HEAD COMMIT, never on the PR's createdAt.
             # Renovate updates a PR in place: same PR, new commit carrying a
             # newer digest or lock state, createdAt unchanged. Since this sweep
