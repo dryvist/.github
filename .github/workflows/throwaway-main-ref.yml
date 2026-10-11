@@ -1,0 +1,8 @@
+name: throwaway-main-ref
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lint:
+    uses: dryvist/.github/.github/workflows/_markdown-lint.yml@main
