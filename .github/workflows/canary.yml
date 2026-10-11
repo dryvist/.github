@@ -44,7 +44,8 @@ permissions: {}
 
 jobs:
   # On a pull request the stacks run unless every changed file is Markdown
-  # outside .github/ (the agentic-workflow imports there are consumed as code).
+  # outside .github/ and tests/canary/ (agentic-workflow imports and canary
+  # fixtures are consumed as code).
   # A release commit push always runs them.
   scope:
     name: Scope
@@ -57,7 +58,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      run: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' || steps.filter.outputs.github_md == 'true' }}
+      run: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' || steps.filter.outputs.github_md == 'true' || steps.filter.outputs.fixtures == 'true' }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
@@ -71,6 +72,8 @@ jobs:
               - '!**/*.mdx'
             github_md:
               - '.github/**/*.md'
+            fixtures:
+              - 'tests/canary/**'
 
   # Reusable-workflow caller jobs take no `timeout-minutes`; each inner job
   # carries its own. The `actions: write` grant is what _ci-gate.yml's queue
