@@ -51,10 +51,10 @@ rules:
         DeterminateSystems/*: ref-pin
         # Every dryvist/* reference must name a 40-hex commit SHA.
         dryvist/*: hash-pin
-        # JacobPEvans / JacobPEvans-personal are first-party, like dryvist/*:
-        # their reusable workflows are allowed the same ref-pin policy.
-        JacobPEvans/*: ref-pin
-        JacobPEvans-personal/*: ref-pin
+        # JacobPEvans / JacobPEvans-personal are first-party, like dryvist/*
+        # (JacobPEvans redirects to the same repositories): the same hash-pin policy.
+        JacobPEvans/*: hash-pin
+        JacobPEvans-personal/*: hash-pin
         # google/* (osv-scanner-action) — same trusted-publisher family as googleapis/*.
         google/*: ref-pin
         googleapis/*: ref-pin

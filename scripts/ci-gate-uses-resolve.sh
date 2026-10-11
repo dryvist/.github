@@ -57,17 +57,22 @@ uses_files=(.github/workflows/*.yml .github/workflows/*.yaml)
 while IFS= read -r action; do
   uses_files+=("${action#./}")
 done < <(find_named action.yml; find_named action.yaml)
-for wf in "${uses_files[@]}"; do
+# A `uses` key as a block entry, a flow-style entry (`{uses: ...}`, `, uses: ...`) or a quoted key.
+uses_key='(^|[[:space:]{,"'\''])uses["'\'']?[[:space:]]*:'
+for wf in ${uses_files[@]+"${uses_files[@]}"}; do
   while IFS= read -r hit; do
     lineno=${hit%%:*}
     line=${hit#*:}
+    line=$(printf '%s' "$line" | tr -d "\"'{}")
     value=${line#*uses:}
     value=${value%%#*}
-    value=$(printf '%s' "$value" | tr -d "\"' \t")
+    value=${value%%,*}
+    value=$(printf '%s' "$value" | tr -d " \t")
     # The org name is matched without case; the original text is kept for messages.
     lower=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')
 
-    if [[ "$lower" == dryvist/*@* ]]; then
+    # dryvist and its legacy owner alias JacobPEvans (a redirect to the same repositories).
+    if [[ "$lower" == dryvist/*@* || "$lower" == jacobpevans/*@* ]]; then
       sha=${value##*@}
       if [[ ! $sha =~ ^[0-9a-f]{40}$ ]]; then
         policy "$wf" "$lineno" "${value} is not pinned to a 40-character commit SHA"
@@ -98,12 +103,13 @@ for wf in "${uses_files[@]}"; do
         fi
         ;;
     esac
-  done < <(grep -nE '^[[:space:]]*(-[[:space:]]+)?uses:' "$wf" || true)
+  done < <({ grep -nE "$uses_key" "$wf" || true; } | { grep -vE '^[0-9]+:[[:space:]]*#' || true; })
 done
 
-# A flake input is pinned when its ref is a floating major tag (v<digits>),
-# not a longer version such as v1.2.3.
-flake_ref='ref=v[0-9]+([^.0-9A-Za-z_-]|$)'
+# A flake input is pinned when its ref is a floating major tag (v<digits>) or an exact
+# release tag (v<digits>.<digits>.<digits>), which a producer that cannot carry a floating
+# tag (an archived repository) uses. A branch, or no ref at all, is not a pin.
+flake_ref='ref=v[0-9]+(\.[0-9]+\.[0-9]+)?([^.0-9A-Za-z_-]|$)'
 while IFS= read -r file; do
   file=${file#./}
   while IFS= read -r hit; do
@@ -114,7 +120,7 @@ while IFS= read -r file; do
       '#'*) continue ;;
     esac
     if [[ ! $text =~ $flake_ref ]]; then
-      policy "$file" "$lineno" "dryvist flake input has no ?ref=v<major>"
+      policy "$file" "$lineno" "dryvist flake input has no ?ref=v<major> (or an exact release tag)"
     fi
   done < <(grep -nE 'github:(dryvist|JacobPEvans)/|git[+][a-z]+://(git@)?github[.]com/(dryvist|JacobPEvans)/' "$file" || true)
 done < <(find_named flake.nix)

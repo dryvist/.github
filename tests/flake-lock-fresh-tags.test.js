@@ -43,6 +43,7 @@ before(() => {
   commits.s1 = git(work, 'rev-parse', 'HEAD');
   git(work, 'checkout', '-q', 'main');
   git(work, 'branch', 'v1', commits.s1);
+  git(work, 'tag', 'v1.0.0', commits.c1);
 
   remote = path.join(root, 'remote');
   fs.mkdirSync(path.join(remote, 'dryvist'), { recursive: true });
@@ -106,9 +107,16 @@ test('in fail mode a dryvist input that names a branch or no ref fails and is no
   for (const ref of ['main', undefined]) {
     const r = run(lockWith('r', ref, commits.c2), 'fail');
     assert.equal(r.status, 1, String(ref));
-    assert.match(r.stdout, /dryvist input in \(dryvist\/r\) names (ref main|no ref); name a floating major tag \(vN\) instead/);
+    assert.match(r.stdout, /dryvist input in \(dryvist\/r\) names (ref main|no ref); name a floating major tag \(vN\) or an exact release tag instead/);
     assert.deepEqual(r.names, []);
   }
+});
+
+test('in fail mode an exact release tag is a pin and passes', () => {
+  const r = run(lockWith('r', 'v1.0.0', commits.c1), 'fail');
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.doesNotMatch(r.stdout, /::error::/);
+  assert.deepEqual(r.names, []);
 });
 
 test('with no policy set a dryvist input that names a branch fails', () => {
