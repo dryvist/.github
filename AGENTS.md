@@ -60,8 +60,9 @@ not a per-repo knob. Split large files rather than widening org defaults.
 Release-please is **org-native** to this repo: every dryvist repo calls the
 reusable `.github/workflows/_release-please.yml` here, pinned to a commit SHA
 (`@<40-hex commit SHA> # vX.Y.Z`), not a cross-account JacobPEvans workflow. It
-opens the release PR and leaves it open for a person to merge, for every bump
-type (patch, minor, or major). A dryvist
+opens the release PR for every bump type (patch, minor, or major). On a repo
+whose `automerge` property is `simple`, `bot-pr-automerge-sweep.yml` merges it
+once its checks pass; on a `manual` repo it waits for a person. A dryvist
 repo's `release-please.yml` caller forwards a single secret:
 
 | dryvist org secret | Reusable workflow secret |
@@ -152,7 +153,10 @@ hourly deterministic backstop that re-derives eligibility from the GitHub API
 head commit past the soak: 48 h, or none for a first-party bump) and
 squash-merges into the PR's own base branch. Renovate still tries to merge its
 own PRs first; the sweep exists because it usually does not succeed, and the
-gap was being filled by hand. First-party bumps auto-merge on every repo except those whose `automerge` property is `manual` (every `ansible-*` repo and `nix-ai`); there, and for release PRs, a person approves.
+gap was being filled by hand. First-party bumps auto-merge on every repo except
+those whose `automerge` property is `manual` (every `ansible-*` repo and
+`nix-ai`); there, a person approves. Release PRs follow the same split, with no
+soak.
 
 **Do not merge a bot PR yourself, and do not review one to unblock it.** A bot
 PR the sweep will not merge is a defect in `renovate-presets.json` or in the
