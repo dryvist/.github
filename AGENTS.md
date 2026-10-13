@@ -149,9 +149,16 @@ Renovate and release PRs are merged by `.github/workflows/bot-pr-automerge-sweep
 hourly deterministic backstop that re-derives eligibility from the GitHub API
 (bot author, no `update:major` or `bump:minor` label, mergeable, checks green,
 head commit past the soak: 48 h, or none for a first-party bump) and
-squash-merges into the PR's own base branch. Release PRs skip the soak. A repo whose
-`automerge` property is `manual` (every `ansible-*` repo and `nix-ai`) gets a
-sweep merge only after the local triage agent adds `auto-merge-deps`.
+squash-merges into the PR's own base branch. Release PRs (base `main` on trunk
+repos, `develop` on git-flow repos) skip the soak and the triage-label gate. A repo
+whose `automerge` property is `manual` (every `ansible-*` repo and `nix-ai`) gets a
+sweep merge of any other bot PR only after the local triage agent adds `auto-merge-deps`.
+
+Documentation projection PRs from `app/openbao-service-broker` in `dryvist/docs`
+merge without a person when they change at most 5 files and 100 added plus deleted
+lines, the changed-file list is complete, and no path is under `.github/workflows/`
+or matches a secrets, credentials, auth, permissions, `.env`, `.pem` or `.key` rule
+(`scripts/bot-sweep-policy.sh`). A larger projection PR waits for approval.
 
 **Do not merge a bot PR yourself, and do not review one to unblock it.** A bot
 PR the sweep will not merge is a defect in `renovate-presets.json` or in the
