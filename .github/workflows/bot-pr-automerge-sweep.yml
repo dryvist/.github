@@ -74,9 +74,9 @@ jobs:
       # those PRs sat open indefinitely while this sweep could not see them.
       # app/jacobpevans-release-please opens release PRs on every repo flow
       # (main on trunk repos, develop on git-flow repos); each merges like any
-      # other bot PR once its checks are green. app/openbao-service-broker
-      # opens documentation projection PRs and is gated by
-      # scripts/bot-sweep-policy.sh.
+      # other bot PR once its checks are green, and skips the triage-label gate
+      # on "manual" repos. app/openbao-service-broker opens documentation
+      # projection PRs and is gated by scripts/bot-sweep-policy.sh.
       BOT_AUTHORS: "app/renovate app/dryvist-github-actions app/jacobpevans-release-please app/openbao-service-broker"
       SMALL_DIFF_MAX_FILES: "5"
       SMALL_DIFF_MAX_LINES: "100"
@@ -291,7 +291,7 @@ jobs:
             # can add it; the event history names who added it and when.
             manual=$(gh api "repos/${ORG}/${repo}/properties/values" \
               --jq 'any(.[]; .property_name == "automerge" and .value == "manual")' 2>/dev/null || echo false)
-            if [ "$manual" = "true" ]; then
+            if [ "$manual" = "true" ] && [ "$author" != "app/jacobpevans-release-please" ]; then
               head_date=$(gh api "repos/${ORG}/${repo}/commits/${sha}" \
                 --jq '.commit.committer.date' 2>/dev/null || echo "")
               triaged=""
