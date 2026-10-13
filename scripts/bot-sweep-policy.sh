@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Per-PR policy for the bot PR automerge sweep. Reads one `gh pr view --json` object on
+# stdin plus REPO (owner/name) and prints `proceed` or `skip:<reason>`.
+#
+# A PR from SMALL_DIFF_PROJECTION_AUTHOR proceeds only in SMALL_DIFF_PROJECTION_REPO, with
+# at most SMALL_DIFF_MAX_FILES changed files and SMALL_DIFF_MAX_LINES added plus deleted
+# lines, a complete changed-file list, and no path under .github/workflows/ or matching a
+# secrets, credentials, auth, permissions, .env, .pem or .key rule. Every other author
+# proceeds to the sweep's remaining gates.
 set -euo pipefail
 
 if ! pr=$(jq -c -s '
