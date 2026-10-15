@@ -280,7 +280,7 @@ jobs:
             if [[ $INPUT == */* ]]; then
               # Nested paths are accepted only when every segment follows a
               # direct input edge from the root of this lock.
-              if [[ $INPUT =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]*(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+$ ]] &&
+              if [[ $INPUT =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_][A-Za-z0-9_-]*)*(/[A-Za-z0-9_][A-Za-z0-9_-]*(\.[A-Za-z0-9_][A-Za-z0-9_-]*)*)+$ ]] &&
                  jq -e --arg path "$INPUT" '
                    . as $lock
                    | ($path | split("/")) as $parts
