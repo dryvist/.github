@@ -1,4 +1,3 @@
----
 # Reusable: relock the flake and open ONE pull request
 #
 # THE CONTRACT — one repo, one branch, one open flake PR, ever.
@@ -149,12 +148,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          printf '%s' "::error title=GitHub App token not minted::No token for $REPO. "
-          printf '%s' "A 404 'get a repository installation' means the App is not installed on $REPO; install it there. "
-          printf '%s' "A 401 'JSON web token could not be decoded' or a missing 'private-key' means "
-          printf '%s' "vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; "
-          printf '%s' 'set both where this job can read them (repository, organization or the automation environment). '
-          printf '%s\n' 'The step above shows the API error.'
+          echo "::error title=GitHub App token not minted::No token for $REPO. A 404 'get a repository installation' means the App is not installed on $REPO; install it there. A 401 'JSON web token could not be decoded' or a missing 'private-key' means vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; set both where this job can read them (repository, organization or the automation environment). The step above shows the API error."
           exit 1
 
       - name: Checkout flake.lock
@@ -223,12 +217,7 @@ jobs:
         env:
           REPO: ${{ github.repository }}
         run: |
-          printf '%s' "::error title=GitHub App token not minted::No token for $REPO. "
-          printf '%s' "A 404 'get a repository installation' means the App is not installed on $REPO; install it there. "
-          printf '%s' "A 401 'JSON web token could not be decoded' or a missing 'private-key' means "
-          printf '%s' "vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; "
-          printf '%s' 'set both where this job can read them (repository, organization or the automation environment). '
-          printf '%s\n' 'The step above shows the API error.'
+          echo "::error title=GitHub App token not minted::No token for $REPO. A 404 'get a repository installation' means the App is not installed on $REPO; install it there. A 401 'JSON web token could not be decoded' or a missing 'private-key' means vars.GH_APP_CLIENT_ID or secrets.GH_APP_PRIVATE_KEY is unset or belongs to another App; set both where this job can read them (repository, organization or the automation environment). The step above shows the API error."
           exit 1
 
       - name: Generate read-only token for private flake inputs
