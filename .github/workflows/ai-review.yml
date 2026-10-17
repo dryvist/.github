@@ -52,7 +52,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@286459bf39f4c269e10d6b28e8c29ba225faed5e # v0.49.0
+    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@7628f535be4f3b964cba9cd920504912f03e212d # v0.50.1
     secrets:
       TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 
@@ -86,7 +86,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: dryvist/ai-workflows/.github/workflows/pr-agent.yml@286459bf39f4c269e10d6b28e8c29ba225faed5e # v0.49.0
+    uses: dryvist/ai-workflows/.github/workflows/pr-agent.yml@7628f535be4f3b964cba9cd920504912f03e212d # v0.50.1
     with:
       review: true
       # Open-source repositories request review-oss.
