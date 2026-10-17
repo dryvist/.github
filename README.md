@@ -5,8 +5,10 @@ GitHub organization. Contains AI assistant policy, lint/format config,
 dependency-management config, security policy, and the org profile page.
 
 This repo holds **only** vendor-agnostic org infrastructure. Cribl-specific
-test harnesses and reusable workflows live in
-[`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template).
+test harnesses live in
+[`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template);
+generic reusable workflow definitions live in
+[`JacobPEvans/.github`](https://github.com/JacobPEvans/.github).
 
 ## Requirements
 
@@ -170,12 +172,13 @@ This repo exposes the following inheritance surfaces:
 | `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
-| `.github/workflows/_*.yml` | Reusable CI workflows, consumed via `uses: dryvist/.github/.github/workflows/<file>@<40-hex commit SHA> # vX.Y.Z` |
+| Generic reusable workflows | `JacobPEvans/.github`, consumed via `uses: JacobPEvans/.github/.github/workflows/<file>@v1` |
+| Org-specific reusable workflows | `_ci-gate.yml`, `_disclosure-gate.yml`, `_flake-lock-fresh.yml`, `_release-please.yml`, `renovate-config-validate.yml` |
 | `.github/workflows/{markdownlint,conventions-check,ai-review}.yml` | Org-wide Required Workflows; `tofu-github` rulesets inject them into every repo's PRs |
-| `configs/` | Shared configs the reusable workflows fetch at runtime (e.g. `_markdown-lint`'s org-default fallback) |
+| `configs/` | Org-specific configs retained here, including `gitignore` and `release-please-config.json` |
 | `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |
-| `scripts/` | Shell helpers the reusable workflows sparse-checkout (`ci-gate-watchdog.sh`, `run-pip-audit.sh`) |
-| repo-local `osv-scanner.toml` | Optional OSV config passed with `_osv-scan.yml`'s `config_file` input for repo-specific exceptions |
+| `scripts/` | Helpers used by workflows retained here, including `ci-gate-watchdog.sh` and `flake-lock-fresh.sh` |
+| repo-local `osv-scanner.toml` | Optional OSV config passed to `JacobPEvans/.github`'s `_osv-scan.yml` `config_file` input |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
 
