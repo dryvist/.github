@@ -10,6 +10,7 @@ const CONTROL_PLANE_PATHS = new Set([
   'SECURITY.md',
   'flake.lock',
   'flake.nix',
+  'renovate.json',
 ]);
 
 function isGeneratedPath(path) {
