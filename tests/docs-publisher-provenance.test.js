@@ -14,6 +14,7 @@ test('separates generated output from repository control plane', () => {
   assert.equal(isGeneratedPath('.claude/skills/example/SKILL.md'), false);
   assert.equal(isGeneratedPath('AGENTS.md'), false);
   assert.equal(isGeneratedPath('scripts/validate-mermaid.sh'), false);
+  assert.equal(isGeneratedPath('renovate.json'), false);
 });
 
 test('extracts publisher source metadata without logging the body', () => {
@@ -53,7 +54,11 @@ function harness({ files, author = 'publisher[bot]', branch = 'chore/publisher/u
 }
 
 test('allows control-plane changes without publisher identity', async () => {
-  const state = harness({ files: ['.github/workflows/ci.yml', 'AGENTS.md'] });
+  const state = harness({
+    author: 'contributor',
+    branch: 'feature/ci',
+    files: ['.github/workflows/x.yml', '.claude/settings.json', 'scripts/build.ts', 'renovate.json', 'AGENTS.md'],
+  });
   await run(state);
   assert.deepEqual(state.failures, []);
 });
@@ -79,6 +84,27 @@ test('accepts a pinned generated projection from the publisher', async () => {
   assert.deepEqual(state.failures, []);
   if (previousLogin === undefined) delete process.env.DOCS_PUBLISHER_LOGIN;
   else process.env.DOCS_PUBLISHER_LOGIN = previousLogin;
+});
+
+test('rejects publisher-written paths without its branch or source trailer', async () => {
+  const previousLogin = process.env.DOCS_PUBLISHER_LOGIN;
+  process.env.DOCS_PUBLISHER_LOGIN = 'publisher[bot]';
+  try {
+    const wrongBranch = harness({
+      files: ['docs.json'],
+      branch: 'feature/docs',
+      body: 'Docs-Publisher-Source: 0123456789abcdef0123456789abcdef01234567',
+    });
+    await run(wrongBranch);
+    assert.equal(wrongBranch.failures.length, 1);
+
+    const missingTrailer = harness({ files: ['guides/example.mdx'] });
+    await run(missingTrailer);
+    assert.equal(missingTrailer.failures.length, 1);
+  } finally {
+    if (previousLogin === undefined) delete process.env.DOCS_PUBLISHER_LOGIN;
+    else process.env.DOCS_PUBLISHER_LOGIN = previousLogin;
+  }
 });
 
 test('rejects a source trailer that names a repository', async () => {
