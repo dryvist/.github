@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.1](https://github.com/dryvist/.github/compare/v1.19.0...v1.19.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* **ai-review:** call pr-agent and scope-classify at ai-workflows v0.50.1 ([#397](https://github.com/dryvist/.github/issues/397)) ([2b7841a](https://github.com/dryvist/.github/commit/2b7841a90f9cd39aa14424097918e8703f0e0197))
+
 ## [1.19.0](https://github.com/dryvist/.github/compare/v1.18.0...v1.19.0) (2026-10-15)
 
 
