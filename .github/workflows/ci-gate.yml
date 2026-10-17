@@ -29,7 +29,7 @@ jobs:
       # `actions: write` must be granted here or the run fails at graph
       # validation (startup_failure).
       actions: write
-    uses: ./.github/workflows/_ci-gate.yml
+    uses: JacobPEvans/.github/.github/workflows/_ci-gate.yml@v1
     with:
       nix_validate: true
       workflow_lint: true
