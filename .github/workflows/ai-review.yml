@@ -4,7 +4,7 @@
 # (`org-ai-review`), which injects this workflow into the pull requests of
 # EVERY repo in the org — no per-repo `uses:` caller, so a repo cannot opt out
 # by omission. It mirrors markdownlint.yml (the proven required-workflow
-# pattern) and defers the actual review to dryvist/ai-workflows' reusable
+# pattern) and defers the actual review to JacobPEvans/.github-ai's reusable
 # PR-Agent workflow, which reads each repo's own `.pr_agent.toml` for its
 # checklist.
 #
@@ -29,7 +29,7 @@
 # its group per pull request, and a caller sharing that exact group causes an
 # opaque 0-job startup_failure.
 #
-# `scope` (dryvist/ai-workflows' content-aware scope-classify.yml, "Jev")
+# `scope` (JacobPEvans/.github-ai's content-aware scope-classify.yml, "Jev")
 # runs unconditionally and gates `pr-agent` on its `ai_review` output. The
 # required workflow itself always completes (`dependency-bot` or `pr-agent`
 # always runs); only whether `pr-agent`'s review job runs is narrowed. A
@@ -52,7 +52,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@7628f535be4f3b964cba9cd920504912f03e212d # v0.50.1
+    uses: JacobPEvans/.github-ai/.github/workflows/scope-classify.yml@v1
     secrets:
       TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 
@@ -86,7 +86,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: dryvist/ai-workflows/.github/workflows/pr-agent.yml@7628f535be4f3b964cba9cd920504912f03e212d # v0.50.1
+    uses: JacobPEvans/.github-ai/.github/workflows/pr-agent.yml@v1
     with:
       review: true
       # Open-source repositories request review-oss.

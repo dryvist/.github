@@ -5,7 +5,7 @@
 #
 # What this workflow does:
 #
-#   scope    -> content-aware classifier (dryvist/ai-workflows'
+#   scope    -> content-aware classifier (JacobPEvans/.github-ai's
 #               scope-classify.yml, "Jev"); a SECOND, additional layer on
 #               top of `changes` below, narrowing further, never replacing
 #               it - see "Content-aware scope classifier" below
@@ -35,7 +35,7 @@
 # never be skippable by ANY signal, deterministic or classified.
 # `markdown-lint` and `file-size` depend only on their path filters, never on
 # `scope`: the classifier may narrow optional jobs, not these two.
-# https://github.com/dryvist/ai-workflows/blob/main/.github/scope-rubric.md
+# https://github.com/JacobPEvans/.github-ai/blob/v1/.github/scope-rubric.md
 #
 # Why the watchdog exists:
 #
@@ -478,10 +478,10 @@ jobs:
   # 'success'` AND the output says so, so a scope failure or an empty
   # secret defers entirely to the pre-existing filter logic (the classifier
   # is unreachable = everything the filters already decided still runs).
-  # https://github.com/dryvist/ai-workflows/blob/main/.github/scope-rubric.md
+  # https://github.com/JacobPEvans/.github-ai/blob/v1/.github/scope-rubric.md
   scope:
     name: Classify CI scope (Jev)
-    uses: dryvist/ai-workflows/.github/workflows/scope-classify.yml@286459bf39f4c269e10d6b28e8c29ba225faed5e # v0.49.0
+    uses: JacobPEvans/.github-ai/.github/workflows/scope-classify.yml@v1
     secrets:
       TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
 
