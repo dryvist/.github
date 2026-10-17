@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.3](https://github.com/dryvist/.github/compare/v1.19.2...v1.19.3) (2026-10-17)
+
+
+### Bug Fixes
+
+* **docs-publisher:** treat renovate.json as repository control plane ([#401](https://github.com/dryvist/.github/issues/401)) ([0c5eae0](https://github.com/dryvist/.github/commit/0c5eae05e6edcb42f494e1f001d5132e17c231d8))
+
 ## [1.19.2](https://github.com/dryvist/.github/compare/v1.19.1...v1.19.2) (2026-10-17)
 
 
