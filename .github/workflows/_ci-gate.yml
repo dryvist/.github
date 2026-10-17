@@ -654,9 +654,9 @@ jobs:
     # scope failure (or a caller with no TYPESAFE_API_KEY plumbed through)
     # defers entirely to the filter, exactly as before this job existed.
     if: ${{ !cancelled() && (inputs.nix_validate || inputs.profile == 'nix') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    # Keep nested workflow calls on the same immutable source revision while
-    # validating changes to this reusable workflow repository.
-    uses: ./.github/workflows/_nix-validate.yml
+    # Use the canonical v1 validator while validating changes to this reusable
+    # workflow repository.
+    uses: JacobPEvans/.github/.github/workflows/_nix-validate.yml@v1
     with:
       all_systems: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.all_systems }}
       focused_checks: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
@@ -682,7 +682,7 @@ jobs:
     # failure defers to the filter/base-ref condition alone, same as
     # before this job existed.
     if: ${{ !cancelled() && inputs.nix_build && (github.event_name != 'pull_request' || github.base_ref == 'main') && needs.changes.outputs.nix == 'true' && (inputs.nix_skip_deps_only == false || needs.changes.outputs.is-deps-only != 'true' || needs.changes.outputs.is-flake-lock-change == 'true' || needs.changes.outputs.is-nix-source-change == 'true') && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
-    uses: ./.github/workflows/_nix-build.yml
+    uses: JacobPEvans/.github/.github/workflows/_nix-build.yml@v1
     with:
       build-command: ${{ inputs.nix_build_command }}
 
@@ -690,7 +690,7 @@ jobs:
     name: Markdown Lint
     needs: changes
     if: ${{ !cancelled() && inputs.markdown_lint && needs.changes.outputs.markdown == 'true' }}
-    uses: ./.github/workflows/_markdown-lint.yml
+    uses: JacobPEvans/.github/.github/workflows/_markdown-lint.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -698,7 +698,7 @@ jobs:
     name: File Size
     needs: changes
     if: ${{ !cancelled() && inputs.file_size && (needs.changes.outputs.nix == 'true' || needs.changes.outputs.markdown == 'true' || needs.changes.outputs.terraform == 'true') }}
-    uses: ./.github/workflows/_file-size.yml
+    uses: JacobPEvans/.github/.github/workflows/_file-size.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -706,7 +706,7 @@ jobs:
     name: Token Limits
     needs: [changes, scope]
     if: ${{ !cancelled() && inputs.token_limits && needs.changes.outputs.markdown == 'true' && (needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: ./.github/workflows/_token-limits.yml
+    uses: JacobPEvans/.github/.github/workflows/_token-limits.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -714,7 +714,7 @@ jobs:
     name: Python Security
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.python_security || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: ./.github/workflows/_python-security.yml
+    uses: JacobPEvans/.github/.github/workflows/_python-security.yml@v1
     with:
       python-dirs: ${{ inputs.python_security_dirs }}
       ignore-vulns: ${{ inputs.python_security_ignore_vulns }}
@@ -730,7 +730,7 @@ jobs:
     # a fast validate - only narrows when scope succeeded and said
     # something other than full.
     if: ${{ !cancelled() && (inputs.python_ci || inputs.profile == 'python') && needs.changes.outputs.python == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || (needs.scope.outputs.ci != 'lint-only' && needs.scope.outputs.ci != 'none')) }}
-    uses: ./.github/workflows/_python-ci.yml
+    uses: JacobPEvans/.github/.github/workflows/_python-ci.yml@v1
     with:
       python_versions: ${{ inputs.python_ci_versions }}
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -766,7 +766,7 @@ jobs:
   zizmor:
     name: Workflow Security (zizmor)
     if: ${{ inputs.zizmor && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_zizmor.yml
+    uses: JacobPEvans/.github/.github/workflows/_zizmor.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -775,7 +775,7 @@ jobs:
   agent-pr-body:
     name: Agent PR Body
     if: ${{ inputs.agent_pr_body && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_agent-pr-body.yml
+    uses: JacobPEvans/.github/.github/workflows/_agent-pr-body.yml@v1
     with:
       block: ${{ inputs.agent_pr_body_block }}
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -787,7 +787,7 @@ jobs:
     name: Ansible CI
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.ansible_ci || inputs.profile == 'ansible') && needs.changes.outputs.ansible == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: ./.github/workflows/_ansible-ci.yml
+    uses: JacobPEvans/.github/.github/workflows/_ansible-ci.yml@v1
     with:
       emit_gate: false
       lint_args: ${{ inputs.ansible_lint_args }}
@@ -808,7 +808,7 @@ jobs:
     name: Renovate Annotations
     needs: changes
     if: ${{ inputs.renovate_annotations }}
-    uses: ./.github/workflows/_renovate-annotations.yml
+    uses: JacobPEvans/.github/.github/workflows/_renovate-annotations.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -816,7 +816,7 @@ jobs:
     name: OpenTofu CI
     needs: [changes, scope]
     if: ${{ !cancelled() && (inputs.tofu_ci || inputs.profile == 'tofu') && needs.changes.outputs.terraform == 'true' && (needs.changes.outputs.profile-unmapped == 'true' || needs.scope.result != 'success' || needs.scope.outputs.ci != 'none') }}
-    uses: ./.github/workflows/_tofu-ci.yml
+    uses: JacobPEvans/.github/.github/workflows/_tofu-ci.yml@v1
     with:
       working_directories: ${{ inputs.tofu_working_directories }}
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
@@ -826,7 +826,7 @@ jobs:
   osv-scan:
     name: OSV Scanner
     if: ${{ inputs.osv_scan && github.event_name == 'pull_request' }}
-    uses: ./.github/workflows/_osv-scan.yml
+    uses: JacobPEvans/.github/.github/workflows/_osv-scan.yml@v1
     with:
       config_file: ${{ inputs.osv_config_file }}
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}

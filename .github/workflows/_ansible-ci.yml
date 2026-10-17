@@ -589,7 +589,7 @@ jobs:
     if: ${{ needs.changes.outputs.ansible == 'true' }}
     permissions:
       contents: read
-    uses: ./.github/workflows/_token-limits.yml
+    uses: JacobPEvans/.github/.github/workflows/_token-limits.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
@@ -604,7 +604,7 @@ jobs:
     if: ${{ inputs.renovate_annotations && needs.changes.outputs.ansible == 'true' }}
     permissions:
       contents: read
-    uses: ./.github/workflows/_renovate-annotations.yml
+    uses: JacobPEvans/.github/.github/workflows/_renovate-annotations.yml@v1
     with:
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 

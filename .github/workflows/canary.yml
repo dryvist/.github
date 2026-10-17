@@ -1,14 +1,15 @@
 ---
-# Caller-contract canary for the reusable workflows this repo publishes.
+# Caller-contract canary for the central reusable workflows this repo calls.
 #
-# Stack jobs call reusables through local paths, so the code under test is the
-# PR head (pull_request) or the pushed commit (push to main). On push, only a
-# release commit runs the stacks: its Canary check is what gates the major-tag
-# move, and every other commit was already canaried as a pull request. Release
-# PRs are squash-merged with their release-please title so the push matches.
-# The release commit is never re-canaried. Fixtures under tests/canary/<stack>/
-# are reached only through the directory inputs a reusable exposes; the rest
-# run against the repo root.
+# Stack jobs call generic reusables at JacobPEvans/.github@v1 and call this
+# repository's gate locally. The canary checks the central workflow contract
+# against the gate and fixtures from the PR head (pull_request) or pushed
+# commit (push to main). On push, only a release commit runs the stacks: its
+# Canary check gates the major-tag move, and every other commit was already
+# canaried as a pull request. Release PRs are squash-merged with their
+# release-please title so the push matches. The release commit is never
+# re-canaried. Fixtures under tests/canary/<stack>/ are reached only through
+# the directory inputs a reusable exposes; the rest run against the repo root.
 #
 # The `promote` job at the end runs on push to main after this run's summary
 # succeeds. It moves the floating major tag when a release tag already names
@@ -18,9 +19,9 @@
 # The job named `Canary` is the required check (ruleset, admin gate). It fails
 # when any caller job fails or is cancelled, and when a stack's change detection
 # did not match its fixture (a silent skip would otherwise read as a pass).
-# `ansible-direct` is the one exception: _ansible-ci.yml hard-codes its own
-# filter, so its lint runs only when the change touches Ansible paths. Its
-# coverage is printed to the job summary, not asserted.
+# `ansible-direct` is the one exception: the central _ansible-ci.yml hard-codes
+# its own filter, so its lint runs only when the change touches Ansible paths.
+# Its coverage is printed to the job summary, not asserted.
 #
 # `template-callers` is static: it reads each template's ci-gate.yml caller from
 # the template's default branch and checks it against this commit's gate
@@ -135,9 +136,9 @@ jobs:
       dependency_review: false
       zizmor: false
 
-  # python_ci is not canaried: _python-ci.yml runs `uv run` at the repo root and
-  # needs a root pyproject.toml this repo does not have. _python-security.yml
-  # takes a directory, so it exercises the fixture instead.
+  # python_ci is not canaried: the central _python-ci.yml runs `uv run` at the
+  # repo root and needs a root pyproject.toml this repo does not have. The
+  # central _python-security.yml takes a directory, so it exercises the fixture.
   python:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
@@ -171,16 +172,16 @@ jobs:
       dependency_review: false
       zizmor: false
 
-  # _ansible-ci.yml, with Molecule on. The contract_only map covers the
-  # Molecule-relevant paths on a PR, so a PR touching only workflows skips
-  # Molecule. A push to main runs the full scenario set.
+  # The central _ansible-ci.yml runs with Molecule on. The contract_only map
+  # covers the Molecule-relevant paths on a PR, so a PR touching only workflows
+  # skips Molecule. A push to main runs the full scenario set.
   ansible-direct:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
     permissions:
       contents: read
       pull-requests: read
-    uses: ./.github/workflows/_ansible-ci.yml
+    uses: JacobPEvans/.github/.github/workflows/_ansible-ci.yml@v1
     with:
       emit_gate: false
       molecule: true
