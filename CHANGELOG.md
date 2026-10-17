@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.2](https://github.com/dryvist/.github/compare/v1.19.1...v1.19.2) (2026-10-17)
+
+
+### Bug Fixes
+
+* **disclosure-gate:** skip Renovate release notes in the PR body scan ([#399](https://github.com/dryvist/.github/issues/399)) ([e1b3e08](https://github.com/dryvist/.github/commit/e1b3e08a6fb382f833534b99e4e65f73282f2416))
+
 ## [1.19.1](https://github.com/dryvist/.github/compare/v1.19.0...v1.19.1) (2026-10-17)
 
 
