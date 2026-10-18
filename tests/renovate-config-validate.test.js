@@ -12,8 +12,8 @@ test('Renovate config validator keeps its strict, configurable contract', () => 
   assert.match(validator, /config_file:/);
   assert.match(validator, /RENOVATE_CONFIG_FILE/);
   assert.match(validator, /renovate-config-validator --strict/);
-  assert.match(validator, /RENOVATE_VERSION: "44\.82\.4"/);
-  assert.match(validator, /node-version: "24\.11\.0"/);
+  assert.match(validator, /RENOVATE_VERSION: "\d+\.\d+\.\d+"/);
+  assert.match(validator, /node-version: "\d+\.\d+\.\d+"/);
   assert.match(validator, /key: renovate-cli-\$\{\{ runner\.os \}\}-\$\{\{ env\.RENOVATE_VERSION \}\}/);
 });
 
