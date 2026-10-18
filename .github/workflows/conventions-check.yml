@@ -95,3 +95,20 @@ jobs:
           echo "WARN mode: conventions missing (see annotations). Not failing."
           echo "Set repository variable CONVENTIONS_STRICT=true to enforce."
           exit 0
+
+      # Always enforced, unlike the presence checks above.
+      - name: Sparse-checkout the Renovate schedule guard from this repo
+        if: github.repository != 'dryvist/.github'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .gh-shared
+          sparse-checkout: |
+            scripts/renovate-schedule-guard.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - name: Reject schedule keys in Renovate config
+        if: github.repository != 'dryvist/.github'
+        run: bash .gh-shared/scripts/renovate-schedule-guard.sh
