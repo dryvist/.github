@@ -78,14 +78,14 @@ on:
 jobs:
   gate:
     permissions: { contents: read, pull-requests: read, actions: write }
-    uses: dryvist/.github/.github/workflows/_ci-gate.yml@<40-hex commit SHA> # vX.Y.Z
+    uses: JacobPEvans/.github/.github/workflows/_ci-gate.yml@v1
 ```
 
 `markdown_lint` and `file_size` are on by default and `filters` defaults to
 the markdown block; pass `with:` only for a `nix`/`python`/`ansible`/
 `terraform` filter, a toggle (`nix_validate`, `python_ci`, `tofu_ci`,
-`osv_scan`, …), or a `runner_label`. The header of `_ci-gate.yml` lists
-every input.
+`osv_scan`, …), or a `runner_label`. The header of `_ci-gate.yml` in
+[`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) lists every input.
 
 If the repo is a Cribl pack, scaffold from
 [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
@@ -94,7 +94,7 @@ instead — the template already includes the canonical configs.
 ### Wire up release-please in a dryvist repo
 
 Each repo needs `.release-please-manifest.json` + `release-please-config.json`
-plus a thin caller workflow that delegates to the org-native reusable workflow:
+plus a thin caller workflow that delegates to the shared reusable workflow:
 
 ```yaml
 # .github/workflows/release-please.yml
@@ -108,7 +108,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: dryvist/.github/.github/workflows/_release-please.yml@<40-hex commit SHA> # vX.Y.Z
+    uses: JacobPEvans/.github/.github/workflows/_release-please.yml@v1
     secrets:
       GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY: ${{ secrets.GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY }}
 ```
@@ -144,13 +144,12 @@ Org-level prereqs (one-time, owner-handled) for the dryvist release App:
 
 ## Calling the shared workflows
 
-Callers pin each reusable workflow to a commit SHA, with the release tag as a trailing comment:
+The shared reusable workflows live in `JacobPEvans/.github`. Callers use its floating major tag:
 
 ```yaml
-uses: dryvist/.github/.github/workflows/_ci-gate.yml@<40-hex commit SHA> # vX.Y.Z
+uses: JacobPEvans/.github/.github/workflows/_ci-gate.yml@v1
 ```
 
-- Renovate updates the SHA and the version comment together, in one PR per consumer.
 - Patch updates merge automatically after CI passes. Minor and major updates are merged by a person. Release PRs and small
   documentation-projection PRs merge themselves.
 - Nix, Ansible and OpenTofu git references use the floating major tag (`?ref=vN`). The lock file records the exact revision.
@@ -173,11 +172,9 @@ This repo exposes the following inheritance surfaces:
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | Generic reusable workflows | `JacobPEvans/.github`, consumed via `uses: JacobPEvans/.github/.github/workflows/<file>@v1` |
-| Org-specific reusable workflows | `_ci-gate.yml`, `_disclosure-gate.yml`, `_flake-lock-fresh.yml`, `_release-please.yml`, `renovate-config-validate.yml` |
 | `.github/workflows/{markdownlint,conventions-check,ai-review}.yml` | Org-wide Required Workflows; `tofu-github` rulesets inject them into every repo's PRs |
 | `configs/` | Org-specific configs retained here, including `gitignore` and `release-please-config.json` |
 | `configs/gitignore` | Org-default `.gitignore` baseline (secrets, credentials, TF state, AI-assistant local state); appended per repo at scaffold |
-| `scripts/` | Helpers used by workflows retained here, including `ci-gate-watchdog.sh` and `flake-lock-fresh.sh` |
 | repo-local `osv-scanner.toml` | Optional OSV config passed to `JacobPEvans/.github`'s `_osv-scan.yml` `config_file` input |
 | `SECURITY.md` | Org-wide vulnerability reporting policy (auto-applied to every dryvist repo's Security tab) |
 | `profile/README.md` | Org profile page at <https://github.com/dryvist> |
