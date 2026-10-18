@@ -71,16 +71,6 @@
       "* 16-23 * * 2"
     ]
   },
-  "nix": {
-    "lockFileMaintenance": {
-      "description": [
-        "Disabled for Nix flakes ONLY (lockFileMaintenance stays ON for npm/terraform/python/etc.). Flake inputs (git-refs) move hourly, and lockFileMaintenance delegates to `nix flake update`, which resolves to absolute-latest and ignores minimumReleaseAge (Renovate docs: lockFileMaintenance does not support it). Enabled + automerged it looped create->automerge->recreate ~60 PRs/week on churny flake repos (nix-darwin, nix-ai), ignoring the Saturday cadence. KEEP IT OFF.",
-        "SUPERSEDED 2026-08-05 \u2014 the whole `nix` MANAGER is now off too (see renovate-nix.json), so this setting is belt-and-braces rather than the operative control. flake.lock has exactly one writer: the _update-flake-lock.yml reusable workflow in this repo, which every nix repo calls via .github/workflows/deps-flake-lock.yml on the Saturday window and on demand. It runs a bare `nix flake update` onto the single branch `chore/flake-lock`, so a repo never has more than one open flake PR.",
-        "WHY THE MANAGER COULD NOT COVER IT: Renovate updates an input when its REFERENCE changes. That works for DIGEST-TRACKED inputs (devenv, git-hooks, treefmt-nix) but is FALSE for CHANNEL-PINNED inputs such as github:NixOS/nixpkgs/nixpkgs-26.05-darwin \u2014 a channel branch's reference never changes, so there is nothing to diff and the locked rev freezes permanently. Measured 2026-07-28: nix-devenv/channels/flake.lock had been modified exactly once since creation 8 weeks earlier, nix-claude-code was 65 days stale and nix-home 58 days, all with Renovate running and the nix manager enabled."
-      ],
-      "enabled": false
-    }
-  },
   "customManagers": [
     {
       "description": "Renovate-annotated version pins in Nix files. HASH FIELDS ARE NOT UPDATED \u2014 only version strings. Each repo's fix-renovate-hashes.yml runs nix-update to fix adjacent hash = \"sha256-...\" fields after Renovate bumps a version. When adding a new fetchPypi/fetchurl package with a Renovate annotation, also add it to that repo's nix-update workflow and flake packages output.",
@@ -488,6 +478,16 @@
         "git-refs"
       ],
       "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      "description": "Flake relocks on repositories that configure live machines open for review instead of auto-merging.",
+      "matchRepositories": [
+        "dryvist/nix-darwin*"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "automerge": false
     },
     {
       "description": "Repos whose automerge custom property is manual (tofu-github config/automerge.yml: every ansible-* repo and nix-ai): Renovate never auto-merges there, and the org-automerge-manual ruleset requires a person's approval. Last rule so it overrides every automerge setting above.",
