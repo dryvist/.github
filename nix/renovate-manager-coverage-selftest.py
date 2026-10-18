@@ -59,6 +59,7 @@ WIDENED_MUST_MATCH = [
 # managers in the preset must not silently skip the assertion.
 DEFAULTS_MANAGER_MARKER = "/defaults/main"
 WIDENED_ANNOTATION_MARKER = "/roles/.+/vars/"
+IMAGE_MANAGER_MARKER = "Docker image pins in Ansible role defaults"
 
 
 def patterns_of(manager: dict) -> list[re.Pattern[str]]:
@@ -114,6 +115,7 @@ def main() -> int:
                     failures.append(f"{name!r}: matches {path} (it must not)")
 
     failures.extend(check_requirements_managers(preset))
+    failures.extend(check_image_manager(preset))
 
     if failures:
         print("Renovate manager coverage FAILED:", file=sys.stderr)
@@ -229,6 +231,82 @@ def check_requirements_managers(preset: dict) -> list[str]:
     ):
         if not any(m.search(sample) for m in all_matchers):
             problems.append(f"no manager matches the {label} shape")
+    return problems
+
+
+IMAGE_DIGEST = "sha256:" + "a" * 64
+IMAGE_SAMPLES = [
+    ("quoted tag", '_image: "ghcr.io/acme/app:1.2.3"', "ghcr.io/acme/app", "1.2.3", None),
+    ("unquoted tag", "_image: ghcr.io/acme/app:1.2.3", "ghcr.io/acme/app", "1.2.3", None),
+    (
+        "quoted digest",
+        f'_image: "ghcr.io/acme/app:1.2.3@{IMAGE_DIGEST}"',
+        "ghcr.io/acme/app",
+        "1.2.3",
+        IMAGE_DIGEST,
+    ),
+    (
+        "unquoted digest",
+        f"_image: ghcr.io/acme/app:1.2.3@{IMAGE_DIGEST}",
+        "ghcr.io/acme/app",
+        "1.2.3",
+        IMAGE_DIGEST,
+    ),
+    (
+        "folded digest",
+        f"_image: >-\n  ghcr.io/acme/app:1.2.3@{IMAGE_DIGEST}",
+        "ghcr.io/acme/app",
+        "1.2.3",
+        IMAGE_DIGEST,
+    ),
+    (
+        "folded tag",
+        "_image: >-\n  ghcr.io/acme/app:1.2.3",
+        "ghcr.io/acme/app",
+        "1.2.3",
+        None,
+    ),
+]
+
+
+def check_image_manager(preset: dict) -> list[str]:
+    managers = []
+    for manager in preset.get("customManagers", []):
+        desc = manager.get("description", "")
+        head = desc[0] if isinstance(desc, list) and desc else desc
+        if isinstance(head, str) and head.startswith(IMAGE_MANAGER_MARKER):
+            managers.append(manager)
+    if len(managers) != 1:
+        return [f"expected one {IMAGE_MANAGER_MARKER!r} manager, found {len(managers)}"]
+
+    matchers = [_py_regex(s) for s in managers[0].get("matchStrings", [])]
+    problems = []
+    for label, sample, dep_name, current_value, current_digest in IMAGE_SAMPLES:
+        match = None
+        for matcher in matchers:
+            match = matcher.search(sample)
+            if match:
+                break
+        if match is None:
+            problems.append(f"image manager does not match the {label} shape")
+            continue
+        expected = {
+            "depName": dep_name,
+            "currentValue": current_value,
+            "currentDigest": current_digest,
+        }
+        for field, value in expected.items():
+            if match.groupdict().get(field) != value:
+                problems.append(
+                    f"image manager {label} captured {field}={match.groupdict().get(field)!r}, expected {value!r}"
+                )
+
+    for label, sample in (
+        ("untagged ref", "_image: ghcr.io/acme/app"),
+        ("Jinja expression", '_image: "ghcr.io/acme/app:1.2.3{{ suffix }}"'),
+    ):
+        if any(m.search(sample) for m in matchers):
+            problems.append(f"image manager matches {label} (it must not)")
     return problems
 
 
