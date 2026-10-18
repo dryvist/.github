@@ -40,20 +40,19 @@ Python is not used for new dryvist work.
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
 | Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
 
-The canonical `biome.jsonc`, `.markdownlint-cli2.yaml`, and
-`configs/file-size-defaults.yml` live in this repo. Repos copy biome/markdownlint
-at scaffold time; periodic sync is handled by Renovate's custom manager (or
-manual update for now — see the biome `customManagers` entry in
-`renovate-presets.json`). File-size defaults are **not** copied — CI and
-pre-commit load them from this repo via the shared checker script.
+The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo.
+Repos copy biome/markdownlint at scaffold time; periodic sync is handled by
+Renovate's custom manager (or manual update for now — see the biome
+`customManagers` entry in `renovate-presets.json`). File-size defaults and
+their shared checker live in `JacobPEvans/.github` and are **not** copied.
 
 ### File-size gate (org defaults + per-repo overrides)
 
-Org-wide byte limits live in `configs/file-size-defaults.yml` and are enforced
-by `scripts/check-file-sizes.sh` (called from `_file-size.yml`). **Do not add
-a repo-root `.file-size.yml` unless the repo needs `extended`, `exempt`, or
-`scan` overrides.** Never commit a `defaults:` block — that is global policy,
-not a per-repo knob. Split large files rather than widening org defaults.
+Org-wide byte limits live in `JacobPEvans/.github`
+(`configs/file-size-defaults.yml`, enforced by `_file-size.yml`). **Do not add a repo-root `.file-size.yml` unless the repo needs `extended`,
+`exempt`, or `scan` overrides.** Never commit a `defaults:` block — that is
+global policy, not a per-repo knob. Split large files rather than widening org
+defaults.
 
 ## Release-please (org-native)
 
@@ -161,11 +160,12 @@ sweep fails its own run when a bot PR outlives the policy, which is the signal
 that something needs fixing; record the follow-up in Vikunja, never a GitHub
 issue.
 
-## Master source of truth (no upstream inheritance)
+## Master source of truth for org config
 
-`dryvist/.github` is the **master**: it extends no other repository's config.
-Renovate policy lives here in `renovate-presets.json` + `renovate-grouping.json`;
-reusable workflows are first-party. The dependency direction is inverted —
+`dryvist/.github` is the **master** for org policy configuration: it extends no
+other repository's config. Renovate policy lives here in `renovate-presets.json`
+and `renovate-grouping.json`; generic reusable workflows live in
+`JacobPEvans/.github`. The dependency direction is inverted —
 `JacobPEvans/.github` extends THIS repo's presets, not the reverse. (Flipping the
 JacobPEvans side to `extends: github>dryvist/.github:renovate-presets` and deleting
 its duplicate preset copies is a pending follow-up.)
@@ -196,8 +196,8 @@ For every change in dryvist:
 5. Conventional commits (`fix:`, `feat:`, `chore:`, etc.) — release-please
    uses these to compute bumps.
 
-Ansible CI callers use the shared policy in `README.md` and
-`.github/workflows/_ansible-ci.yml`: pull requests and non-main pushes run
+Ansible CI callers use the shared policy in `README.md` and the central
+`_ansible-ci.yml@v1`: pull requests and non-main pushes run
 focused changed-role coverage; only a push to `main` after merge runs the full
 Molecule matrix. Shared execution inputs, uncovered paths, and failed selectors
 must keep the single required `Merge Gate` red until validation succeeds. A
@@ -207,18 +207,17 @@ the test runs in that same gate.
 
 ### Adding a new reusable workflow
 
-A brand-new `_*.yml` lands in **its own PR first, with no wiring**. A
-`uses: dryvist/.github/.github/workflows/_new-thing.yml@<40-hex commit SHA>`
-reference names a commit that must already contain the file. A reference
-added in the same PR as the file fails workflow **graph validation** before
-any job runs ("workflow file issue", zero jobs, no `gate / Merge Gate` context
-at all). This repo's own gate calls `./.github/workflows/_ci-gate.yml` by local
-path. Merge the new file first, then pin the released commit in a second PR.
+A brand-new generic `_*.yml` lands in `JacobPEvans/.github` in **its own PR
+first, with no wiring**. A reference added in the same PR as the file fails
+workflow **graph validation** before any job runs ("workflow file issue", zero
+jobs, no `gate / Merge Gate` context at all). Merge the new file first, then
+reference the released `v1` tag in a second PR. This repo's own gate calls
+`./.github/workflows/_ci-gate.yml` by local path.
 
 ## When in doubt
 
-- `dryvist/.github` is the master for org policy (Renovate presets, reusable
-  workflows); it inherits nothing from `JacobPEvans/.github`.
+- `dryvist/.github` is the master for org policy configuration (Renovate
+  presets); generic reusable workflows live in `JacobPEvans/.github`.
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
