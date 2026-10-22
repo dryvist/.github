@@ -146,14 +146,13 @@ already read; do not paste the result into any public artifact.
 
 Renovate and release PRs are merged by `.github/workflows/bot-pr-automerge-sweep.yml`, an
 hourly deterministic backstop that re-derives eligibility from the GitHub API
-(bot author, no `update:major` or `bump:minor` label, mergeable, checks green,
-head commit past the soak: 48 h, or none for a first-party bump) and
-squash-merges into the PR's own base branch. Release PRs skip the soak and the triage label. A repo whose
+(bot author, no `update:major` or `bump:minor` label, mergeable, checks green)
+and squash-merges into the PR's own base branch. Release PRs skip the triage label. A repo whose
 `automerge` property is `manual` (every `ansible-*` repo and `nix-ai`) gets a
 sweep merge only after the local triage agent adds `auto-merge-deps`.
 
 **Do not merge a bot PR yourself, and do not review one to unblock it.** A bot
-PR the sweep will not merge is a defect in `renovate-presets.json` or in the
+PR the sweep will not merge is a defect in `JacobPEvans/.github`'s `renovate-presets.json` or in the
 sweep's gates — fix it there so the next hundred PRs are covered too. Merging
 one by hand fixes exactly one PR and hides the defect from the next agent. The
 sweep fails its own run when a bot PR outlives the policy, which is the signal
