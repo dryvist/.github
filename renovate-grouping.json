@@ -1,7 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "All dependencies are grouped in one repository PR; the group automerges only when every member may automerge, so a major in the group leaves the PR open for review.",
+  "description": "Pass-through to JacobPEvans/.github renovate-grouping, the single Renovate policy master.",
   "extends": [
-    "group:all"
+    "local>JacobPEvans/.github:renovate-grouping"
   ]
 }

@@ -38,12 +38,12 @@ Python is not used for new dryvist work.
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
 | Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
-| Dependency updates | Renovate | Mastered here — presets in `renovate-presets.json` (extends nothing external) |
+| Dependency updates | Renovate | Policy mastered in `JacobPEvans/.github`; this repo's presets pass through to it |
 
 The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo.
 Repos copy biome/markdownlint at scaffold time; periodic sync is handled by
 Renovate's custom manager (or manual update for now — see the biome
-`customManagers` entry in `renovate-presets.json`). File-size defaults and
+`customManagers` entry in `JacobPEvans/.github`'s `renovate-presets.json`). File-size defaults and
 their shared checker live in `JacobPEvans/.github` and are **not** copied.
 
 ### File-size gate (org defaults + per-repo overrides)
@@ -162,13 +162,9 @@ issue.
 
 ## Master source of truth for org config
 
-`dryvist/.github` is the **master** for org policy configuration: it extends no
-other repository's config. Renovate policy lives here in `renovate-presets.json`
-and `renovate-grouping.json`; generic reusable workflows live in
-`JacobPEvans/.github`. The dependency direction is inverted —
-`JacobPEvans/.github` extends THIS repo's presets, not the reverse. (Flipping the
-JacobPEvans side to `extends: github>dryvist/.github:renovate-presets` and deleting
-its duplicate preset copies is a pending follow-up.)
+`JacobPEvans/.github` is the **master** for Renovate policy and for generic reusable
+workflows. `renovate-presets.json`, `renovate-grouping.json` and `renovate-nix.json`
+here are pass-throughs to it; change policy in `JacobPEvans/.github`, never here.
 
 ## Scope of this repo
 
@@ -216,8 +212,8 @@ reference the released `v1` tag in a second PR. This repo's own gate calls
 
 ## When in doubt
 
-- `dryvist/.github` is the master for org policy configuration (Renovate
-  presets); generic reusable workflows live in `JacobPEvans/.github`.
+- `JacobPEvans/.github` is the master for Renovate presets and generic reusable
+  workflows; this repo's presets pass through to it.
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.

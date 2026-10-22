@@ -1,13 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": [
-    "dryvist/.github nix preset. Nix repos extend `local>dryvist/.github:renovate-nix`. It enables Renovate's native `nix` manager: flake input bumps join the repository's grouped Saturday PR, and lockFileMaintenance relocks the whole flake (channel-pinned inputs included) in the same Saturday window.",
-    "The `.nix` version-pin customManager (fetchPypi/fetchurl pins carrying a `# renovate:` annotation) is a SEPARATE mechanism defined in the default preset — it edits version strings inside .nix files, never flake.lock."
+    "dryvist/.github nix preset: a pass-through to JacobPEvans/.github renovate-nix, which enables Renovate's native nix manager. Nix repos extend local>dryvist/.github:renovate-nix.",
+    "The .nix version-pin customManager is defined in the master preset. It edits version strings only, never flake.lock."
   ],
   "extends": [
-    "local>dryvist/.github"
-  ],
-  "nix": {
-    "enabled": true
-  }
+    "local>JacobPEvans/.github:renovate-nix"
+  ]
 }
