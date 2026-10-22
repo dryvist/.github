@@ -13,50 +13,16 @@ to this [.github repository](https://github.com/dryvist/.github/security/advisor
 
 ## Dependency Trust
 
-Automated dependency updates use Renovate via this repo's master presets
-([`renovate-presets.json`](renovate-presets.json) + [`renovate-grouping.json`](renovate-grouping.json)).
-Third-party minor/patch updates auto-merge publisher-agnostically; trust tiers gate only
-majors and PR-creation cadence. `dryvist/**` patch updates auto-merge; `dryvist/**` minor
-and major updates wait for a person. Canonical, fuller documentation:
+Automated dependency updates use Renovate. The policy is defined once, in the master
+[`JacobPEvans/.github`](https://github.com/JacobPEvans/.github/blob/main/SECURITY.md#dependency-trust),
+and this repo's `renovate-presets.json`, `renovate-grouping.json` and `renovate-nix.json`
+pass through to it.
+
+Auto-merged updates are gated by the deterministic `dependency-review` job
+(`actions/dependency-review-action`) inside the required Merge Gate on public repos.
+The `dryvist/ai-workflows` dependency reviewer is advisory only: it labels findings for
+human follow-up but does not gate or block auto-merge. Canonical, fuller documentation:
 [docs.jacobpevans.com/infrastructure/cicd/dependency-automation](https://docs.jacobpevans.com/infrastructure/cicd/dependency-automation).
-
-| Tier | Scope | PR-creation cadence | Majors |
-| --- | --- | --- | --- |
-| **First-party** | `dryvist/**` | at any time | wait for a person (minor too; patch auto-merges) |
-| **Own-org personal** | `JacobPEvans/**`, `JacobPEvans-personal/**` | at any time | auto-merge immediately, incl. major |
-| **Trusted** | curated ~50-org allowlist | twice-weekly (Mon/Thu) | never auto-merge; 3-day review PR (`dep:review`) |
-| **Untrusted** | all other external deps | weekly (Mon) | never auto-merge; held 30 days for review |
-| **Security / CVE** | any vulnerability alert | immediate (0-day PR) | third-party minor/patch and `dryvist/**` patch auto-merge fast; majors open for review |
-
-**Third-party minor/patch updates auto-merge publisher-agnostically** — any package, any
-ecosystem, any publisher — after a 3-day stabilization window and green CI. Trust tiers
-do not gate third-party minor/patch; they gate only majors and PR-creation cadence.
-
-- **First-party** — our own published `dryvist/**` packages. release-please opens a release PR and
-  a person merges it. Consumers receive a first-party release as a bump PR: patch
-  releases auto-merge after green CI; minor and major releases wait for a person.
-- **Own-org personal** — `JacobPEvans/**` and `JacobPEvans-personal/**` packages auto-merge
-  immediately at any update type, including major.
-- **Trusted** — the curated org allowlist in `renovate-presets.json` (actions, google,
-  github, hashicorp, astral-sh, NixOS, …). Trust here shortens the major-default
-  30-day hold to a 3-day review PR (`dep:review` label); it has no effect on
-  third-party minor/patch, which auto-merges the same way for every third-party tier.
-- **Untrusted** — everything else. Minor/patch still auto-merges through the same
-  publisher-agnostic rule; the only differences are a weekly (vs twice-weekly)
-  PR-creation cadence and the full 30-day hold before a major opens for review.
-- **Majors never auto-merge, except own-org personal packages** — a compatible-looking
-  version is not a compatible API. `dryvist/**` majors wait for a person; trusted-org majors
-  open a 3-day review PR; every other major is held 30 days.
-- **Security / CVE** — `vulnerabilityAlerts` surfaces a 0-day PR immediately, bypassing
-  the normal schedule. The auto-merge decision then falls to the same packageRules as
-  any other update: a third-party security minor/patch inherits the broad rule's fast
-  auto-merge, a `dryvist/**` security patch auto-merges after green CI, while a security
-  major, or a `dryvist/**` security minor, still opens for review like any other.
-- **Supply-chain safety** for the broad auto-merge set is the deterministic
-  `dependency-review` job (`actions/dependency-review-action`) inside the required
-  Merge Gate on public repos. The `dryvist/ai-workflows` dependency reviewer is
-  advisory only — it labels findings for human follow-up but does not gate or block
-  auto-merge.
 
 All third-party GitHub Actions — trusted orgs included — and all dryvist
 reusable workflows are pinned to SHA digests, not tags (see Version Pinning
@@ -71,8 +37,8 @@ below).
 | All third-party GitHub Actions | SHA commit hash pins + released version tag as a trailing comment (`# v4.2.2`); Renovate bumps both together |
 | npm packages | Lower-bound (`^x.y.z`) in `package.json`; lockfile committed |
 
-Patch updates to dryvist references merge automatically after CI passes.
-Minor and major updates, and release-please PRs, are merged by a person.
+Updates to dryvist references merge automatically after required checks pass, under the
+policy in Dependency Trust.
 Floating major tags (`vN`) move on release, after the Canary check passes.
 On a pull request that changes only Markdown outside `.github/` and
 `tests/canary/`, the Canary check passes with a notice and runs no stacks.

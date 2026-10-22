@@ -41,7 +41,7 @@ Example Renovate configuration to inherit these presets:
 | Inheritance mechanism | Where it shows up |
 | --- | --- |
 | GitHub auto-applied org files (`SECURITY.md`, `profile/README.md`) | Visible on every dryvist repo's Security tab + at <https://github.com/dryvist> |
-| Renovate `extends` | Each repo: `["local>dryvist/.github"]` (resolves `default.json`); nix repos use `:renovate-nix`. This repo is the **master** |
+| Renovate `extends` | Each repo: `["local>dryvist/.github"]` (resolves `default.json`); nix repos use `:renovate-nix`. Policy master: `JacobPEvans/.github` |
 | Biome config | Each repo carries a copy of `biome.jsonc` scaffolded from this repo; Renovate keeps it in sync |
 | markdownlint config | Each repo carries a copy of `.markdownlint-cli2.yaml` from this repo; sync TBD (manual for now) |
 | Pre-commit hooks (shared) | `precommit/` — Nix flake import or static YAML copy; see [`precommit/README.md`](precommit/README.md) |
@@ -168,8 +168,8 @@ This repo exposes the following inheritance surfaces:
 | `default.json` | Shareable Renovate entry point consumers resolve via `extends: ["local>dryvist/.github"]` (config:recommended + master policy) |
 | `renovate-nix.json` | Nix-manager opt-in variant of `default.json`; nix repos extend `["local>dryvist/.github:renovate-nix"]` |
 | `renovate.json` | This repo's OWN Renovate self-config (consumes `default.json`) — not the shared preset |
-| `renovate-presets.json` | Master Renovate policy: auto-merge, trusted orgs, custom managers |
-| `renovate-grouping.json` | Master Renovate ecosystem-grouping rules |
+| `renovate-presets.json` | Pass-through to `JacobPEvans/.github` `renovate-presets.json` (the Renovate policy master) |
+| `renovate-grouping.json` | Pass-through to `JacobPEvans/.github` `renovate-grouping.json` |
 | `precommit/` | Shared pre-commit layer (canonical lint configs + static YAML templates); see [`precommit/README.md`](precommit/README.md) |
 | `zizmor.yml` | Org-wide zizmor workflow-security policy (referenced by the pre-commit `zizmor` hook) |
 | Generic reusable workflows | `JacobPEvans/.github`, consumed via `uses: JacobPEvans/.github/.github/workflows/<file>@v1` |
@@ -204,7 +204,7 @@ npx -y markdownlint-cli2 "**/*.md"
 
 ## References
 
-- [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — to become a downstream consumer of this repo's presets (inversion pending)
+- [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — the Renovate policy master; this repo's presets pass through to it
 - [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template) — Cribl pack template
 - [Biome configuration reference](https://biomejs.dev/reference/configuration/)
 - [markdownlint-cli2 configuration](https://github.com/DavidAnson/markdownlint-cli2#configuration)
