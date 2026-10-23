@@ -178,29 +178,6 @@ jobs:
           # workflow cannot start merging PRs before a dispatched dry run has
           # been read. Unsetting it disarms the sweep without reverting code.
           SWEEP_LIVE: ${{ vars.BOT_SWEEP_LIVE }}
-          # Minimum age of the PR HEAD COMMIT. Enforced here from the commit
-          # timestamp so it holds even when Renovate never refreshes its own
-          # renovate/stability-days status.
-          #
-          # DELIBERATELY SHORTER than the 3-day minimumReleaseAge in
-          # renovate-presets.json, and the two are not meant to match. That
-          # preset gates when a PR may be CREATED; this gates when an already
-          # open PR may MERGE, and PR creation runs on two fixed weekly
-          # windows, so a bump has normally aged well past its own release
-          # before it is even proposed. Holding an open PR a further 72h past
-          # that added visible backlog without adding soak: the batch lands in
-          # one evening and then sits, so the org is never at zero open bot
-          # PRs. 48h keeps a real independent soak while letting a batch clear
-          # inside the same week it opened.
-          MIN_AGE_HOURS: "48"
-          # Minimum head-commit age for a FIRST-PARTY bump: a Renovate PR whose
-          # title updates a dryvist/ package or a github.com/dryvist/ git source.
-          # renovate-presets.json merges own-org dependencies with a zero-day
-          # minimumReleaseAge, and the producer's own release gate already
-          # exercised that version, so an independent soak adds delay only.
-          # Third-party bumps keep MIN_AGE_HOURS. Majors and minors stay held
-          # by label whatever this value is.
-          FIRST_PARTY_MIN_AGE_HOURS: "0"
           # A bot PR still open past this is a policy defect, not a backlog
           # item. The job fails so the failure notification surfaces it.
           STALL_DAYS: "7"
@@ -213,7 +190,6 @@ jobs:
           set -euo pipefail
 
           now=$(date -u +%s)
-          min_age=$(( MIN_AGE_HOURS * 3600 ))
           stall_age=$(( STALL_DAYS * 86400 ))
 
           # A manual run honours its input. A scheduled run is dry unless armed.
@@ -312,13 +288,9 @@ jobs:
 
             policy=$(REPO="${ORG}/${repo}" bash scripts/bot-sweep-policy.sh <<<"$pr")
 
-            # Anchor the soak on the HEAD COMMIT, never on the PR's createdAt.
-            # Renovate updates a PR in place: same PR, new commit carrying a
-            # newer digest or lock state, createdAt unchanged. Since this sweep
-            # deliberately exempts renovate/stability-days, commit age is the
-            # ONLY soak it enforces — reading createdAt would let a five-day-old
-            # PR carrying a one-hour-old dependency through, which is exactly
-            # the 3-day stabilization the presets promise.
+            # Age is read from the HEAD COMMIT, never the PR's createdAt. Renovate
+            # updates a PR in place with a new commit, and createdAt stays put.
+            # The age feeds only the stalled-PR report below.
             committed=$(gh api "repos/${ORG}/${repo}/commits/${sha}" \
               --jq '.commit.committer.date' 2>/dev/null || echo "")
             if [ -z "$committed" ]; then
@@ -343,28 +315,13 @@ jobs:
               CLEAN|UNSTABLE) ;;
               *) [ -z "$reason" ] && reason="state:${state}" ;;
             esac
-            # A first-party bump (see FIRST_PARTY_MIN_AGE_HOURS) ages on its own
-            # threshold; every other bump keeps MIN_AGE_HOURS.
-            pr_min_age=$min_age
-            pr_min_hours=$MIN_AGE_HOURS
-            if [ "$first_party" = "true" ]; then
-              pr_min_age=$(( FIRST_PARTY_MIN_AGE_HOURS * 3600 ))
-              pr_min_hours=$FIRST_PARTY_MIN_AGE_HOURS
-            fi
-            # A release PR carries no new dependency, so it has nothing to soak.
-            if [ "$author" = "app/jacobpevans-release-please" ]; then
-              pr_min_age=0
-              pr_min_hours=0
-            fi
-            [ -z "$reason" ] && [ "$age" -lt "$pr_min_age" ] \
-              && reason="age:$(( age / 3600 ))h<${pr_min_hours}h"
-
             # UNSTABLE is accepted only when the sole non-green signal is
             # Renovate's own renovate/stability-days status. That status
             # advances only on a Renovate run, so gating on it would
-            # reintroduce the very dependency this workflow exists to remove —
-            # the PR age checked above is the independent soak. Any other
-            # failing or pending signal still blocks.
+            # reintroduce the very dependency this workflow exists to remove.
+            # Renovate opens a PR only after its release-age window, so the sweep
+            # does not wait on this status either. Any other failing or pending
+            # signal still blocks.
             if [ -z "$reason" ]; then
               # Each blocking check is reported as name(verdict), never folded
               # into a bare "failed". `cancelled` and `timed_out` mean the check

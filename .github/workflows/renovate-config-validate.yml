@@ -1,7 +1,7 @@
-# Validates this repo's Renovate config (the org master preset) on every PR
-# that touches it. dryvist/.github is the single source of truth for Renovate
-# policy across every dryvist/JacobPEvans repo, so a broken preset here silently
-# breaks dependency automation for all consumers. `--strict` also fails on
+# Validates this repo's Renovate configs on every PR that touches them. They are
+# pass-throughs to JacobPEvans/.github, the single source of truth for Renovate
+# policy across every dryvist/JacobPEvans repo, so a broken pass-through here
+# silently breaks dependency automation for dryvist consumers. `--strict` also fails on
 # deprecation/migration warnings, so config drift (renamed options, removed
 # keys) is caught and fixed at PR time — not discovered months later. Scoped by
 # `paths`, so it only runs when a renovate*.json file actually changes.
