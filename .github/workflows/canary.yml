@@ -53,7 +53,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' ||
       startsWith(github.event.head_commit.message, 'chore(main): release ')
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -206,7 +206,7 @@ jobs:
     needs: [scope]
     if: needs.scope.outputs.run == 'true'
     name: Template Callers
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -236,7 +236,7 @@ jobs:
     if: >-
       always() && (github.event_name == 'pull_request' ||
       startsWith(github.event.head_commit.message, 'chore(main): release '))
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions: {}
     steps:
@@ -300,7 +300,7 @@ jobs:
     name: Move floating major tag
     needs: [canary-summary]
     if: ${{ success() && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: write
