@@ -95,6 +95,13 @@
 # every `pull_request` event when enabled, regardless of which paths changed,
 # since a security scan must not be evadable by touching only untracked paths.
 #
+# `gitleaks` and `trufflehog` (secret scan, one `secret_scan` toggle) are
+# likewise NOT filter-gated: a secret can land in any file type. Both scan only
+# the pull request's own commits (base..head), never full history, and run with
+# `contents: read` only. The gitleaks job ignores the scanned repo's own
+# `.gitleaks.toml`, `.gitleaksignore` and `gitleaks:allow` comments, so a pull
+# request cannot allowlist its own finding.
+#
 # PERMISSIONS INVARIANT for jobs in this file: never request more than the
 # STANDARD caller grant (contents: read, pull-requests: read, actions: write).
 # A called workflow's job that requests more than its caller granted kills
@@ -315,6 +322,15 @@ on:
           event, unconditionally — NOT gated on any `filters` output, since a
           security scan must not be skippable by touching only untracked
           paths.
+        type: boolean
+        default: true
+
+      secret_scan:
+        description: >-
+          Enable `Secret Scan (gitleaks)` and `Secret Scan (trufflehog)`. Each
+          runs on every `pull_request` event, unconditionally - NOT gated on
+          any `filters` output, since a secret can be committed in any file
+          type. Both scan only the commits the pull request adds.
         type: boolean
         default: true
 
@@ -831,6 +847,95 @@ jobs:
       config_file: ${{ inputs.osv_config_file }}
       runner_label: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
 
+  # Secret scanners are NOT `needs: changes` / filter-gated - a secret can be
+  # committed in any file type. Both scan only the PR's own commits
+  # (base..head), never full history, so existing history cannot fail a PR.
+  #
+  # gitleaks runs the pinned release binary: the gitleaks GitHub Action needs a
+  # licence key for organisations. The generated config extends the default
+  # ruleset and is passed explicitly, and `.gitleaksignore` and `gitleaks:allow`
+  # comments are disabled, so the PR under scan cannot allowlist its own finding.
+  # Both pinned binaries carry a Renovate annotation on the version; the sha256 beside
+  # each is not Renovate-tracked, so a version bump fails closed until it is updated too.
+  secret-scan-gitleaks:
+    name: Secret Scan (gitleaks)
+    if: ${{ inputs.secret_scan && github.event_name == 'pull_request' }}
+    runs-on: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the pinned gitleaks release
+        env:
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          # renovate: datasource=github-releases depName=gitleaks/gitleaks
+          GITLEAKS_VERSION="v8.30.1"
+          archive="${RUNNER_TEMP}/gitleaks.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION#v}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+      - name: Scan the commits this pull request adds
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '[extend]\nuseDefault = true\n' > "${RUNNER_TEMP}/gitleaks.toml"
+          mkdir "${RUNNER_TEMP}/gitleaks-no-ignore"
+          "${RUNNER_TEMP}/gitleaks" git \
+            --config "${RUNNER_TEMP}/gitleaks.toml" \
+            --gitleaks-ignore-path "${RUNNER_TEMP}/gitleaks-no-ignore" \
+            --ignore-gitleaks-allow \
+            --log-opts "${BASE_SHA}..${HEAD_SHA}" \
+            --redact --no-banner --exit-code 1 .
+
+  # trufflehog runs the pinned release binary too, so it needs no Docker on the
+  # runner. `--since-commit` + `--branch <sha>` scans exactly base..head, and
+  # `--fail-on-scan-errors` keeps a scan that could not read the range from
+  # passing silently. `verified,unknown` fails on live credentials and on
+  # candidates the verifier could not check; a known-dead candidate is not
+  # reported, so gitleaks above is the check that catches those. `--no-ignore-tag`
+  # makes inline `trufflehog:ignore` comments count as findings.
+  secret-scan-trufflehog:
+    name: Secret Scan (trufflehog)
+    if: ${{ inputs.secret_scan && github.event_name == 'pull_request' }}
+    runs-on: ${{ (!github.event.pull_request || github.event.pull_request.head.repo.full_name == github.repository) && inputs.runner_label || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the pinned trufflehog release
+        env:
+          TRUFFLEHOG_SHA256: 3c7b0d1dc4278294269bfdd7594bca8bb28c78da0a4a06ad202ded37b48deca4
+        run: |
+          set -euo pipefail
+          # renovate: datasource=github-releases depName=trufflesecurity/trufflehog
+          TRUFFLEHOG_VERSION="v3.99.2"
+          archive="${RUNNER_TEMP}/trufflehog.tar.gz"
+          curl -fsSL --retry 3 -o "$archive" \
+            "https://github.com/trufflesecurity/trufflehog/releases/download/${TRUFFLEHOG_VERSION}/trufflehog_${TRUFFLEHOG_VERSION#v}_linux_amd64.tar.gz"
+          echo "${TRUFFLEHOG_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" trufflehog
+      - name: Scan the commits this pull request adds
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          "${RUNNER_TEMP}/trufflehog" git "file://${GITHUB_WORKSPACE}" \
+            --since-commit "$BASE_SHA" --branch "$HEAD_SHA" \
+            --results=verified,unknown --fail --fail-on-scan-errors \
+            --no-ignore-tag --no-update
+
   # ============================================================================
   # WATCHDOG
   # Cancels the run if queued sibling jobs remain after queue_timeout_minutes.
@@ -953,7 +1058,7 @@ jobs:
   # ============================================================================
   gate:
     name: Merge Gate
-    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, dependency-review, zizmor, flake-lock-fresh, uses-resolve, repo-tests, workflow-lint]
+    needs: [changes, scope, watchdog, nix-validate, nix-build, markdown-lint, file-size, token-limits, python-security, python-ci, ansible-ci, renovate-annotations, tofu-ci, osv-scan, secret-scan-gitleaks, secret-scan-trufflehog, dependency-review, zizmor, flake-lock-fresh, uses-resolve, repo-tests, workflow-lint]
     # Run after workflow cancellation too, so cancelled sibling checks aggregate
     # to a failing required status instead of a skipped (successful) job.
     if: ${{ always() }}
@@ -990,7 +1095,8 @@ jobs:
           CI_GATE_ALLOWED_SKIPS: >-
             nix-validate, nix-build, markdown-lint, file-size, token-limits,
             python-security, python-ci, ansible-ci, renovate-annotations,
-            tofu-ci, osv-scan, dependency-review, zizmor, watchdog,
+            tofu-ci, osv-scan, secret-scan-gitleaks, secret-scan-trufflehog,
+            dependency-review, zizmor, watchdog,
             flake-lock-fresh, repo-tests, workflow-lint
           CI_GATE_ALLOWED_FAILURES: scope
         run: node .gh-shared/scripts/ci-gate-aggregate.mts
