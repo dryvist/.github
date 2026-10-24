@@ -13,12 +13,12 @@ const script = path.join(__dirname, '..', 'scripts', 'flake-lock-fresh.sh');
 const HEAD = 'a'.repeat(40);
 const STALE = 'b'.repeat(40);
 
-function run(lock, { base, status = 'ahead' } = {}) {
+function run(lock, { base, status = 'ahead', maxAgeDays = 0 } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flf-'));
   // Fake git: every ref resolves to HEAD.
   fs.writeFileSync(path.join(dir, 'git'), `#!/bin/sh\nprintf '%s\\t%s\\n' ${HEAD} "$3"\n`, { mode: 0o755 });
   // Fake curl: the compare API answers with `status`.
-  fs.writeFileSync(path.join(dir, 'curl'), `#!/bin/sh\necho '{"status":"${status}"}'\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'curl'), `#!/bin/sh\necho '{"status":"${status}","ahead_by":1}'\n`, { mode: 0o755 });
   fs.writeFileSync(path.join(dir, 'flake.lock'), JSON.stringify(lock));
   const args = [];
   if (base) {
@@ -27,15 +27,15 @@ function run(lock, { base, status = 'ahead' } = {}) {
   }
   const names = path.join(dir, 'stale-names');
   const r = spawnSync('bash', [script, ...args, path.join(dir, 'flake.lock')], {
-    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, OWNERS: 'ours other-ours', STALE_NAMES_FILE: names },
+    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, OWNERS: 'ours other-ours', STALE_NAMES_FILE: names, MAX_AGE_DAYS: String(maxAgeDays) },
     encoding: 'utf8',
   });
   return { ...r, names: fs.readFileSync(names, 'utf8').split('\n').filter(Boolean) };
 }
 
-const node = (owner, rev, ref) => ({
+const node = (owner, rev, ref, lastModified) => ({
   original: { type: 'github', owner, repo: 'r', ...(ref ? { ref } : {}) },
-  locked: { type: 'github', owner, repo: 'r', rev },
+  locked: { type: 'github', owner, repo: 'r', rev, ...(lastModified === undefined ? {} : { lastModified }) },
 });
 
 const lock = (nodes) => ({
@@ -109,4 +109,26 @@ test('pr: fails an owned input pinned to a revision', () => {
 test('pr: passes a new input with no base entry', () => {
   const r = run(lock({ a: node('ours', STALE, 'main') }), { base: lock({}), status: 'behind' });
   assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+const secondsAgo = (days) => Math.floor(Date.now() / 1000) - days * 86400;
+
+test('age check includes old third-party root inputs when upstream has newer commits', () => {
+  const r = run(lock({ nixpkgs: node('NixOS', STALE, 'nixos-unstable', secondsAgo(31)) }), { maxAgeDays: 30 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /nixpkgs \(NixOS\/r nixos-unstable\) is 31 days old with 1 newer upstream commit/);
+  assert.deepEqual(r.names, ['nixpkgs']);
+});
+
+test('age check passes a recently locked root input even when upstream has newer commits', () => {
+  const r = run(lock({ nixpkgs: node('NixOS', STALE, 'nixos-unstable', secondsAgo(29)) }), { maxAgeDays: 30 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.deepEqual(r.names, []);
+});
+
+test('age check passes an old root input when upstream has no newer commits', () => {
+  const r = run(lock({ nixpkgs: node('NixOS', STALE, 'nixos-unstable', secondsAgo(181)) }), { maxAgeDays: 30, status: 'behind' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /no newer commits on nixos-unstable/);
+  assert.deepEqual(r.names, []);
 });
