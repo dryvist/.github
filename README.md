@@ -87,6 +87,10 @@ the markdown block; pass `with:` only for a `nix`/`python`/`ansible`/
 `osv_scan`, …), or a `runner_label`. The header of `_ci-gate.yml` lists
 every input.
 
+`secret_scan` is on by default: `Secret Scan (gitleaks)` and `Secret Scan
+(trufflehog)` run on every pull request, are not filter-gated, scan only the
+commits the pull request adds, and block `Merge Gate` on a finding.
+
 If the repo is a Cribl pack, scaffold from
 [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
 instead — the template already includes the canonical configs.
