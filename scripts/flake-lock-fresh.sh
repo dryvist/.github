@@ -34,11 +34,26 @@ OWNED="dryvist JacobPEvans JacobPEvans-personal"
 OWNERS=${OWNERS:-$OWNED}
 remote_base=${FLAKE_LOCK_REMOTE_BASE:-https://github.com}
 [ -n "${STALE_NAMES_FILE:-}" ] && : >"$STALE_NAMES_FILE"
+max_age_days=${MAX_AGE_DAYS:-0}
+if ! [[ $max_age_days =~ ^[0-9]+$ ]]; then
+  echo "::error::MAX_AGE_DAYS must be a non-negative integer"
+  exit 2
+fi
+
+git_remote() {
+  local url=$1
+  shift
+  if [ -n "${GIT_TOKEN:-}" ] && [[ $url == https://github.com/* ]]; then
+    GH_TOKEN=$GIT_TOKEN git -c credential.helper= -c 'credential.helper=!gh auth git-credential' "$@"
+  else
+    git "$@"
+  fi
+}
 
 # remote_head <url> <ref>: the commit <ref> names on the remote. ls-remote lists an annotated
 # tag's own object under <ref> and its commit under <ref>^{}; the peeled line wins.
 remote_head() {
-  git ls-remote "$1" "$2" "$2^{}" | awk -v w="$2" '$2 == (w "^{}") { p = $1 } $2 == w { t = $1 } END { print (p ? p : t) }'
+  git_remote "$1" ls-remote "$1" "$2" "$2^{}" | awk -v w="$2" '$2 == (w "^{}") { p = $1 } $2 == w { t = $1 } END { print (p ? p : t) }'
 }
 
 # reachable <url> <tag> <rev>: succeeds when <rev> is the tag's commit or one of its ancestors.
@@ -47,12 +62,21 @@ reachable() {
   local tmp status=1
   tmp=$(mktemp -d)
   if git init -q --bare "$tmp" &&
-    git -C "$tmp" fetch -q --no-tags --filter=blob:none "$1" "+refs/tags/$2:refs/tags/$2" &&
+    git_remote "$1" -C "$tmp" fetch -q --no-tags --filter=blob:none "$1" "+refs/tags/$2:refs/tags/$2" &&
     git -C "$tmp" merge-base --is-ancestor "$3" "refs/tags/$2" 2>/dev/null; then
     status=0
   fi
   rm -rf "$tmp"
   return "$status"
+}
+
+github_compare() {
+  local url=$1
+  if [ -n "${GIT_TOKEN:-}" ]; then
+    curl -fsSL -H @<(printf 'Authorization: Bearer %s\n' "$GIT_TOKEN") "$url"
+  else
+    curl -fsSL "$url"
+  fi
 }
 
 # name <TAB> owner/repo <TAB> ref (PINNED when pinned to a rev, HEAD when none) <TAB> locked rev
@@ -99,9 +123,7 @@ while IFS=$'\t' read -r name repo ref rev; do
       continue
     fi
     # status is "ahead" when the new rev descends from the base rev.
-    auth=()
-    [ -n "${GIT_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GIT_TOKEN")
-    status=$(curl -fsSL ${auth[@]+"${auth[@]}"} "https://api.github.com/repos/$repo/compare/$old...$rev" | jq -r .status) || status=unknown
+    status=$(github_compare "https://api.github.com/repos/$repo/compare/$old...$rev" | jq -r .status) || status=unknown
     if [ "$status" = ahead ]; then
       echo "$name: $old -> $rev moves forward"
     else
@@ -110,8 +132,11 @@ while IFS=$'\t' read -r name repo ref rev; do
     fi
     continue
   fi
+  if [ "$max_age_days" -gt 0 ]; then
+    echo "$name: age check enabled; checked with root inputs below"
+    continue
+  fi
   url="$remote_base/$repo.git"
-  [ -n "${GIT_TOKEN:-}" ] && url="https://x-access-token:$GIT_TOKEN@github.com/$repo.git"
   if [ "$ref" = HEAD ]; then
     head=$(remote_head "$url" HEAD)
   else
@@ -137,4 +162,67 @@ while IFS=$'\t' read -r name repo ref rev; do
     stale=1
   fi
 done <<<"$inputs"
+
+if [ "$max_age_days" -gt 0 ]; then
+  now=$(date -u +%s)
+  cutoff=$((now - max_age_days * 86400))
+  age_inputs=$(jq -r '
+    . as $l | ($l.nodes[$l.root].inputs // {}) | to_entries[]
+    | .key as $name
+    | ($l.nodes[.value | if type == "string" then . else last end]) as $n
+    | select($n.locked.type? == "github")
+    | [$name,
+       "\($n.locked.owner // $n.original.owner // "")/\($n.locked.repo // $n.original.repo // "")",
+       ($n.original.ref // $n.locked.ref // "HEAD"),
+       ($n.locked.lastModified // ""),
+       ($n.locked.rev // "")]
+    | @tsv' "$lock")
+
+  while IFS=$'\t' read -r name repo ref last_modified rev; do
+    [ -n "$name" ] || continue
+    if ! [[ $last_modified =~ ^[0-9]+$ ]] || [ -z "$rev" ] || [[ $repo != */* ]]; then
+      echo "::error::$name: cannot age-check its locked GitHub revision"
+      stale=1
+      continue
+    fi
+    if [ "$last_modified" -ge "$cutoff" ]; then
+      echo "$name: locked revision is within $max_age_days days"
+      continue
+    fi
+
+    url="$remote_base/$repo.git"
+    if [ "$ref" = HEAD ]; then
+      head=$(remote_head "$url" HEAD)
+    else
+      head=$(remote_head "$url" "refs/tags/$ref")
+      [ -n "$head" ] || head=$(remote_head "$url" "refs/heads/$ref")
+    fi
+    if [ -z "$head" ]; then
+      echo "::error::$name: cannot resolve $ref of $repo"
+      stale=1
+      continue
+    fi
+    if [ "$head" = "$rev" ]; then
+      echo "$name: no newer commits on $ref"
+      continue
+    fi
+
+    comparison=$(github_compare "https://api.github.com/repos/$repo/compare/$rev...$head") || comparison=
+    if [ -z "$comparison" ]; then
+      echo "::error::$name: cannot compare $rev with upstream $head"
+      stale=1
+      continue
+    fi
+    compare_status=$(jq -r '.status // "unknown"' <<<"$comparison")
+    ahead_by=$(jq -r '.ahead_by // 0' <<<"$comparison")
+    if [[ $compare_status == ahead || $compare_status == diverged ]] && [ "$ahead_by" -gt 0 ]; then
+      age_days=$(((now - last_modified) / 86400))
+      echo "::error::$name ($repo $ref) is $age_days days old with $ahead_by newer upstream commit(s); run: nix flake update $name"
+      [ -n "${STALE_NAMES_FILE:-}" ] && printf '%s\n' "$name" >>"$STALE_NAMES_FILE"
+      stale=1
+    else
+      echo "$name: no newer commits on $ref (compare status: $compare_status)"
+    fi
+  done <<<"$age_inputs"
+fi
 exit "$stale"
