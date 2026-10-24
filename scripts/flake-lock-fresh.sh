@@ -215,7 +215,7 @@ if [ "$max_age_days" -gt 0 ]; then
     fi
     compare_status=$(jq -r '.status // "unknown"' <<<"$comparison")
     ahead_by=$(jq -r '.ahead_by // 0' <<<"$comparison")
-    if [ "$compare_status" = ahead ] && [ "$ahead_by" -gt 0 ]; then
+    if [[ $compare_status == ahead || $compare_status == diverged ]] && [ "$ahead_by" -gt 0 ]; then
       age_days=$(((now - last_modified) / 86400))
       echo "::error::$name ($repo $ref) is $age_days days old with $ahead_by newer upstream commit(s); run: nix flake update $name"
       [ -n "${STALE_NAMES_FILE:-}" ] && printf '%s\n' "$name" >>"$STALE_NAMES_FILE"

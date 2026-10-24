@@ -132,3 +132,10 @@ test('age check passes an old root input when upstream has no newer commits', ()
   assert.match(r.stdout, /no newer commits on nixos-unstable/);
   assert.deepEqual(r.names, []);
 });
+
+test('age check flags an old root input when a diverged upstream ref has newer commits', () => {
+  const r = run(lock({ nixpkgs: node('NixOS', STALE, 'nixos-unstable', secondsAgo(31)) }), { maxAgeDays: 30, status: 'diverged' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /nixpkgs \(NixOS\/r nixos-unstable\) is 31 days old with 1 newer upstream commit/);
+  assert.deepEqual(r.names, ['nixpkgs']);
+});
