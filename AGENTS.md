@@ -37,7 +37,7 @@ Python is not used for new dryvist work.
 | Code lint/format | Biome | `biome.jsonc` in this repo; `lineWidth: 120` for JS/TS/JSON/CSS |
 | Markdown lint | markdownlint-cli2 | `.markdownlint-cli2.yaml` in this repo; `MD013 line_length: 160` |
 | Type check | `tsc --noEmit` | TypeScript strict mode in `tsconfig.json` |
-| Release automation | release-please | Org-native — `.github/workflows/_release-please.yml` |
+| Release automation | release-please | `JacobPEvans/.github/.github/workflows/_release.yml@v1` |
 | Dependency updates | Renovate | Policy mastered in `JacobPEvans/.github`; this repo's presets pass through to it |
 
 The canonical `biome.jsonc` and `.markdownlint-cli2.yaml` live in this repo.
@@ -56,9 +56,8 @@ defaults.
 
 ## Release-please (org-native)
 
-Release-please is **org-native** to this repo: every dryvist repo calls the
-reusable `.github/workflows/_release-please.yml` here, pinned to a commit SHA
-(`@<40-hex commit SHA> # vX.Y.Z`), not a cross-account JacobPEvans workflow. It
+Every dryvist repo runs release-please through the shared
+`JacobPEvans/.github/.github/workflows/_release.yml@v1` workflow. It
 opens the release PR for every bump type, which merges like any bot PR (below). A dryvist
 repo's `release-please.yml` caller forwards a single secret:
 
@@ -102,7 +101,7 @@ Work through this in order when creating a dryvist repo.
    branching model you actually intend; the `org-gitflow-*` rulesets bind on
    that property, not on the default branch.
 2. **Add release automation.** A thin `.github/workflows/release-please.yml`
-   calling `dryvist/.github/.github/workflows/_release-please.yml@<40-hex commit SHA> # vX.Y.Z` and
+   calling `JacobPEvans/.github/.github/workflows/_release.yml@v1` and
    forwarding `GH_ACTION_RELEASE_PLEASE_PRIVATE_KEY`. Copy an existing caller
    verbatim rather than writing one. Manifest mode is the default and also
    needs `release-please-config.json` (copy `configs/release-please-config.json`
@@ -207,7 +206,7 @@ first, with no wiring**. A reference added in the same PR as the file fails
 workflow **graph validation** before any job runs ("workflow file issue", zero
 jobs, no `gate / Merge Gate` context at all). Merge the new file first, then
 reference the released `v1` tag in a second PR. This repo's own gate calls
-`./.github/workflows/_ci-gate.yml` by local path.
+`JacobPEvans/.github/.github/workflows/_ci-gate.yml@v1`.
 
 ## When in doubt
 
@@ -216,5 +215,5 @@ reference the released `v1` tag in a second PR. This repo's own gate calls
 - Read this repo's `biome.jsonc` for current lint/format rules.
 - Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
-- For release-please specifics, the org-native workflow's docstring at
-  `.github/workflows/_release-please.yml` in this repo is authoritative.
+- For release-please specifics, the `_release.yml` docstring in
+  `JacobPEvans/.github` is authoritative.
