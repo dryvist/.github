@@ -6,7 +6,7 @@ dependency-management config, security policy, and the org profile page.
 
 This repo holds **only** vendor-agnostic org infrastructure. Cribl-specific
 test harnesses live in
-[`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template);
+[`jpe-cribl/cc-edge-pack-template`](https://github.com/jpe-cribl/cc-edge-pack-template);
 generic reusable workflow definitions live in
 [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github).
 
@@ -92,7 +92,7 @@ the markdown block; pass `with:` only for a `nix`/`python`/`ansible`/
 commits the pull request adds, and block `Merge Gate` on a finding.
 
 If the repo is a Cribl pack, scaffold from
-[`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
+[`jpe-cribl/cc-edge-pack-template`](https://github.com/jpe-cribl/cc-edge-pack-template)
 instead — the template already includes the canonical configs.
 
 ### Wire up release-please in a dryvist repo
@@ -206,7 +206,7 @@ npx -y markdownlint-cli2 "**/*.md"
 ## References
 
 - [`JacobPEvans/.github`](https://github.com/JacobPEvans/.github) — the Renovate policy master; this repo's presets pass through to it
-- [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template) — Cribl pack template
+- [`jpe-cribl/cc-edge-pack-template`](https://github.com/jpe-cribl/cc-edge-pack-template) — Cribl pack template
 - [Biome configuration reference](https://biomejs.dev/reference/configuration/)
 - [markdownlint-cli2 configuration](https://github.com/DavidAnson/markdownlint-cli2#configuration)
 - [Renovate `extends` docs](https://docs.renovatebot.com/config-presets/)
