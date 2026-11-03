@@ -174,7 +174,7 @@ here are pass-throughs to it; change policy in `JacobPEvans/.github`, never here
 - Caller workflow templates that wire up inherited reusable workflows
 
 It does **NOT** contain anything vendor- or product-specific. Cribl pack
-infrastructure lives in [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template).
+infrastructure lives in [`jpe-cribl/cc-edge-pack-template`](https://github.com/jpe-cribl/cc-edge-pack-template).
 Future vendor packs (if any) get their own template repo — never `.github`.
 
 ## Workflow expectations
@@ -213,7 +213,7 @@ reference the released `v1` tag in a second PR. This repo's own gate calls
 - `JacobPEvans/.github` is the master for Renovate presets and generic reusable
   workflows; this repo's presets pass through to it.
 - Read this repo's `biome.jsonc` for current lint/format rules.
-- Read [`dryvist/cc-edge-pack-template`](https://github.com/dryvist/cc-edge-pack-template)
+- Read [`jpe-cribl/cc-edge-pack-template`](https://github.com/jpe-cribl/cc-edge-pack-template)
   for Cribl-specific test/build scaffolding.
 - For release-please specifics, the `_release.yml` docstring in
   `JacobPEvans/.github` is authoritative.
