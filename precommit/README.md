@@ -139,6 +139,42 @@ separately.
 
 ## API
 
+### Agent platform conformance
+
+`templates/agent-platform.yaml` provides optional, parameter-only role checks.
+Consumers append its `repos` entries to their existing hook configuration and
+materialize `configs/agent-platform.schema.json` at
+`precommit/configs/agent-platform.schema.json`. Provide `check-jsonschema`
+0.37.2 and pre-commit 4.5.1 on PATH. This profile is separate from the
+Ansible baseline; adoption happens in consumer pull requests.
+
+The hooks reject prompt filenames under any `roles/` directory:
+`*prompt*.md`, `*.prompt`, and `*system_prompt*`. Path and text checks reject
+`gpu-fill`, `gpu_fill`, `fill-worker`, and `fill_worker`, including occurrences
+within longer identifiers. Matching is case insensitive. Text matches apply
+to comments and documentation as well as executable identifiers; path checks
+also cover empty and binary files.
+
+The YAML schema recursively checks exact `prompt` and `system_prompt` keys in
+role YAML files. Strings may contain at most 5 logical lines, ignoring one
+terminal newline. Folded scalars are measured after YAML folding, and quoted
+newline escapes are decoded. Other keys and non-string parameters remain
+valid. Invalid YAML fails validation. Files outside `roles/` receive only the
+path and text checks.
+
+Run the adopted profile against all tracked files in continuous integration:
+
+```sh
+pre-commit run --config precommit/templates/agent-platform.yaml --all-files
+```
+
+The fixture workflow tests each rejection and acceptance separately using
+pre-commit's real file selection and exit status. Fixtures include nested
+parameters, the 5-line boundary, quoted and folded scalars, and each path
+spelling. Native pre-commit `fail` and `pygrep` hooks plus
+[check-jsonschema](https://check-jsonschema.readthedocs.io/en/latest/usage.html)
+provide the implementation.
+
 This directory exposes the following surfaces:
 
 | Path | Purpose |

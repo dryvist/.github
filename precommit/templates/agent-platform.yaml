@@ -1,0 +1,29 @@
+# Optional conformance hooks. Materialize precommit/configs/agent-platform.schema.json
+# alongside this template, and provide check-jsonschema on PATH.
+---
+repos:
+  - repo: local
+    hooks:
+      - id: agent-platform-prompt-files
+        name: Agent platform prompt filenames
+        language: fail
+        entry: Keep prompt files in the prompt repository.
+        files: '(?i)(^|/)roles/(?:.*/)?[^/]*(?:prompt[^/]*\.md|\.prompt|system_prompt[^/]*)$'
+        types: []
+      - id: agent-platform-paths
+        name: Agent platform path names
+        language: fail
+        entry: Use agent capability names and tier numbers in paths.
+        files: '(?i)(gpu[-_]fill|fill[-_]worker)'
+        types: []
+      - id: agent-platform-identifiers
+        name: Agent platform identifiers
+        language: pygrep
+        entry: '(?i)(gpu[-_]fill|fill[-_]worker)'
+        types: [text]
+      - id: agent-platform-yaml
+        name: Agent platform YAML prompt values
+        language: system
+        entry: check-jsonschema --schemafile precommit/configs/agent-platform.schema.json
+        files: '(^|/)roles/.*\.ya?ml$'
+        types: [file]

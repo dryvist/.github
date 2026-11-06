@@ -1,0 +1,27 @@
+---
+- name: Role parameters
+  vars:
+    prompt: |-
+      one
+      two
+      three
+      four
+      five
+    system_prompt: |
+      one
+      two
+      three
+      four
+      five
+    count: 6
+    nested:
+      - prompt: null
+      - prompt: 6
+      - prompt: [one, two, three, four, five, six]
+    description: |
+      one
+      two
+      three
+      four
+      five
+      six
