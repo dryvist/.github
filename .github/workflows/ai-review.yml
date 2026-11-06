@@ -100,3 +100,16 @@ jobs:
       LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
       LLM_ROUTER_OSS_API_KEY: ${{ secrets.LLM_ROUTER_OSS_API_KEY }}
       GH_APP_CLAUDE_BOT_PRIVATE_KEY: ${{ secrets.GH_APP_CLAUDE_BOT_PRIVATE_KEY }}
+
+  # Advisory local-model review for every repo covered by the org Required
+  # Workflow. The reusable workflow keeps model access read-only and publishes
+  # its findings from a separate job. It cannot change the required gate.
+  local-prereview:
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: dryvist/ai-workflows/.github/workflows/pr-prereview.yml@ab173d4a214013f1d3bad9fdf5c5c0b41694d028
+    secrets:
+      LLM_ROUTER_BASE_URL: ${{ secrets.LLM_ROUTER_BASE_URL }}
+      LLM_ROUTER_API_KEY: ${{ secrets.LLM_ROUTER_API_KEY }}
