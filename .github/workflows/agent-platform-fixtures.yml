@@ -17,7 +17,7 @@ jobs:
   fixtures:
     name: Fixture (${{ matrix.hook }}, ${{ matrix.file }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
