@@ -1,0 +1,10 @@
+---
+- vars:
+    nested:
+      system_prompt: |-
+        one
+        two
+        three
+        four
+        five
+        six

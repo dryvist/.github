@@ -1,0 +1,66 @@
+---
+name: Agent Platform Fixtures
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-platform-fixtures-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixtures:
+    name: Fixture (${{ matrix.hook }}, ${{ matrix.file }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {hook: yaml, file: roles/example/clean.yml, status: 0}
+          - {hook: yaml, file: roles/example/literal.yml, status: 1}
+          - {hook: yaml, file: roles/example/quoted.yaml, status: 1}
+          - {hook: yaml, file: roles/example/folded.yml, status: 0}
+          - {hook: yaml, file: outside.yml, status: 0}
+          - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
+          - {hook: prompt-files, file: roles/example/example-prompt.md, status: 1}
+          - {hook: prompt-files, file: roles/example/system_prompt.txt, status: 1}
+          - {hook: prompt-files, file: roles/example/clean.yml, status: 0}
+          - {hook: paths, file: gpu-fill.txt, status: 1}
+          - {hook: paths, file: gpu_fill.txt, status: 1}
+          - {hook: paths, file: fill-worker.txt, status: 1}
+          - {hook: paths, file: fill_worker.txt, status: 1}
+          - {hook: paths, file: outside.yml, status: 0}
+          - {hook: paths, file: gpu-fill-empty.txt, status: 1}
+          - {hook: identifiers, file: names.yml, status: 1}
+          - {hook: identifiers, file: gpu-fill.txt, status: 1}
+          - {hook: identifiers, file: gpu_fill.txt, status: 1}
+          - {hook: identifiers, file: fill-worker.txt, status: 1}
+          - {hook: identifiers, file: fill_worker.txt, status: 1}
+          - {hook: identifiers, file: outside.yml, status: 0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install fixture tools
+        run: python -m pip install pre-commit==4.5.1 check-jsonschema==0.37.2
+      - name: Validate shared config
+        run: |
+          pre-commit validate-config precommit/templates/agent-platform.yaml
+          check-jsonschema --check-metaschema precommit/configs/agent-platform.schema.json
+      - name: Check fixture exit status
+        env:
+          HOOK: ${{ matrix.hook }}
+          FIXTURE: ${{ matrix.file }}
+          EXPECTED: ${{ matrix.status }}
+        run: |
+          actual=0
+          pre-commit run --config precommit/templates/agent-platform.yaml \
+            "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" || actual=$?
+          test "$actual" -eq "$EXPECTED"
