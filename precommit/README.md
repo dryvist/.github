@@ -155,12 +155,19 @@ within longer identifiers. Matching is case insensitive. Text matches apply
 to comments and documentation as well as executable identifiers; path checks
 also cover empty and binary files.
 
-The YAML schema recursively checks exact `prompt` and `system_prompt` keys in
-role YAML files. Strings may contain at most 5 logical lines, ignoring one
-terminal newline. Folded scalars are measured after YAML folding, and quoted
-newline escapes are decoded. Other keys and non-string parameters remain
-valid. Invalid YAML fails validation. Files outside `roles/` receive only the
-path and text checks.
+The YAML schema recursively checks keys ending in `prompt`, `prompt_template`,
+`persona`, `instructions`, `system_message`, or `developer_message`, with an
+underscore before any suffix. It rejects strings with multiple nonempty logical
+lines and a pair of words of at least 2 ASCII letters separated by spaces or tabs.
+Catalog names, paths, versions, and complete `{{ ... }}` template expressions
+remain valid. Exact `prompt` and `system_prompt` strings also retain their
+5-logical-line limit, ignoring one terminal newline.
+
+Folded scalars are measured after YAML folding, and quoted newline escapes are
+decoded. A single folded paragraph and lists of single words remain valid.
+Other keys and non-string parameters remain valid; nested objects and lists
+are checked recursively. Invalid YAML fails validation. Files outside `roles/`
+receive only the path and text checks.
 
 Run the adopted profile against all tracked files in continuous integration:
 
@@ -170,8 +177,8 @@ pre-commit run --config precommit/templates/agent-platform.yaml --all-files
 
 The fixture workflow tests each rejection and acceptance separately using
 pre-commit's real file selection and exit status. Fixtures include nested
-parameters, the 5-line boundary, quoted and folded scalars, and each path
-spelling. Native pre-commit `fail` and `pygrep` hooks plus
+parameters, the 5-line boundary, quoted and folded scalars, inline text in role
+defaults and vars, catalog references, and each path spelling. Native pre-commit `fail` and `pygrep` hooks plus
 [check-jsonschema](https://check-jsonschema.readthedocs.io/en/latest/usage.html)
 provide the implementation.
 

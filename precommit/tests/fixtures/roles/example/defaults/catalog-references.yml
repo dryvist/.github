@@ -1,0 +1,19 @@
+---
+system_prompt: example-agent
+prompt: agents/prompts/example-agent.md
+prompt_template: example-agent@v2
+example_persona: catalog/example-persona
+instructions: |-
+  {{ lookup('file',
+     example_catalog_path) }}
+nested:
+  - example_cron_prompt: |-
+      agents/prompts/example-agent.md
+  - prompt_template:
+      name: example-agent
+      version: 2
+  - system_message: example-message@v1
+  - developer_message: catalog/example-developer
+description: |-
+  This is ordinary descriptive text.
+  This is another description line.

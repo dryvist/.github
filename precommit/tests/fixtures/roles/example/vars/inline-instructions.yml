@@ -1,0 +1,5 @@
+---
+parameters:
+  - instructions: |-
+      This is inline instruction text.
+      This is another instruction line.

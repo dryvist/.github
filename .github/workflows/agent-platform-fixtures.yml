@@ -26,6 +26,13 @@ jobs:
           - {hook: yaml, file: roles/example/literal.yml, status: 1}
           - {hook: yaml, file: roles/example/quoted.yaml, status: 1}
           - {hook: yaml, file: roles/example/folded.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/inline-system-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-prompt-template.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-persona.yml, status: 1}
+          - {hook: yaml, file: roles/example/vars/inline-instructions.yml, status: 1}
+          - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/vars/inline-message.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/catalog-references.yml, status: 0}
           - {hook: yaml, file: outside.yml, status: 0}
           - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
           - {hook: prompt-files, file: roles/example/example-prompt.md, status: 1}
@@ -77,6 +84,8 @@ jobs:
         include:
           - {file: roles/example/clean.yml, status: 0}
           - {file: roles/example/literal.yml, status: 1}
+          - {file: roles/example/defaults/inline-system-prompt.yml, status: 1}
+          - {file: roles/example/defaults/catalog-references.yml, status: 0}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
