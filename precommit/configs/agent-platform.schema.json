@@ -6,13 +6,33 @@
   "$defs": {
     "value": {
       "patternProperties": {
-        "(^|_)(prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
+        "^(prompt|system_prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
           "allOf": [
             {
               "$ref": "#/$defs/value"
             },
             {
               "$ref": "#/$defs/catalogPrompt"
+            }
+          ]
+        },
+        "(^|_)(prompt_template|persona|instructions|system_message|developer_message)$": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/value"
+            },
+            {
+              "$ref": "#/$defs/catalogPrompt"
+            }
+          ]
+        },
+        "(^|_)(system_)?prompt$": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/value"
+            },
+            {
+              "$ref": "#/$defs/shortPrompt"
             }
           ]
         }
@@ -29,14 +49,30 @@
         "type": "string"
       },
       "then": {
+        "$ref": "#/$defs/catalogReference"
+      }
+    },
+    "shortPrompt": {
+      "if": {
+        "type": "string"
+      },
+      "then": {
         "anyOf": [
           {
-            "pattern": "^\\{\\{(?:(?!\\}\\})[\\s\\S])*\\}\\}$(?![\\s\\S])"
+            "$ref": "#/$defs/catalogReference"
           },
           {
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/@:-]*$(?![\\s\\S])"
+            "$ref": "#/$defs/atMostTwoSentences"
           }
         ]
+      }
+    },
+    "catalogReference": {
+      "pattern": "^\\{\\{(?:(?!\\}\\})[\\s\\S])*\\}\\}$(?![\\s\\S])|^[A-Za-z0-9][A-Za-z0-9._/@:-]*$(?![\\s\\S])"
+    },
+    "atMostTwoSentences": {
+      "not": {
+        "pattern": "[.!?](?:[ \\t\\r\\n]+|$)[\\s\\S]*[.!?](?:[ \\t\\r\\n]+|$)[\\s\\S]*[.!?](?:[ \\t\\r\\n]+|$)"
       }
     }
   }

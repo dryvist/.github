@@ -36,9 +36,15 @@ jobs:
           - {hook: yaml, file: roles/example/defaults/inline-prompt-template.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-persona.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-instructions.yml, status: 1}
-          - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 0}
           - {hook: yaml, file: roles/example/vars/inline-message.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/catalog-references.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/inline-suffixed-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-short-label.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt.yml, status: 1}
+          - {hook: prompt-exceptions, file: roles/example/defaults/excepted-prompt.yml, status: 0, warning: true}
           - {hook: yaml, file: outside.yml, status: 0}
           - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
           - {hook: prompt-files, file: roles/example/example-prompt.md, status: 1}
@@ -74,11 +80,16 @@ jobs:
           HOOK: ${{ matrix.hook }}
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
+          EXPECT_WARNING: ${{ matrix.warning || false }}
         run: |
           actual=0
-          pre-commit run --config precommit/templates/agent-platform.yaml \
-            "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" || actual=$?
+          output=$(pre-commit run --config precommit/templates/agent-platform.yaml \
+            "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" 2>&1) || actual=$?
+          printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"
+          if [[ "$EXPECT_WARNING" == "true" ]]; then
+            printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
+          fi
 
   caller-fixtures:
     name: Caller fixture (${{ matrix.file }})
@@ -98,6 +109,13 @@ jobs:
           - {file: roles/example/defaults/inline-system-prompt.yml, status: 1}
           - {file: roles/example/defaults/inline-templated-prompt.yml, status: 1}
           - {file: roles/example/defaults/catalog-references.yml, status: 0}
+          - {file: roles/example/vars/inline-prompt.yml, status: 0}
+          - {file: roles/example/defaults/inline-suffixed-prompt.yml, status: 1}
+          - {file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
+          - {file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
+          - {file: roles/example/defaults/suffixed-short-label.yml, status: 0}
+          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 1}
+          - {file: roles/example/defaults/excepted-prompt.yml, status: 0, warning: true}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
@@ -113,6 +131,7 @@ jobs:
         env:
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
+          EXPECT_WARNING: ${{ matrix.warning || false }}
         run: |
           mkdir -p caller
           cd caller
@@ -121,6 +140,11 @@ jobs:
           cp "../precommit/tests/fixtures/$FIXTURE" "$FIXTURE"
           git add "$FIXTURE"
           cp ../precommit/configs/agent-platform.schema.json precommit/configs/
+          cp ../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt precommit/configs/
           actual=0
-          pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files || actual=$?
+          output=$(pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1) || actual=$?
+          printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"
+          if [[ "$EXPECT_WARNING" == "true" ]]; then
+            printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
+          fi

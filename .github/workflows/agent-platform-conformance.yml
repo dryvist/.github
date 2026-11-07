@@ -36,6 +36,7 @@ jobs:
           sparse-checkout: |
             precommit/templates/agent-platform.yaml
             precommit/configs/agent-platform.schema.json
+            precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
           sparse-checkout-cone-mode: false
       - name: Install conformance tools
         run: python -m pip install pre-commit==4.7.0 check-jsonschema==0.39.0
@@ -43,4 +44,5 @@ jobs:
         run: |
           mkdir -p precommit/configs
           cp .agent-platform/precommit/configs/agent-platform.schema.json precommit/configs/
+          cp .agent-platform/precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt precommit/configs/
           pre-commit run --config .agent-platform/precommit/templates/agent-platform.yaml --all-files

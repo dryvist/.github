@@ -1,0 +1,1 @@
+reviewer_prompt: "{{ prompt_catalog.daily_summary }}"

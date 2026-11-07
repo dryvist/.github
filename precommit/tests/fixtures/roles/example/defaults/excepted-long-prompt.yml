@@ -1,0 +1,2 @@
+hermes_agent_summary_cron_prompt: >-
+  Post the daily summary. Include the open tasks. Send it to the channel.
