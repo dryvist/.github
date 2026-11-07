@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Agent platform role parameters",
-  "description": "Role parameters keep prompt and system_prompt strings within five logical lines.",
+  "description": "Role parameters use catalog references instead of multiline prompt text.",
   "$ref": "#/$defs/value",
   "$defs": {
     "value": {
@@ -13,11 +13,47 @@
           "$ref": "#/$defs/shortPrompt"
         }
       },
+      "patternProperties": {
+        "(^|_)(prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/value"
+            },
+            {
+              "$ref": "#/$defs/catalogPrompt"
+            }
+          ]
+        }
+      },
       "additionalProperties": {
         "$ref": "#/$defs/value"
       },
       "items": {
         "$ref": "#/$defs/value"
+      }
+    },
+    "catalogPrompt": {
+      "if": {
+        "type": "string"
+      },
+      "then": {
+        "anyOf": [
+          {
+            "pattern": "^\\s*\\{\\{[\\s\\S]*\\}\\}\\s*$"
+          },
+          {
+            "not": {
+              "allOf": [
+                {
+                  "pattern": "\\S[^\\r\\n]*\\r?\\n[\\s\\S]*\\S"
+                },
+                {
+                  "pattern": "[A-Za-z]{2,}[ \\t]+[A-Za-z]{2,}"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     "shortPrompt": {
