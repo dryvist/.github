@@ -1,0 +1,2 @@
+---
+prompt: "{{ context }}\nReview pending tasks and summarize failures.\nSend the report to {{ recipient }}"
