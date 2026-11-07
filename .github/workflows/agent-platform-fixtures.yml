@@ -87,7 +87,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Install fixture tools
-        run: python -m pip install pre-commit==4.5.1 check-jsonschema==0.37.2
+        run: python -m pip install pre-commit==4.7.0 check-jsonschema==0.39.0
       - name: Check all tracked caller files with an external template
         env:
           FIXTURE: ${{ matrix.file }}
