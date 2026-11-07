@@ -1,0 +1,46 @@
+# Run the shared conformance hooks against every tracked caller file.
+# job.workflow_sha selects the template and schema at the workflow's pinned commit.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context
+# Caller example (replace <sha> with this workflow's full commit SHA):
+# jobs:
+#   conformance:
+#     uses: dryvist/.github/.github/workflows/agent-platform-conformance.yml@<sha>
+#     permissions:
+#       contents: read
+---
+name: Agent Platform Conformance
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    name: Agent platform conformance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout caller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Checkout shared conformance configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: dryvist/.github
+          ref: ${{ job.workflow_sha }}
+          path: .agent-platform
+          persist-credentials: false
+          sparse-checkout: |
+            precommit/templates/agent-platform.yaml
+            precommit/configs/agent-platform.schema.json
+          sparse-checkout-cone-mode: false
+      - name: Install conformance tools
+        run: python -m pip install pre-commit==4.5.1 check-jsonschema==0.37.2
+      - name: Materialize schema and check tracked files
+        run: |
+          mkdir -p precommit/configs
+          cp .agent-platform/precommit/configs/agent-platform.schema.json precommit/configs/
+          pre-commit run --config .agent-platform/precommit/templates/agent-platform.yaml --all-files

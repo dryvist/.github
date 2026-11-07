@@ -37,12 +37,14 @@ jobs:
           - {hook: paths, file: fill_worker.txt, status: 1}
           - {hook: paths, file: outside.yml, status: 0}
           - {hook: paths, file: gpu-fill-empty.txt, status: 1}
+          - {hook: paths, file: gpu-fill/CHANGELOG.md, status: 0}
           - {hook: identifiers, file: names.yml, status: 1}
           - {hook: identifiers, file: gpu-fill.txt, status: 1}
           - {hook: identifiers, file: gpu_fill.txt, status: 1}
           - {hook: identifiers, file: fill-worker.txt, status: 1}
           - {hook: identifiers, file: fill_worker.txt, status: 1}
           - {hook: identifiers, file: outside.yml, status: 0}
+          - {hook: identifiers, file: gpu-fill/CHANGELOG.md, status: 0}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -63,4 +65,41 @@ jobs:
           actual=0
           pre-commit run --config precommit/templates/agent-platform.yaml \
             "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" || actual=$?
+          test "$actual" -eq "$EXPECTED"
+
+  caller-fixtures:
+    name: Caller fixture (${{ matrix.file }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {file: roles/example/clean.yml, status: 0}
+          - {file: roles/example/literal.yml, status: 1}
+          - {file: roles/example/template.prompt, status: 1}
+          - {file: gpu-fill-empty.txt, status: 1}
+          - {file: names.yml, status: 1}
+          - {file: gpu-fill/CHANGELOG.md, status: 0}
+    steps:
+      - name: Checkout shared configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install fixture tools
+        run: python -m pip install pre-commit==4.5.1 check-jsonschema==0.37.2
+      - name: Check all tracked caller files with an external template
+        env:
+          FIXTURE: ${{ matrix.file }}
+          EXPECTED: ${{ matrix.status }}
+        run: |
+          mkdir -p caller
+          cd caller
+          git init
+          mkdir -p "$(dirname "$FIXTURE")" precommit/configs
+          cp "../precommit/tests/fixtures/$FIXTURE" "$FIXTURE"
+          git add "$FIXTURE"
+          cp ../precommit/configs/agent-platform.schema.json precommit/configs/
+          actual=0
+          pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files || actual=$?
           test "$actual" -eq "$EXPECTED"
