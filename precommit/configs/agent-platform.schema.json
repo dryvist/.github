@@ -61,14 +61,22 @@
           {
             "$ref": "#/$defs/catalogReference"
           },
-          {"$ref": "#/$defs/shortLiteralPrompt"}
+          {
+            "$ref": "#/$defs/shortLiteralPrompt"
+          }
         ]
       }
     },
     "shortLiteralPrompt": {
       "allOf": [
-        {"maxLength": 160},
-        {"not": {"pattern": "[\\r\\n]"}}
+        {
+          "maxLength": 160
+        },
+        {
+          "not": {
+            "pattern": "[\\r\\n]"
+          }
+        }
       ]
     },
     "catalogReference": {

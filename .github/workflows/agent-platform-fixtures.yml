@@ -48,6 +48,9 @@ jobs:
           - {hook: yaml, file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/suffixed-short-label.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt-in-list.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt-in-flow-mapping.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/malformed-yaml.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
           - {hook: yaml, file: outside.yml, status: 0}
           - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
@@ -120,7 +123,10 @@ jobs:
           - {file: roles/example/defaults/suffixed-short-label.yml, status: 0}
           - {file: roles/example/defaults/system-prompt-short-label.yml, status: 0}
           - {file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-long-prompt-in-list.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-long-prompt-in-flow-mapping.yml, status: 0, warning: true}
           - {file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
+          - {file: roles/example/defaults/no-exception-file.yml, status: 0, exception_mode: absent}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
@@ -137,6 +143,7 @@ jobs:
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
           EXPECT_WARNING: ${{ matrix.warning || false }}
+          EXCEPTION_MODE: ${{ matrix.exception_mode || 'bundled' }}
         run: |
           mkdir -p caller
           cd caller
@@ -146,7 +153,11 @@ jobs:
           git add "$FIXTURE"
           cp ../precommit/configs/agent-platform.schema.json precommit/configs/
           actual=0
-          export AGENT_PLATFORM_PROMPT_EXCEPTION_FILE=../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
+          if [[ "$EXCEPTION_MODE" == "bundled" ]]; then
+            export AGENT_PLATFORM_PROMPT_EXCEPTION_FILE=../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
+          else
+            unset AGENT_PLATFORM_PROMPT_EXCEPTION_FILE
+          fi
           output=$(pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1) || actual=$?
           printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"
