@@ -159,8 +159,9 @@ The YAML schema recursively checks keys ending in `prompt`, `prompt_template`,
 `persona`, `instructions`, `system_message`, or `developer_message`, with an
 underscore before any suffix. It rejects strings with multiple nonempty logical
 lines and a pair of words of at least 2 ASCII letters separated by spaces or tabs.
-Catalog names, paths, versions, and complete `{{ ... }}` template expressions
-remain valid. Exact `prompt` and `system_prompt` strings also retain their
+Catalog names, paths, versions, and a single complete `{{ ... }}` template expression
+remain valid. Multiline prompt text containing template expressions is rejected.
+Exact `prompt` and `system_prompt` strings also retain their
 5-logical-line limit, ignoring one terminal newline.
 
 Folded scalars are measured after YAML folding, and quoted newline escapes are
