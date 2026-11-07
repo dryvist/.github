@@ -1,5 +1,5 @@
 # Optional conformance hooks. Materialize precommit/configs/agent-platform.schema.json
-# alongside this template, and provide check-jsonschema on PATH.
+# alongside this template, and provide jq, check-jsonschema, and pre-commit on PATH.
 ---
 repos:
   - repo: local
@@ -25,7 +25,60 @@ repos:
         types: [text]
       - id: agent-platform-yaml
         name: Agent platform YAML prompt values
-        language: system
-        entry: check-jsonschema --schemafile precommit/configs/agent-platform.schema.json
+        language: python
+        language_version: python3
+        additional_dependencies: [ruamel.yaml==0.19.1]
+        entry: |
+          bash -c '
+          set -eu
+          exception_file=${AGENT_PLATFORM_PROMPT_EXCEPTION_FILE:-}
+          if [ -n "$exception_file" ] && [ -f "$exception_file" ]; then
+            exceptions=$(jq -Rsc "split(\"\\n\") | map(select(length > 0)) | if all(.[]; test(\"^[A-Za-z_][A-Za-z0-9_]*$\")) then . else error(\"invalid exception key\") end" "$exception_file")
+          else
+            exceptions="[]"
+          fi
+          schema=$(mktemp /tmp/agent-platform-schema.XXXXXX)
+          trap "rm -f \$schema" EXIT
+          jq --argjson exceptions "$exceptions" ".[\"\$defs\"].value.patternProperties |= with_entries(if .key == \"(^|_)(system_)?prompt\$\" and (\$exceptions | length) > 0 then .key = (\"^(?!(?:\" + (\$exceptions | join(\"|\")) + \")\$).*?(^|_)(system_)?prompt\$\") else . end)" precommit/configs/agent-platform.schema.json > "$schema"
+          exception_pattern=$(jq -r "join(\"|\")" <<<"$exceptions")
+          if [ -n "$exception_pattern" ]; then
+            python - "$exceptions" "$@" <<\PY
+          import json
+          import sys
+          from ruamel.yaml import YAML
+
+          exception_keys = set(json.loads(sys.argv[1]))
+          yaml = YAML(typ="safe")
+
+          def warn_for_exception_keys(value, filename, seen):
+              if isinstance(value, dict):
+                  marker = id(value)
+                  if marker in seen:
+                      return
+                  seen.add(marker)
+                  for key, child in value.items():
+                      if isinstance(key, str) and key in exception_keys:
+                          print("::warning title=Agent platform prompt exception::{}: {}".format(filename, key))
+                      warn_for_exception_keys(child, filename, seen)
+              elif isinstance(value, list):
+                  marker = id(value)
+                  if marker in seen:
+                      return
+                  seen.add(marker)
+                  for child in value:
+                      warn_for_exception_keys(child, filename, seen)
+
+          for filename in sys.argv[2:]:
+              try:
+                  with open(filename, encoding="utf-8") as stream:
+                      value = yaml.load(stream)
+              except Exception:
+                  sys.exit("Unable to parse YAML file: {}".format(filename))
+              warn_for_exception_keys(value, filename, set())
+          PY
+          fi
+          check-jsonschema --schemafile "$schema" "$@"
+          ' --
         files: '(^|/)roles/.*\.ya?ml$'
         types: [file]
+        verbose: true

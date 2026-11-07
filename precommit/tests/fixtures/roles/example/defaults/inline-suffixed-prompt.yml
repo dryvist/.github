@@ -1,0 +1,2 @@
+reviewer_system_prompt: >-
+  Find the open tasks. Summarize the blockers. Send the summary to the channel.

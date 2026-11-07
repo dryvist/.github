@@ -1,0 +1,3 @@
+hermes_agent_review_prompt: |-
+  This literal prompt has a newline and must fail validation even though each line is short.
+  The second line keeps a newline in the decoded value.

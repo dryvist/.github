@@ -28,7 +28,7 @@ jobs:
           - {hook: yaml, file: roles/example/folded.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-short-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
-          - {hook: yaml, file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-wrapped-template.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-system-prompt.yml, status: 1}
@@ -39,6 +39,19 @@ jobs:
           - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-message.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/catalog-references.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/inline-suffixed-prompt.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-long-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/suffixed-multiline-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/suffixed-160-character-prompt.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/system-prompt-short-label.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-short-label.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt-in-list.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt-in-flow-mapping.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/malformed-yaml.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
           - {hook: yaml, file: outside.yml, status: 0}
           - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
           - {hook: prompt-files, file: roles/example/example-prompt.md, status: 1}
@@ -74,12 +87,17 @@ jobs:
           HOOK: ${{ matrix.hook }}
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
+          EXPECT_WARNING: ${{ matrix.warning || false }}
+          AGENT_PLATFORM_PROMPT_EXCEPTION_FILE: precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
         run: |
           actual=0
-          pre-commit run --config precommit/templates/agent-platform.yaml \
-            "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" || actual=$?
+          output=$(pre-commit run --config precommit/templates/agent-platform.yaml \
+            "agent-platform-$HOOK" --files "precommit/tests/fixtures/$FIXTURE" 2>&1) || actual=$?
+          printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"
-
+          if [[ "$EXPECT_WARNING" == "true" ]]; then
+            printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
+          fi
   caller-fixtures:
     name: Caller fixture (${{ matrix.file }})
     runs-on: ubuntu-26.04
@@ -91,13 +109,25 @@ jobs:
           - {file: roles/example/clean.yml, status: 1}
           - {file: roles/example/defaults/inline-short-prompt.yml, status: 1}
           - {file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
-          - {file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {file: roles/example/defaults/inline-wrapped-template.yml, status: 0}
           - {file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
           - {file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {file: roles/example/literal.yml, status: 1}
           - {file: roles/example/defaults/inline-system-prompt.yml, status: 1}
           - {file: roles/example/defaults/inline-templated-prompt.yml, status: 1}
           - {file: roles/example/defaults/catalog-references.yml, status: 0}
+          - {file: roles/example/vars/inline-prompt.yml, status: 1}
+          - {file: roles/example/defaults/inline-suffixed-prompt.yml, status: 0}
+          - {file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
+          - {file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
+          - {file: roles/example/defaults/suffixed-short-label.yml, status: 0}
+          - {file: roles/example/defaults/system-prompt-short-label.yml, status: 0}
+          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-long-prompt-in-list.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-long-prompt-in-flow-mapping.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
+          - {file: roles/example/defaults/no-exception-file.yml, status: 0, exception_mode: absent}
+          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 1, exception_mode: absent}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
@@ -113,6 +143,8 @@ jobs:
         env:
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
+          EXPECT_WARNING: ${{ matrix.warning || false }}
+          EXCEPTION_MODE: ${{ matrix.exception_mode || 'bundled' }}
         run: |
           mkdir -p caller
           cd caller
@@ -122,5 +154,26 @@ jobs:
           git add "$FIXTURE"
           cp ../precommit/configs/agent-platform.schema.json precommit/configs/
           actual=0
-          pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files || actual=$?
+          if [[ "$EXCEPTION_MODE" == "bundled" ]]; then
+            export AGENT_PLATFORM_PROMPT_EXCEPTION_FILE=../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
+          else
+            unset AGENT_PLATFORM_PROMPT_EXCEPTION_FILE
+          fi
+          output=$(pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1) || actual=$?
+          printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"
+          if [[ "$EXPECT_WARNING" == "true" ]]; then
+            printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
+          fi
+          if [[ "$FIXTURE" == 'roles/example/defaults/excepted-long-prompt.yml' \
+            && "$EXCEPTION_MODE" == 'bundled' ]]; then
+            python_blocker="$(mktemp -d "${RUNNER_TEMP:-/tmp}/agent-platform-python-blocker.XXXXXX")"
+            trap 'rm -rf "$python_blocker"' EXIT
+            ln -s /usr/bin/false "$python_blocker/python"
+            python_actual=0
+            output=$(PATH="$python_blocker:$PATH" \
+              pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1) || python_actual=$?
+            printf '%s\n' "$output"
+            test "$python_actual" -eq 0
+            printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
+          fi
