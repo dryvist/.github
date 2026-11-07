@@ -15,11 +15,13 @@ repos:
         language: fail
         entry: Use agent capability names and tier numbers in paths.
         files: '(?i)(gpu[-_]fill|fill[-_]worker)'
+        exclude: '(^|/)CHANGELOG\.md$'
         types: []
       - id: agent-platform-identifiers
         name: Agent platform identifiers
         language: pygrep
         entry: '(?i)(gpu[-_]fill|fill[-_]worker)'
+        exclude: '(^|/)CHANGELOG\.md$'
         types: [text]
       - id: agent-platform-yaml
         name: Agent platform YAML prompt values
