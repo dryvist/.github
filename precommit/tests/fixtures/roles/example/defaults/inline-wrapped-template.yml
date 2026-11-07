@@ -1,0 +1,2 @@
+---
+system_prompt: "{{ context }} Review pending tasks and summarize failures. {{ recipient }}"

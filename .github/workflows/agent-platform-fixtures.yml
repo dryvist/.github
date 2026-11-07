@@ -22,10 +22,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {hook: yaml, file: roles/example/clean.yml, status: 0}
+          - {hook: yaml, file: roles/example/clean.yml, status: 1}
           - {hook: yaml, file: roles/example/literal.yml, status: 1}
           - {hook: yaml, file: roles/example/quoted.yaml, status: 1}
-          - {hook: yaml, file: roles/example/folded.yml, status: 0}
+          - {hook: yaml, file: roles/example/folded.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-short-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-system-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-templated-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-prompt-template.yml, status: 1}
@@ -83,7 +88,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {file: roles/example/clean.yml, status: 0}
+          - {file: roles/example/clean.yml, status: 1}
+          - {file: roles/example/defaults/inline-short-prompt.yml, status: 1}
+          - {file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
+          - {file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
+          - {file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {file: roles/example/literal.yml, status: 1}
           - {file: roles/example/defaults/inline-system-prompt.yml, status: 1}
           - {file: roles/example/defaults/inline-templated-prompt.yml, status: 1}

@@ -3,9 +3,15 @@ system_prompt: example-agent
 prompt: agents/prompts/example-agent.md
 prompt_template: example-agent@v2
 example_persona: catalog/example-persona
-instructions: |-
+instructions: >-
   {{ lookup('file',
-     example_catalog_path) }}
+  example_catalog_path) }}
+example_prompt: "{{ lookup('file', paths['${CATALOG}']) }}"
+example_system_message: "{{ catalog[{'name': 'example-agent'}['name']] }}"
+multiline_prompt: >-
+  {{ catalog[
+       {'name': 'example-agent'}['name']
+     ] }}
 nested:
   - example_cron_prompt: |-
       agents/prompts/example-agent.md

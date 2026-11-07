@@ -1,18 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Agent platform role parameters",
-  "description": "Role parameters use catalog references instead of multiline prompt text.",
+  "description": "Role prompt strings use catalog references or a single template expression.",
   "$ref": "#/$defs/value",
   "$defs": {
     "value": {
-      "properties": {
-        "prompt": {
-          "$ref": "#/$defs/shortPrompt"
-        },
-        "system_prompt": {
-          "$ref": "#/$defs/shortPrompt"
-        }
-      },
       "patternProperties": {
         "(^|_)(prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
           "allOf": [
@@ -39,31 +31,12 @@
       "then": {
         "anyOf": [
           {
-            "pattern": "^\\s*\\{\\{(?:(?!\\{\\{|\\}\\})[\\s\\S])*\\}\\}\\s*$"
+            "pattern": "^\\{\\{(?:(?!\\}\\})[\\s\\S])*\\}\\}$(?![\\s\\S])"
           },
           {
-            "not": {
-              "allOf": [
-                {
-                  "pattern": "\\S[^\\r\\n]*\\r?\\n[\\s\\S]*\\S"
-                },
-                {
-                  "pattern": "[A-Za-z]{2,}[ \\t]+[A-Za-z]{2,}"
-                }
-              ]
-            }
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._/@:-]*$(?![\\s\\S])"
           }
         ]
-      }
-    },
-    "shortPrompt": {
-      "if": {
-        "type": "string"
-      },
-      "then": {
-        "not": {
-          "pattern": "(?:[^\\n]*\\n){5}[^\\n]+|(?:[^\\n]*\\n){6}"
-        }
       }
     }
   }
