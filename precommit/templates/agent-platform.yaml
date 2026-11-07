@@ -1,5 +1,5 @@
 # Optional conformance hooks. Materialize precommit/configs/agent-platform.schema.json
-# alongside this template, and provide check-jsonschema on PATH.
+# alongside this template, and provide jq, check-jsonschema, and pre-commit on PATH.
 ---
 repos:
   - repo: local
@@ -26,14 +26,29 @@ repos:
       - id: agent-platform-yaml
         name: Agent platform YAML prompt values
         language: system
-        entry: check-jsonschema --schemafile precommit/configs/agent-platform.schema.json
-        files: '(^|/)roles/.*\.ya?ml$'
-        types: [file]
-      - id: agent-platform-prompt-exceptions
-        name: Agent platform prompt exceptions
-        language: system
         entry: >-
-          bash -c 'matches=$(grep -HnEf precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt "$@"); result=$?; if [ "$result" -eq 0 ]; then printf "%s\n" "$matches" | while IFS= read -r match; do printf "::warning title=Agent platform prompt exception::%s\n" "$match"; done; elif [ "$result" -ne 1 ]; then exit "$result"; fi' --
+          bash -c 'set -eu;
+          exception_file=${AGENT_PLATFORM_PROMPT_EXCEPTION_FILE:-precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt};
+          exceptions=$(jq -Rsc "split(\"\\n\") | map(select(length > 0)) | if all(.[]; test(\"^[A-Za-z_][A-Za-z0-9_]*$\")) then . else error(\"invalid exception key\") end" "$exception_file");
+          schema=$(mktemp /tmp/agent-platform-schema.XXXXXX);
+          trap "rm -f \$schema" EXIT;
+          jq --argjson exceptions "$exceptions" ".[\"\$defs\"].value.patternProperties |= with_entries(if .key == \"(^|_)(system_)?prompt\$\" and (\$exceptions | length) > 0 then .key = (\"^(?!(?:\" + (\$exceptions | join(\"|\")) + \")\$).*?(^|_)(system_)?prompt\$\") else . end)" precommit/configs/agent-platform.schema.json > "$schema";
+          exception_pattern=$(jq -r "join(\"|\")" <<<"$exceptions");
+          if [ -n "$exception_pattern" ]; then
+            for file; do
+              result=0;
+              matches=$(grep -HnE "^[[:space:]]*[\"'"'"']?(${exception_pattern})[\"'"'"']?[[:space:]]*:" "$file") || result=$?;
+              if [ "$result" -eq 0 ]; then
+                while IFS= read -r match; do
+                  printf "::warning title=Agent platform prompt exception::%s\\n" "$match";
+                done <<<"$matches";
+              elif [ "$result" -ne 1 ]; then
+                exit "$result";
+              fi;
+            done;
+          fi;
+          check-jsonschema --schemafile "$schema" "$@";
+          ' --
         files: '(^|/)roles/.*\.ya?ml$'
         types: [file]
         verbose: true

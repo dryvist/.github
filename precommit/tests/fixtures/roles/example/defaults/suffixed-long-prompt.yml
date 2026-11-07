@@ -1,0 +1,1 @@
+hermes_agent_review_prompt: "This is a literal prompt that is intentionally longer than one hundred and sixty characters so the shared schema rejects it even when it is written on a single line without sentence punctuation."

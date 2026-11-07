@@ -144,9 +144,12 @@ separately.
 `templates/agent-platform.yaml` provides optional, parameter-only role checks.
 Consumers append its `repos` entries to their existing hook configuration and
 materialize `configs/agent-platform.schema.json` at
-`precommit/configs/agent-platform.schema.json`. Provide `check-jsonschema`
-0.37.2 and pre-commit 4.5.1 on PATH. This profile is separate from the
-Ansible baseline; adoption happens in consumer pull requests.
+`precommit/configs/agent-platform.schema.json`. The shared conformance workflow
+reads the dated prompt exception list from this repository, so consumers do not
+need to install another file. Local runs can set
+`AGENT_PLATFORM_PROMPT_EXCEPTION_FILE` to that bundled list. Provide `jq`,
+`check-jsonschema` 0.37.2, and pre-commit 4.5.1 on PATH. This profile is separate
+from the Ansible baseline; adoption happens in consumer pull requests.
 
 The hooks reject prompt filenames under any `roles/` directory:
 `*prompt*.md`, `*.prompt`, and `*system_prompt*`. Path and text checks reject
@@ -157,14 +160,17 @@ also cover empty and binary files.
 
 The YAML schema recursively checks keys ending in `prompt`, `prompt_template`,
 `persona`, `instructions`, `system_message`, or `developer_message`, with an
-underscore before any suffix. Prompt strings must be a catalog reference matching
-`^[A-Za-z0-9][A-Za-z0-9._/@:-]*$` or exactly one `{{ ... }}` template expression
-allowing internal braces and newlines but no earlier `}}`. Catalog references
-contain no spaces or newlines; template expressions have no surrounding whitespace.
-Other text fails, including prose containing template expressions and terminal newlines.
+underscore before any suffix. Prompt-like values must be catalog references
+matching `^[A-Za-z0-9][A-Za-z0-9._/@:-]*$` or exactly one `{{ ... }}` template
+expression allowing internal braces and newlines but no earlier `}}`. For
+`_prompt` and `_system_prompt` keys, including `system_prompt` and longer
+namespaced keys, a literal may be at most 160 characters on one line; catalog
+references and short labels pass. The bare `prompt` key remains reference-only.
+The dated exception list warns for each listed key and exempts only that key's
+value from the literal limit.
 
 Folded scalars are checked after YAML folding, and quoted newline escapes are
-decoded. Folded prose and multiline lists of words fail.
+decoded. Newlines in decoded prompt values fail the literal-value rule.
 Other keys and non-string parameters remain valid; nested objects and lists
 are checked recursively. Invalid YAML fails validation. Files outside `roles/`
 receive only the path and text checks.
@@ -180,7 +186,8 @@ pre-commit's real file selection and exit status. Fixtures include nested
 parameters, quoted and folded scalars, single-line and multiline inline text in role
 defaults and vars, catalog references, exact template expressions, and each path spelling. Native pre-commit `fail` and `pygrep` hooks plus
 [check-jsonschema](https://check-jsonschema.readthedocs.io/en/latest/usage.html)
-provide the implementation.
+provide the implementation. The caller fixtures run without copying the dated
+exception list into the caller checkout.
 
 This directory exposes the following surfaces:
 

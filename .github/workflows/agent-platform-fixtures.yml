@@ -28,7 +28,7 @@ jobs:
           - {hook: yaml, file: roles/example/folded.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-short-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
-          - {hook: yaml, file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-wrapped-template.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-system-prompt.yml, status: 1}
@@ -36,15 +36,19 @@ jobs:
           - {hook: yaml, file: roles/example/defaults/inline-prompt-template.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/inline-persona.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-instructions.yml, status: 1}
-          - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 0}
+          - {hook: yaml, file: roles/example/vars/inline-prompt.yml, status: 1}
           - {hook: yaml, file: roles/example/vars/inline-message.yml, status: 1}
           - {hook: yaml, file: roles/example/defaults/catalog-references.yml, status: 0}
-          - {hook: yaml, file: roles/example/defaults/inline-suffixed-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/inline-suffixed-prompt.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/suffixed-long-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/suffixed-multiline-prompt.yml, status: 1}
+          - {hook: yaml, file: roles/example/defaults/suffixed-160-character-prompt.yml, status: 0}
+          - {hook: yaml, file: roles/example/defaults/system-prompt-short-label.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
           - {hook: yaml, file: roles/example/defaults/suffixed-short-label.yml, status: 0}
-          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt.yml, status: 1}
-          - {hook: prompt-exceptions, file: roles/example/defaults/excepted-prompt.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {hook: yaml, file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
           - {hook: yaml, file: outside.yml, status: 0}
           - {hook: prompt-files, file: roles/example/template.prompt, status: 1}
           - {hook: prompt-files, file: roles/example/example-prompt.md, status: 1}
@@ -102,20 +106,21 @@ jobs:
           - {file: roles/example/clean.yml, status: 1}
           - {file: roles/example/defaults/inline-short-prompt.yml, status: 1}
           - {file: roles/example/vars/inline-single-line-prompt.yml, status: 1}
-          - {file: roles/example/defaults/inline-wrapped-template.yml, status: 1}
+          - {file: roles/example/defaults/inline-wrapped-template.yml, status: 0}
           - {file: roles/example/defaults/inline-multiline-expression.yml, status: 1}
           - {file: roles/example/defaults/catalog-reference-newline.yml, status: 1}
           - {file: roles/example/literal.yml, status: 1}
           - {file: roles/example/defaults/inline-system-prompt.yml, status: 1}
           - {file: roles/example/defaults/inline-templated-prompt.yml, status: 1}
           - {file: roles/example/defaults/catalog-references.yml, status: 0}
-          - {file: roles/example/vars/inline-prompt.yml, status: 0}
-          - {file: roles/example/defaults/inline-suffixed-prompt.yml, status: 1}
+          - {file: roles/example/vars/inline-prompt.yml, status: 1}
+          - {file: roles/example/defaults/inline-suffixed-prompt.yml, status: 0}
           - {file: roles/example/defaults/suffixed-catalog-reference.yml, status: 0}
           - {file: roles/example/defaults/suffixed-variable-reference.yml, status: 0}
           - {file: roles/example/defaults/suffixed-short-label.yml, status: 0}
-          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 1}
-          - {file: roles/example/defaults/excepted-prompt.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/system-prompt-short-label.yml, status: 0}
+          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 0, warning: true}
+          - {file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
@@ -140,8 +145,8 @@ jobs:
           cp "../precommit/tests/fixtures/$FIXTURE" "$FIXTURE"
           git add "$FIXTURE"
           cp ../precommit/configs/agent-platform.schema.json precommit/configs/
-          cp ../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt precommit/configs/
           actual=0
+          export AGENT_PLATFORM_PROMPT_EXCEPTION_FILE=../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
           output=$(pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1) || actual=$?
           printf '%s\n' "$output"
           test "$actual" -eq "$EXPECTED"

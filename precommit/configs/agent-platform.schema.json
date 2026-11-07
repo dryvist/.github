@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Agent platform role parameters",
-  "description": "Role prompt strings use catalog references or a single template expression.",
+  "description": "Role prompt values use catalog references, template expressions, or short single-line literals.",
   "$ref": "#/$defs/value",
   "$defs": {
     "value": {
       "patternProperties": {
-        "^(prompt|system_prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
+        "^(prompt|prompt_template|persona|instructions|system_message|developer_message)$": {
           "allOf": [
             {
               "$ref": "#/$defs/value"
@@ -61,19 +61,18 @@
           {
             "$ref": "#/$defs/catalogReference"
           },
-          {
-            "$ref": "#/$defs/atMostTwoSentences"
-          }
+          {"$ref": "#/$defs/shortLiteralPrompt"}
         ]
       }
     },
+    "shortLiteralPrompt": {
+      "allOf": [
+        {"maxLength": 160},
+        {"not": {"pattern": "[\\r\\n]"}}
+      ]
+    },
     "catalogReference": {
       "pattern": "^\\{\\{(?:(?!\\}\\})[\\s\\S])*\\}\\}$(?![\\s\\S])|^[A-Za-z0-9][A-Za-z0-9._/@:-]*$(?![\\s\\S])"
-    },
-    "atMostTwoSentences": {
-      "not": {
-        "pattern": "[.!?](?:[ \\t\\r\\n]+|$)[\\s\\S]*[.!?](?:[ \\t\\r\\n]+|$)[\\s\\S]*[.!?](?:[ \\t\\r\\n]+|$)"
-      }
     }
   }
 }
