@@ -88,6 +88,7 @@ jobs:
           FIXTURE: ${{ matrix.file }}
           EXPECTED: ${{ matrix.status }}
           EXPECT_WARNING: ${{ matrix.warning || false }}
+          AGENT_PLATFORM_PROMPT_EXCEPTION_FILE: precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
         run: |
           actual=0
           output=$(pre-commit run --config precommit/templates/agent-platform.yaml \
@@ -126,6 +127,7 @@ jobs:
           - {file: roles/example/defaults/excepted-long-prompt-in-flow-mapping.yml, status: 0, warning: true}
           - {file: roles/example/defaults/excepted-and-unexcepted-long-prompts.yml, status: 1, warning: true}
           - {file: roles/example/defaults/no-exception-file.yml, status: 0, exception_mode: absent}
+          - {file: roles/example/defaults/excepted-long-prompt.yml, status: 1, exception_mode: absent}
           - {file: roles/example/template.prompt, status: 1}
           - {file: gpu-fill-empty.txt, status: 1}
           - {file: names.yml, status: 1}
@@ -163,7 +165,8 @@ jobs:
           if [[ "$EXPECT_WARNING" == "true" ]]; then
             printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
           fi
-          if [[ "$FIXTURE" == 'roles/example/defaults/excepted-long-prompt.yml' ]]; then
+          if [[ "$FIXTURE" == 'roles/example/defaults/excepted-long-prompt.yml' \
+            && "$EXCEPTION_MODE" == 'bundled' ]]; then
             python_blocker="$(mktemp -d "${RUNNER_TEMP:-/tmp}/agent-platform-python-blocker.XXXXXX")"
             trap 'rm -rf "$python_blocker"' EXIT
             ln -s /usr/bin/false "$python_blocker/python"

@@ -31,8 +31,8 @@ repos:
         entry: |
           bash -c '
           set -eu
-          exception_file=${AGENT_PLATFORM_PROMPT_EXCEPTION_FILE:-precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt}
-          if [ -e "$exception_file" ]; then
+          exception_file=${AGENT_PLATFORM_PROMPT_EXCEPTION_FILE:-}
+          if [ -n "$exception_file" ] && [ -f "$exception_file" ]; then
             exceptions=$(jq -Rsc "split(\"\\n\") | map(select(length > 0)) | if all(.[]; test(\"^[A-Za-z_][A-Za-z0-9_]*$\")) then . else error(\"invalid exception key\") end" "$exception_file")
           else
             exceptions="[]"
