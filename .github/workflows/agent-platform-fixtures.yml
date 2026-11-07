@@ -97,6 +97,18 @@ jobs:
           if [[ "$EXPECT_WARNING" == "true" ]]; then
             printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
           fi
+      - name: Verify the prompt hook uses its provisioned Python
+        if: matrix.file == 'roles/example/defaults/excepted-long-prompt.yml'
+        run: |
+          cd caller
+          python_blocker="$(mktemp -d "${RUNNER_TEMP:-/tmp}/agent-platform-python-blocker.XXXXXX")"
+          trap 'rm -rf "$python_blocker"' EXIT
+          ln -s /usr/bin/false "$python_blocker/python"
+          output=$(PATH="$python_blocker:$PATH" \
+            AGENT_PLATFORM_PROMPT_EXCEPTION_FILE=../precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt \
+            pre-commit run --config ../precommit/templates/agent-platform.yaml --all-files 2>&1)
+          printf '%s\n' "$output"
+          printf '%s\n' "$output" | grep -Fq '::warning title=Agent platform prompt exception::'
 
   caller-fixtures:
     name: Caller fixture (${{ matrix.file }})

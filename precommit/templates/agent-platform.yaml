@@ -25,7 +25,9 @@ repos:
         types: [text]
       - id: agent-platform-yaml
         name: Agent platform YAML prompt values
-        language: system
+        language: python
+        language_version: python3
+        additional_dependencies: [ruamel.yaml==0.19.1]
         entry: |
           bash -c '
           set -eu
