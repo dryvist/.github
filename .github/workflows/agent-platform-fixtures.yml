@@ -3,15 +3,27 @@ name: Agent Platform Fixtures
 
 on:
   pull_request:
+    paths:
+      - .github/workflows/agent-platform-fixtures.yml
+      - precommit/tests/fixtures/**
+      - precommit/templates/agent-platform.yaml
+      - precommit/configs/agent-platform.schema.json
+      - precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
   push:
     branches: [main]
+    paths:
+      - .github/workflows/agent-platform-fixtures.yml
+      - precommit/tests/fixtures/**
+      - precommit/templates/agent-platform.yaml
+      - precommit/configs/agent-platform.schema.json
+      - precommit/configs/agent-platform-prompt-exceptions-2026-11-07.txt
 
 permissions:
   contents: read
 
 concurrency:
-  group: agent-platform-fixtures-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   fixtures:
